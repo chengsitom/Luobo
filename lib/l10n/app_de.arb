@@ -887,14 +887,6 @@
     "description": "Empty state subtitle on the history screen"
   },
   "@_SORT_OPTIONS": {},
-  "sortByTitleAZ": "Songs (A-Z)",
-  "@sortByTitleAZ": {
-    "description": "Sort option: title ascending"
-  },
-  "sortByTitleZA": "Songs (A-Z)",
-  "@sortByTitleZA": {
-    "description": "Sort option: title descending"
-  },
   "sortByArtistAZ": "Künstler (A-Z)",
   "@sortByArtistAZ": {
     "description": "Sort option: artist ascending"

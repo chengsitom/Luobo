@@ -33,22 +33,22 @@ class SongAnalysis {
   });
 
   Map<String, dynamic> toJson() => {
-    'songId': songId,
-    'bpm': bpm,
-    'genre': genre,
-    'year': year,
-    'energy': energy,
-    'duration': duration,
-  };
+        'songId': songId,
+        'bpm': bpm,
+        'genre': genre,
+        'year': year,
+        'energy': energy,
+        'duration': duration,
+      };
 
   factory SongAnalysis.fromJson(Map<String, dynamic> json) => SongAnalysis(
-    songId: json['songId'] as String,
-    bpm: json['bpm'] as int,
-    genre: json['genre'] as String?,
-    year: json['year'] as int?,
-    energy: (json['energy'] as num).toDouble(),
-    duration: json['duration'] as int,
-  );
+        songId: json['songId'] as String,
+        bpm: json['bpm'] as int,
+        genre: json['genre'] as String?,
+        year: json['year'] as int?,
+        energy: (json['energy'] as num).toDouble(),
+        duration: json['duration'] as int,
+      );
 }
 
 class AutoDjService extends ChangeNotifier {
@@ -72,6 +72,12 @@ class AutoDjService extends ChangeNotifier {
 
   final Set<String> _recentlyAddedIds = {};
   static const int _maxRecentlyAdded = 100;
+
+  /// 「漫游」用的本地全曲库池（乱序副本）。非 null 时 [_getShuffledLibrarySongs]
+  /// 优先从池里顺序取，不再打服务端的 `getRandomSongs` —— 这样「全曲库漫游」
+  /// 才是真的全库，且一轮之内不重复。
+  List<Song>? _localPool;
+  int _poolCursor = 0;
 
   SubsonicService? _subsonicService;
   RecommendationService? _recommendationService;
@@ -192,6 +198,11 @@ class AutoDjService extends ChangeNotifier {
   }
 
   Future<List<Song>> _getShuffledLibrarySongs(Set<String> existingIds) async {
+    // 漫游：走本地全曲库池，不打服务端随机。
+    final pool = _localPool;
+    if (pool != null) {
+      return _filterAndLimit(_takeFromLocalPool(pool), existingIds);
+    }
     final songs = await _subsonicService!.getRandomSongs(size: _songsToAdd * 2);
     return _filterAndLimit(songs, existingIds);
   }
@@ -266,7 +277,6 @@ class AutoDjService extends ChangeNotifier {
     final List<Future<List<Song>>> futures = [];
 
     if (currentSong != null) {
-      
       futures.add(
         _subsonicService!.getSimilarSongs(
           currentSong.id,
@@ -300,13 +310,12 @@ class AutoDjService extends ChangeNotifier {
         _analysisCache.containsKey(currentSong.id)) {
       final smartQueue = generateQueue(
         seedSong: currentSong,
-        availableSongs: availableSongs
-            .where((s) => !existingIds.contains(s.id))
-            .toList(),
+        availableSongs:
+            availableSongs.where((s) => !existingIds.contains(s.id)).toList(),
         queueLength: _songsToAdd,
       );
       if (smartQueue.length > 1) {
-        return smartQueue.skip(1).toList(); 
+        return smartQueue.skip(1).toList();
       }
     }
 
@@ -339,6 +348,43 @@ class AutoDjService extends ChangeNotifier {
 
   void clearRecentlyAdded() {
     _recentlyAddedIds.clear();
+  }
+
+  /// 是否已注入漫游本地池。
+  bool get hasLocalPool => _localPool != null;
+
+  /// 注入 / 清除漫游用的本地池。
+  ///
+  /// 传 `null` 或空列表 = 退出漫游，回到服务端随机。注入时重洗池子并清空
+  /// 「最近加过」记录 —— 换池子后旧记录会误伤新池。
+  void setLocalPool(List<Song>? songs) {
+    _recentlyAddedIds.clear();
+    if (songs == null || songs.isEmpty) {
+      _localPool = null;
+      _poolCursor = 0;
+      return;
+    }
+    _localPool = List<Song>.from(songs)..shuffle(Random());
+    _poolCursor = 0;
+  }
+
+  /// 按游标从本地池顺序取一批候选；走到末尾就重洗一轮。
+  ///
+  /// ⚠️ 重洗时必须**一并清掉「最近加过」记录**，否则新一轮的歌会被上一轮的记录
+  /// 整批滤掉，`_filterAndLimit` 只能返回空列表 —— 表现为「漫游放着放着不续歌了」。
+  List<Song> _takeFromLocalPool(List<Song> pool) {
+    final want = (_songsToAdd * 3).clamp(1, pool.length);
+    final out = <Song>[];
+    while (out.length < want) {
+      if (_poolCursor >= pool.length) {
+        pool.shuffle(Random());
+        _poolCursor = 0;
+        _recentlyAddedIds.clear();
+      }
+      out.add(pool[_poolCursor]);
+      _poolCursor++;
+    }
+    return out;
   }
 
   static String getModeDisplayName(AutoDjMode mode) {
@@ -529,9 +575,8 @@ class AutoDjService extends ChangeNotifier {
     final queue = <Song>[seedSong];
     final usedIds = <String>{seedSong.id};
 
-    final candidates = availableSongs
-        .where((s) => s.id != seedSong.id)
-        .toList();
+    final candidates =
+        availableSongs.where((s) => s.id != seedSong.id).toList();
 
     for (int i = 0; i < queueLength - 1 && candidates.isNotEmpty; i++) {
       final lastSong = queue.last;

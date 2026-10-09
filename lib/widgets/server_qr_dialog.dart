@@ -39,8 +39,8 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
   Future<void> _saveToGallery() async {
     final l10n = AppLocalizations.of(context)!;
     try {
-      final boundary = _qrKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
+      final boundary =
+          _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return;
 
       final image = await boundary.toImage(pixelRatio: 3.0);
@@ -119,7 +119,6 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
               ),
             ),
             const SizedBox(height: 20),
-
             RepaintBoundary(
               key: _qrKey,
               child: Container(
@@ -137,9 +136,7 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -157,7 +154,6 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => Navigator.pop(context),

@@ -34,7 +34,7 @@ import 'utils/image_cache.dart';
 
 /// 运行时上报的应用版本，写入诊断导出 meta.json；
 /// 与 pubspec.yaml `version` 保持一致，发版时同步更新。
-const String kAppVersion = '1.1.16+11';
+const String kAppVersion = '1.1.19+14';
 
 /// Shows the privacy policy dialog on first launch
 Future<void> _showPrivacyPolicyIfNeeded() async {
@@ -206,7 +206,6 @@ void main() async {
   final localeService = LocaleService();
   final upnpService = UpnpService();
   final themeService = ThemeService();
-  final nowPlayingThemeService = NowPlayingThemeService();
   MetricsCollector.milestone('servicesCreated', startupSw.elapsedMilliseconds);
 
   BpmAnalyzerService().initialize().catchError((e) {
@@ -250,9 +249,6 @@ void main() async {
   });
   await themeService.initialize().catchError((e) {
     debugPrint('Failed to initialize theme service: $e');
-  });
-  nowPlayingThemeService.initialize().catchError((e) {
-    debugPrint('Failed to initialize now playing theme service: $e');
   });
 
   // Initialize favorite playlists service
@@ -312,9 +308,6 @@ void main() async {
       ChangeNotifierProvider<CastService>.value(value: castService),
       ChangeNotifierProvider<LocaleService>.value(value: localeService),
       ChangeNotifierProvider<ThemeService>.value(value: themeService),
-      ChangeNotifierProvider<NowPlayingThemeService>.value(
-        value: nowPlayingThemeService,
-      ),
       ChangeNotifierProvider<UpnpService>.value(value: upnpService),
       ChangeNotifierProvider(
         create: (_) => PlayerProvider(
@@ -327,9 +320,8 @@ void main() async {
         ),
       ),
       ChangeNotifierProvider(
-        create: (_) =>
-            LibraryProvider(subsonicService)
-              ..recommendationService = recommendationService,
+        create: (_) => LibraryProvider(subsonicService)
+          ..recommendationService = recommendationService,
       ),
     ],
     child: const MuslyApp(),

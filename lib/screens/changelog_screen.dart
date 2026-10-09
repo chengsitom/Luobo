@@ -29,7 +29,11 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     try {
       final raw = await rootBundle.loadString('README.md');
       final sections = _parseVersionHistory(raw);
-      if (mounted) setState(() { _sections = sections; _loading = false; });
+      if (mounted)
+        setState(() {
+          _sections = sections;
+          _loading = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -47,9 +51,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     // 找下一个 ## 章节（结束边界）
     final afterHistory = raw.substring(historyMatch.end);
     final nextH2 = RegExp(r'^## ', multiLine: true).firstMatch(afterHistory);
-    final body = nextH2 == null
-        ? afterHistory
-        : afterHistory.substring(0, nextH2.start);
+    final body =
+        nextH2 == null ? afterHistory : afterHistory.substring(0, nextH2.start);
 
     // 按版本标题行分割（支持 **vX.X.X...** 或直接 vX.X.X 开头的行）
     final lines = body.split('\n');
@@ -98,8 +101,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     final content = line.replaceFirst(RegExp(r'^-\s*'), '');
     final done = content.startsWith('✅');
     final pending = content.startsWith('⬜');
-    final text = _stripMarkdown(content
-        .replaceFirst(RegExp(r'^[✅⬜]\s*'), ''));
+    final text = _stripMarkdown(content.replaceFirst(RegExp(r'^[✅⬜]\s*'), ''));
     if (text.isEmpty) return null;
     return _ChangelogItem(text: text, done: done, pending: pending);
   }
@@ -187,8 +189,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     );
   }
 
-  Widget _buildItem(
-      BuildContext context, _ChangelogItem item, {required bool isLast}) {
+  Widget _buildItem(BuildContext context, _ChangelogItem item,
+      {required bool isLast}) {
     final isDark = _isDark;
     return Column(
       children: [

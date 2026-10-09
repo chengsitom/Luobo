@@ -9,7 +9,9 @@ import '../l10n/app_localizations.dart';
 import '../providers/library_provider.dart';
 import '../services/ai_knowledge_service.dart';
 import '../services/storage_service.dart';
-import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
 
 class SettingsAiPlaylistTab extends StatefulWidget {
   const SettingsAiPlaylistTab({super.key});
@@ -58,9 +60,7 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
         _buildConnectionSection(),
-        const SizedBox(height: 24),
         _buildKnowledgeSection(),
-        const SizedBox(height: 24),
         _buildExplanationSection(),
       ],
     );
@@ -71,33 +71,11 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
     required List<Widget> children,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: _isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
-        ),
+        LuoboSectionHeader(title),
+        LuoboCard(children: children),
       ],
     );
   }
@@ -105,86 +83,54 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
   // ── Connection settings (API Key / URL / Model) ─────────────────────
 
   Widget _buildConnectionSection() {
-    final accent = Theme.of(context).colorScheme.primary;
-    final isDark = _isDark;
     return _buildSection(
       title: AppLocalizations.of(context)!.aiConnectionSettings,
       children: [
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: _buildLeadingIcon(CupertinoIcons.lock, accent),
-          title: Text(AppLocalizations.of(context)!.apiKey,
-              style: const TextStyle(fontSize: 16)),
-          subtitle: Text(
-            _aiApiKey.isEmpty
-                ? AppLocalizations.of(context)!.notConfigured
-                : '${_aiApiKey.substring(0, 8)}...${_aiApiKey.substring(_aiApiKey.length - 4)}',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-          ),
-          trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+        // 三行都是「标题 + 右侧状态值 + ›」的单行形态（§9.20）：
+        // 值放右边缘而不是塞进副标题 —— 副标题形态会让行高从 50 涨到 62，
+        // 且和飞牛「清除 App 缓存 1.0 GB ›」的读法不一致。
+        LuoboRow(
+          icon: CupertinoIcons.lock,
+          title: AppLocalizations.of(context)!.apiKey,
+          value: _maskedApiKey(),
+          showChevron: true,
           onTap: _showApiKeyDialog,
         ),
-        const Divider(height: 1, indent: 64),
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: _buildLeadingIcon(CupertinoIcons.globe, accent),
-          title: Text(AppLocalizations.of(context)!.apiUrl,
-              style: const TextStyle(fontSize: 16)),
-          subtitle: Text(
-            _aiBaseUrl,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+        _buildDivider(),
+        LuoboRow(
+          icon: CupertinoIcons.globe,
+          title: AppLocalizations.of(context)!.apiUrl,
+          value: _aiBaseUrl,
+          showChevron: true,
           onTap: _showBaseUrlDialog,
         ),
-        const Divider(height: 1, indent: 64),
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: _buildLeadingIcon(Icons.memory_rounded, accent),
-          title: Text(AppLocalizations.of(context)!.aiModel,
-              style: const TextStyle(fontSize: 16)),
-          subtitle: Text(
-            _aiModel,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-          ),
-          trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+        _buildDivider(),
+        LuoboRow(
+          icon: Icons.memory_rounded,
+          title: AppLocalizations.of(context)!.aiModel,
+          value: _aiModel,
+          showChevron: true,
           onTap: _showModelSelector,
         ),
       ],
     );
   }
 
-  Widget _buildLeadingIcon(IconData icon, Color accent) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        gradient:
-            LinearGradient(colors: [accent, accent.withValues(alpha: 0.6)]),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(icon, color: Colors.white, size: 18),
-    );
+  Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
+
+  /// API Key 的打码显示。
+  ///
+  /// ⚠️ **必须按长度兜底**：早先只判了 `isEmpty`，长度 1–7 的短 key 会在
+  /// `substring(0, 8)` 抛 `RangeError`，而异常发生在 `build` 里 —— 整页每帧
+  /// 崩溃，用户连改回都做不到。阈值 8 与 `config/analytics_config.dart` 的
+  /// 既有守卫一致。
+  String _maskedApiKey() {
+    if (_aiApiKey.isEmpty) {
+      return AppLocalizations.of(context)!.notConfigured;
+    }
+    if (_aiApiKey.length < 8) return '••••••';
+    return '${_aiApiKey.substring(0, 8)}…'
+        '${_aiApiKey.substring(_aiApiKey.length - 4)}';
   }
 
   void _showApiKeyDialog() {
@@ -340,7 +286,7 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
   // ── Knowledge base ───────────────────────────────────────────────────
 
   Widget _buildKnowledgeSection() {
-    final accent = Theme.of(context).colorScheme.primary;
+    final accent = LuoboAccent.accent;
     final isDark = _isDark;
     return ListenableBuilder(
       listenable: AiKnowledgeService.instance,
@@ -349,25 +295,14 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
         return _buildSection(
           title: AppLocalizations.of(context)!.songKnowledgeBase,
           children: [
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: _buildLeadingIcon(CupertinoIcons.book, accent),
-              title: Text(AppLocalizations.of(context)!.songKnowledgeBase,
-                  style: const TextStyle(fontSize: 16)),
-              subtitle: Column(
+            LuoboRow(
+              icon: CupertinoIcons.book,
+              title: AppLocalizations.of(context)!.songKnowledgeBase,
+              subtitle: AppLocalizations.of(context)!
+                  .knowledgeIndexed(svc.cachedCount, svc.totalSongs),
+              subtitleExtra: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppLocalizations.of(context)!
-                        .knowledgeIndexed(svc.cachedCount, svc.totalSongs),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.5)
-                          : Colors.black.withValues(alpha: 0.5),
-                    ),
-                  ),
                   if (svc.lastUpdate != null)
                     Text(
                       AppLocalizations.of(context)!.lastUpdated(
@@ -392,89 +327,55 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
                     ),
                 ],
               ),
+              showChevron: false,
               trailing: svc.isGenerating
                   ? IconButton(
                       icon: const Icon(CupertinoIcons.xmark_circle, size: 22),
                       onPressed: _cancelKnowledgeGeneration,
                     )
-                  : TextButton(
+                  : LuoboTextAction(
+                      label: svc.cachedCount == 0
+                          ? AppLocalizations.of(context)!.generate
+                          : AppLocalizations.of(context)!.incrementalUpdate,
                       onPressed: _aiApiKey.isEmpty ? null : _generateKnowledge,
-                      child: Text(
-                        svc.cachedCount == 0
-                            ? AppLocalizations.of(context)!.generate
-                            : AppLocalizations.of(context)!.incrementalUpdate,
-                        style: TextStyle(
-                            color: _aiApiKey.isEmpty ? Colors.grey : accent),
-                      ),
                     ),
             ),
-            const Divider(height: 1, indent: 64),
+            _buildDivider(),
             // Export
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading:
-                  _buildLeadingIcon(CupertinoIcons.square_arrow_up, accent),
-              title: Text(
-                AppLocalizations.of(context)!.exportKnowledgeBase,
-                style: const TextStyle(fontSize: 16),
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.exportKnowledgeBaseSubtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : Colors.black.withValues(alpha: 0.5),
-                ),
-              ),
+            LuoboRow(
+              icon: CupertinoIcons.square_arrow_up,
+              title: AppLocalizations.of(context)!.exportKnowledgeBase,
+              subtitle:
+                  AppLocalizations.of(context)!.exportKnowledgeBaseSubtitle,
+              showChevron: false,
               trailing: _isExporting
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : TextButton(
+                  : LuoboTextAction(
+                      label: AppLocalizations.of(context)!.export,
                       onPressed: svc.cachedCount == 0 ? null : _exportKnowledge,
-                      child: Text(
-                        AppLocalizations.of(context)!.export,
-                        style: TextStyle(
-                            color: svc.cachedCount == 0 ? Colors.grey : accent),
-                      ),
                     ),
             ),
-            const Divider(height: 1, indent: 64),
+            _buildDivider(),
             // Import
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading:
-                  _buildLeadingIcon(CupertinoIcons.square_arrow_down, accent),
-              title: Text(
-                AppLocalizations.of(context)!.importKnowledgeBase,
-                style: const TextStyle(fontSize: 16),
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.importKnowledgeBaseSubtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : Colors.black.withValues(alpha: 0.5),
-                ),
-              ),
+            LuoboRow(
+              icon: CupertinoIcons.square_arrow_down,
+              title: AppLocalizations.of(context)!.importKnowledgeBase,
+              subtitle:
+                  AppLocalizations.of(context)!.importKnowledgeBaseSubtitle,
+              showChevron: false,
               trailing: _isImporting
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : TextButton(
+                  : LuoboTextAction(
+                      label: AppLocalizations.of(context)!.import,
                       onPressed: _importKnowledge,
-                      child: Text(
-                        AppLocalizations.of(context)!.import,
-                        style: TextStyle(color: accent),
-                      ),
                     ),
             ),
           ],
@@ -624,36 +525,21 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
   // ── Explanation ──────────────────────────────────────────────────────
 
   Widget _buildExplanationSection() {
-    final isDark = _isDark;
     return _buildSection(
       title: AppLocalizations.of(context)!.howItWorks,
       children: [
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Icon(CupertinoIcons.info_circle,
-              color: isDark ? Colors.white70 : Colors.black54),
-          title: Text(
-            AppLocalizations.of(context)!.knowledgeBaseExplanation,
-            style: const TextStyle(fontSize: 16),
-          ),
-          trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+        LuoboRow(
+          icon: CupertinoIcons.info_circle,
+          title: AppLocalizations.of(context)!.knowledgeBaseExplanation,
           onTap: () => _showExplanationSheet(
             title: AppLocalizations.of(context)!.knowledgeBaseExplanation,
             paragraphs: _knowledgeExplanationParagraphs(),
           ),
         ),
-        const Divider(height: 1, indent: 56),
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Icon(CupertinoIcons.info_circle,
-              color: isDark ? Colors.white70 : Colors.black54),
-          title: Text(
-            AppLocalizations.of(context)!.playlistGenerationExplanation,
-            style: const TextStyle(fontSize: 16),
-          ),
-          trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+        _buildDivider(),
+        LuoboRow(
+          icon: CupertinoIcons.info_circle,
+          title: AppLocalizations.of(context)!.playlistGenerationExplanation,
           onTap: () => _showExplanationSheet(
             title: AppLocalizations.of(context)!.playlistGenerationExplanation,
             paragraphs: _playlistExplanationParagraphs(),

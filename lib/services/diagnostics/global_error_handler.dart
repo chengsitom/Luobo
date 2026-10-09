@@ -114,8 +114,8 @@ class GlobalErrorHandler {
               }
               _printSuppress[key] = now;
               if (_printSuppress.length > 256) {
-                _printSuppress.removeWhere(
-                    (_, t) => now - t >= printSuppressWindowMs);
+                _printSuppress
+                    .removeWhere((_, t) => now - t >= printSuppressWindowMs);
               }
               DiagnosticsService.instance.record(
                 EventType.logPrint,

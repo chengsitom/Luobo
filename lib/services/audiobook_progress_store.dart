@@ -105,8 +105,8 @@ class AudiobookProgressStore {
         if (decoded is Map) {
           decoded.forEach((key, value) {
             if (key is String && value is Map) {
-              map[key] =
-                  AudiobookProgress.fromJson(key, Map<String, dynamic>.from(value));
+              map[key] = AudiobookProgress.fromJson(
+                  key, Map<String, dynamic>.from(value));
             }
           });
         }
@@ -142,9 +142,7 @@ class AudiobookProgressStore {
 
   /// 「继续收听」候选：排除 completed 的书，按 updatedAt 倒序。
   List<AudiobookProgress> recent(String serverKey, {int limit = 1}) {
-    final entries = _for(serverKey).values
-        .where((p) => !p.completed)
-        .toList()
+    final entries = _for(serverKey).values.where((p) => !p.completed).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return entries.take(limit).toList();
   }

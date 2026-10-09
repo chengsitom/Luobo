@@ -77,8 +77,7 @@ class _DailyRecommendationCardState extends State<DailyRecommendationCard> {
       );
       // 取色标准：优先 vibrant（最鲜艳、最有辨识度），再回落 dominant。
       // 避免红黑等双色封面因黑色像素多而取成纯黑背景（用户反馈）。
-      final color = palette.vibrantColor?.color ??
-          palette.dominantColor?.color;
+      final color = palette.vibrantColor?.color ?? palette.dominantColor?.color;
       if (color == null || color.computeLuminance() > _maxLuminance) {
         if (_palette != null && mounted) setState(() => _palette = null);
         return;
@@ -139,7 +138,8 @@ class _DailyRecommendationCardState extends State<DailyRecommendationCard> {
                       height: 1.2,
                     ),
                   ),
-                  if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+                  if (widget.subtitle != null &&
+                      widget.subtitle!.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
                       widget.subtitle!,

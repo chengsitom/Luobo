@@ -22,7 +22,16 @@ import 'package:just_audio/just_audio.dart';
 /// just_audio operations.  It calls [updateNowPlaying] whenever the current
 /// song changes to push metadata up to the lock screen / Control Center.
 class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+  /// Android：打断处理由 App 层独占（`docs/音频打断处理技术方案.md` §4.1 方案 B）
+  /// —— 关掉库内处理，避免「库内恢复播放」绕过 App 层 `play()/_fadeIn()` 导致
+  /// 音量停在 0（位置照走但无声）。
+  ///
+  /// iOS：**必须保持库内处理** —— `PlayerProvider._configureAudioSession()` 是
+  /// Android-only，关掉会让 iOS 彻底失去打断处理（iOS 现有链路本身是正确的：
+  /// 原生 `audioFocusGain` → `_smoothVolumeChange(_volume)`）。
+  final AudioPlayer _player = AudioPlayer(
+    handleInterruptions: defaultTargetPlatform != TargetPlatform.android,
+  );
   static const _pitchChannel = MethodChannel('com.devid.musly/pitch');
 
   /// Exposed so [PlayerProvider] can still call setUrl, play, pause, seek, etc.
@@ -44,9 +53,7 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
     // Forward just_audio playback events → audio_service playback state.
     // This drives the iOS Control Center / lock screen widget and the
     // Android media notification automatically.
-    _player.playbackEventStream
-        .map(_buildPlaybackState)
-        .pipe(playbackState);
+    _player.playbackEventStream.map(_buildPlaybackState).pipe(playbackState);
   }
 
   // ---------------------------------------------------------------------------
@@ -145,8 +152,7 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaAction.seekBackward,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      processingState:
-          processingStateMap[_player.processingState] ??
+      processingState: processingStateMap[_player.processingState] ??
           AudioProcessingState.idle,
       playing: _player.playing,
       updatePosition: _player.position,

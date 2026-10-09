@@ -318,7 +318,8 @@ class LibraryProvider extends ChangeNotifier {
     for (final name in names) {
       final artist = byName[name];
       if (artist == null || !seen.add(artist.id)) continue;
-      result.add(TopArtist(artist: artist, playCount: _artistPlayCount(artist)));
+      result
+          .add(TopArtist(artist: artist, playCount: _artistPlayCount(artist)));
       if (result.length >= kTopArtistsCount) break;
     }
     return result;
@@ -473,7 +474,8 @@ class LibraryProvider extends ChangeNotifier {
     return merged;
   }
 
-  Future<void> initialize({bool force = false, bool scheduleBackground = true}) async {
+  Future<void> initialize(
+      {bool force = false, bool scheduleBackground = true}) async {
     if (_isInitialized && !force) return;
 
     _isLoading = true;
@@ -520,6 +522,16 @@ class LibraryProvider extends ChangeNotifier {
       });
 
       if (!_serverOfflineMode) {
+        // ⚠️ 冷启动必须加载一次收藏：`_starred` 此前**只在收藏/取消收藏动作**里
+        // 被赋值（`star()` / `unstar()` / `PlayerProvider.toggleFavorite*`），
+        // 冷启动链路里没有它 → `starred` 恒为 null → 首页「收藏」卡计数恒为 0、
+        // 流体卡取不到色（看起来像"没获取到封面"）。见
+        // `docs/首页快捷入口与漫游技术方案.md` §12.2。
+        //
+        // ⚠️ 但它**不进**下面那个 5s 超时窗口：它只服务首页那张卡的计数与取色，
+        // 慢一点不该让整个「初始化完成」超时。它内部自带 try/catch，完成时会
+        // `notifyListeners()`，首页自行重建。
+        unawaited(loadStarred());
         try {
           await Future.wait([
             loadRecentAlbums(),
@@ -1018,7 +1030,8 @@ class LibraryProvider extends ChangeNotifier {
 
       if (_serverOfflineMode || _localOnlyMode) {
         // 本地/离线：仅重读缓存/本地扫描结果，不触发服务端全量同步。
-        completer.complete(RefreshResult(success: true, isLocal: _localOnlyMode));
+        completer
+            .complete(RefreshResult(success: true, isLocal: _localOnlyMode));
       } else {
         completer.complete(await _refreshAllDataInBackground());
       }

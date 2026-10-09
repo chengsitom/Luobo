@@ -5,6 +5,7 @@ import 'json_coerce.dart';
 class ArtistRef {
   final String id;
   final String name;
+
   /// Explicit cover art ID from the API response. When absent, falls back to
   /// [id] for servers (like Navidrome) that serve artist images via
   /// `getCoverArt?id={artistId}`.
@@ -27,10 +28,10 @@ class ArtistRef {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    if (coverArt != null) 'coverArt': coverArt,
-  };
+        'id': id,
+        'name': name,
+        if (coverArt != null) 'coverArt': coverArt,
+      };
 
   static List<ArtistRef>? parseList(dynamic data) {
     if (data == null) return null;

@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 /// Single request size for cover art across the whole app. Every screen asks
 /// the server for the same pixels, so one cover = one URL = one server-side
@@ -28,8 +31,7 @@ class _CoverFileService extends FileService {
   HttpFileService? _delegate;
 
   @override
-  Future<FileServiceResponse> get(String url,
-      {Map<String, String>? headers}) {
+  Future<FileServiceResponse> get(String url, {Map<String, String>? headers}) {
     return (_delegate ??= HttpFileService(httpClient: coverHttpClient))
         .get(url, headers: headers);
   }
@@ -59,6 +61,26 @@ void registerCoverCacheServerId(String serverId) {
 }
 
 String get coverCacheServerId => _coverCacheServerId;
+
+/// 封面磁盘缓存的字节数（与 [coverCacheManager] 同一口径）。
+///
+/// `flutter_cache_manager` 的默认 IOFileSystem 落在**临时目录**而不是
+/// app-cache 目录，所以按 `<tempDir>/coverCache` 递归求和。
+/// App 设置页与「下载与存储」页共用，避免同一目录两处各算一遍。
+Future<int> coverCacheDirSize() async {
+  try {
+    final base = await getTemporaryDirectory();
+    final dir = Directory('${base.path}/coverCache');
+    if (!await dir.exists()) return 0;
+    var total = 0;
+    await for (final f in dir.list(recursive: true, followLinks: false)) {
+      if (f is File) total += await f.length();
+    }
+    return total;
+  } catch (_) {
+    return 0;
+  }
+}
 
 /// Semantic disk-cache key for a cover: stable across password changes
 /// (serverId excludes the password), per-server isolated, and queryable by id
@@ -93,7 +115,6 @@ class ImageCacheConfig {
 }
 
 class ImagePreloader {
-
   static Future<void> preloadImages(
     BuildContext context,
     List<String> imageUrls,
@@ -101,12 +122,12 @@ class ImagePreloader {
     for (final url in imageUrls) {
       if (url.isNotEmpty) {
         try {
-          await precacheImage(CachedNetworkImageProvider(url,
-              cacheManager: coverCacheManager,
-              cacheKey: coverArtCacheKeyFromUrl(url)), context);
-        } catch (_) {
-          
-        }
+          await precacheImage(
+              CachedNetworkImageProvider(url,
+                  cacheManager: coverCacheManager,
+                  cacheKey: coverArtCacheKeyFromUrl(url)),
+              context);
+        } catch (_) {}
       }
     }
   }
@@ -118,11 +139,11 @@ class ImagePreloader {
     if (imageUrl.isEmpty) return;
 
     try {
-      await precacheImage(CachedNetworkImageProvider(imageUrl,
-          cacheManager: coverCacheManager,
-          cacheKey: coverArtCacheKeyFromUrl(imageUrl)), context);
-    } catch (_) {
-      
-    }
+      await precacheImage(
+          CachedNetworkImageProvider(imageUrl,
+              cacheManager: coverCacheManager,
+              cacheKey: coverArtCacheKeyFromUrl(imageUrl)),
+          context);
+    } catch (_) {}
   }
 }

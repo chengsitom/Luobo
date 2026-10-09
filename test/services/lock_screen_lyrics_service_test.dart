@@ -54,8 +54,7 @@ void main() {
     final service = LockScreenLyricsService();
     await service.loadLyrics(lrc);
 
-    expect(callsOf('clearLyrics'), isNotEmpty,
-        reason: '换歌需先清原生副标题，避免旧歌词挂到新歌上');
+    expect(callsOf('clearLyrics'), isNotEmpty, reason: '换歌需先清原生副标题，避免旧歌词挂到新歌上');
   });
 
   test('Android：无歌词时清空原生歌词行', () async {
@@ -80,8 +79,7 @@ void main() {
     ]));
     await pumpEventQueue();
 
-    expect(callsOf('updateLyrics').length, 1,
-        reason: '同一行只推一次，避免高频刷新通知/元数据');
+    expect(callsOf('updateLyrics').length, 1, reason: '同一行只推一次，避免高频刷新通知/元数据');
   });
 
   test('非 Android 平台：不触碰原生歌词通道', () async {

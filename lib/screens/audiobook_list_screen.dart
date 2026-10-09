@@ -164,9 +164,7 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
   /// 复用共享组件 HorizontalScrollSection（R002 修复，2026-08-21）。
   Widget _buildContinueShelf(AppLocalizations l10n) {
     final progress = _recent!;
-    final book = _books
-        .where((b) => b.id == progress.audiobookId)
-        .firstOrNull;
+    final book = _books.where((b) => b.id == progress.audiobookId).firstOrNull;
     if (book == null) return const SizedBox.shrink();
 
     // caption 定位到具体章节+分钟（"第 X 章 · 已播至 mm:ss"），不能只显示系列名；

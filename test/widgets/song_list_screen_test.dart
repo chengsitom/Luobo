@@ -57,7 +57,8 @@ void main() {
       await tester.pump();
 
       expect(tester.takeException(), isNull);
-      final fluid = tester.widget<FluidBackground>(find.byType(FluidBackground));
+      final fluid =
+          tester.widget<FluidBackground>(find.byType(FluidBackground));
       // 不用模块的整幅 showScrim：离屏实测它把中段空间对比度压到 0.023，
       // 而分区遮罩是 0.068（≈3 倍），白字对比度两者持平（3.97/3.56 vs 4.09/3.68）。
       expect(fluid.showScrim, isFalse);

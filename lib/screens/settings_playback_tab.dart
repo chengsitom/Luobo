@@ -1,13 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/player_provider.dart';
 import '../services/replay_gain_service.dart';
-import '../services/auto_dj_service.dart';
 import '../services/storage_service.dart';
 import '../services/fade_settings_service.dart';
-import '../theme/app_theme.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/sheet_shell.dart';
 
 class SettingsPlaybackTab extends StatefulWidget {
   const SettingsPlaybackTab({super.key});
@@ -26,12 +26,8 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   double _replayGainFallback = -6.0;
   bool _lrcLibFallback = false;
   bool _neteaseFallback = true;
-  AutoDjMode _autoDjMode = AutoDjMode.off;
-  int _autoDjSongsToAdd = 5;
   bool _fadeEnabled = false;
   int _fadeDurationMs = 300;
-
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   @override
   void initState() {
@@ -40,7 +36,6 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   }
 
   Future<void> _loadSettings() async {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     await _replayGainService.initialize();
     await _fadeSettingsService.initialize();
 
@@ -55,8 +50,6 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
       _replayGainFallback = _replayGainService.getFallbackGain();
       _lrcLibFallback = lrcLibFallback;
       _neteaseFallback = neteaseFallback;
-      _autoDjMode = playerProvider.autoDjService.mode;
-      _autoDjSongsToAdd = playerProvider.autoDjService.songsToAdd;
       _fadeEnabled = _fadeSettingsService.getFadeEnabled();
       _fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
     });
@@ -67,23 +60,11 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
-        _buildSection(
-          title: AppLocalizations.of(context)!.sectionAutoDj,
-          children: [
-            _buildAutoDjModeSelector(),
-            if (_autoDjMode != AutoDjMode.off) ...[
-              _buildDivider(),
-              _buildAutoDjSongsSlider(),
-            ],
-          ],
-        ),
-        const SizedBox(height: 24),
+        // 2026-10-08：「自动播放 / AutoDJ」小节已移除 —— 续播模式与「每次追加
+        // 数量」搬到了首页「漫游」卡的长按面板（方案 §5.3「路 3」）。
         _buildGaplessSection(),
-        const SizedBox(height: 24),
         _buildFadeSection(),
-        const SizedBox(height: 24),
         _buildLrcLibSection(),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.sectionVolumeNormalization,
           children: [
@@ -108,184 +89,41 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
     required List<Widget> children,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: _isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
-        ),
+        LuoboSectionHeader(title),
+        LuoboCard(children: children),
       ],
     );
   }
 
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 56),
-      child: Container(
-        height: 0.5,
-        color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-      ),
-    );
-  }
-
-  Widget _buildAutoDjModeSelector() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.wand_stars,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.autoDjMode,
-        style: const TextStyle(fontSize: 16),
-      ),
-      trailing: DropdownButton<AutoDjMode>(
-        value: _autoDjMode,
-        underline: const SizedBox(),
-        items: AutoDjMode.values.map((mode) {
-          return DropdownMenuItem(
-            value: mode,
-            child: Text(_getAutoDjModeLabel(mode)),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value != null) _setAutoDjMode(value);
-        },
-      ),
-    );
-  }
-
-  String _getAutoDjModeLabel(AutoDjMode mode) {
-    final l10n = AppLocalizations.of(context)!;
-    switch (mode) {
-      case AutoDjMode.off:
-        return l10n.autoDjModeOff;
-      case AutoDjMode.shuffleLibrary:
-        return l10n.autoDjModeShuffleLibrary;
-      case AutoDjMode.similarSongs:
-        return l10n.autoDjModeSimilarSongs;
-      case AutoDjMode.sameGenre:
-        return l10n.autoDjModeSameGenre;
-      case AutoDjMode.sameArtist:
-        return l10n.autoDjModeSameArtist;
-      case AutoDjMode.smartMix:
-        return l10n.autoDjModeSmartMix;
-    }
-  }
-
-  void _setAutoDjMode(AutoDjMode mode) {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    playerProvider.autoDjService.setMode(mode);
-    setState(() => _autoDjMode = mode);
-  }
-
-  Widget _buildAutoDjSongsSlider() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF5856D6), Color(0xFF7B68EE)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.music_note_list,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.autoDjSongsToAdd(_autoDjSongsToAdd),
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Slider(
-        value: _autoDjSongsToAdd.toDouble(),
-        min: 1,
-        max: 20,
-        divisions: 19,
-        activeColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) {
-          final count = value.round();
-          final playerProvider = Provider.of<PlayerProvider>(
-            context,
-            listen: false,
-          );
-          playerProvider.autoDjService.setSongsToAdd(count);
-          setState(() => _autoDjSongsToAdd = count);
-        },
-      ),
-    );
-  }
+  Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
 
   Widget _buildReplayGainModeSelector() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF34C759), Color(0xFF30D158)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.speaker_2,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(AppLocalizations.of(context)!.replayGainMode,
-          style: const TextStyle(fontSize: 16)),
-      trailing: DropdownButton<ReplayGainMode>(
-        value: _replayGainMode,
-        underline: const SizedBox(),
-        items: ReplayGainMode.values.map((mode) {
-          return DropdownMenuItem(
-            value: mode,
-            child: Text(_getReplayGainModeLabel(mode)),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value != null) _setReplayGainMode(value);
-        },
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    return LuoboRow(
+      icon: CupertinoIcons.speaker_2,
+      title: l10n.replayGainMode,
+      value: _getReplayGainModeLabel(_replayGainMode),
+      showChevron: true,
+      onTap: _pickReplayGainMode,
     );
+  }
+
+  Future<void> _pickReplayGainMode() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showLuoboPickerSheet<ReplayGainMode>(
+      context: context,
+      title: l10n.replayGainMode,
+      options: [
+        for (final mode in ReplayGainMode.values)
+          (value: mode, label: _getReplayGainModeLabel(mode)),
+      ],
+      selected: _replayGainMode,
+    );
+    if (picked == null || !mounted) return;
+    _setReplayGainMode(picked);
   }
 
   String _getReplayGainModeLabel(ReplayGainMode mode) {
@@ -306,31 +144,26 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   }
 
   Widget _buildReplayGainPreampSlider() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(AppLocalizations.of(context)!
-          .replayGainPreamp(_replayGainPreamp.toStringAsFixed(1))),
-      subtitle: Slider(
-        value: _replayGainPreamp,
-        min: -12,
-        max: 12,
-        divisions: 24,
-        activeColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          await _replayGainService.setPreampGain(value);
-          setState(() => _replayGainPreamp = value);
-        },
-      ),
+    return LuoboSliderRow(
+      title: AppLocalizations.of(context)!
+          .replayGainPreamp(_replayGainPreamp.toStringAsFixed(1)),
+      value: _replayGainPreamp,
+      min: -12,
+      max: 12,
+      divisions: 24,
+      onChanged: (value) async {
+        await _replayGainService.setPreampGain(value);
+        setState(() => _replayGainPreamp = value);
+      },
     );
   }
 
   Widget _buildReplayGainClippingToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(AppLocalizations.of(context)!.replayGainPreventClipping),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      title: AppLocalizations.of(context)!.replayGainPreventClipping,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _replayGainPreventClipping,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           await _replayGainService.setPreventClipping(value);
           setState(() => _replayGainPreventClipping = value);
@@ -340,67 +173,31 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   }
 
   Widget _buildReplayGainFallbackSlider() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(
-        AppLocalizations.of(context)!
-            .replayGainFallbackGain(_replayGainFallback.toStringAsFixed(1)),
-      ),
-      subtitle: Slider(
-        value: _replayGainFallback,
-        min: -12,
-        max: 0,
-        divisions: 12,
-        activeColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          await _replayGainService.setFallbackGain(value);
-          setState(() => _replayGainFallback = value);
-        },
-      ),
+    return LuoboSliderRow(
+      title: AppLocalizations.of(context)!
+          .replayGainFallbackGain(_replayGainFallback.toStringAsFixed(1)),
+      value: _replayGainFallback,
+      min: -12,
+      max: 0,
+      divisions: 12,
+      onChanged: (value) async {
+        await _replayGainService.setFallbackGain(value);
+        setState(() => _replayGainFallback = value);
+      },
     );
   }
 
   Widget _buildLrcLibSection() {
-    final accent = Theme.of(context).colorScheme.primary;
     return _buildSection(
       title: AppLocalizations.of(context)!.lyricsSection,
       children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [accent, accent.withValues(alpha: 0.6)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.text_quote,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.enableLrcLibFallback,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.lrcLibFallbackSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-          ),
-          trailing: CupertinoSwitch(
+        LuoboRow(
+          icon: CupertinoIcons.text_quote,
+          title: AppLocalizations.of(context)!.enableLrcLibFallback,
+          subtitle: AppLocalizations.of(context)!.lrcLibFallbackSubtitle,
+          showChevron: false,
+          trailing: LuoboSwitch(
             value: _lrcLibFallback,
-            activeTrackColor: accent,
             onChanged: (v) async {
               final storage = StorageService();
               await storage.saveLrcLibFallback(v);
@@ -408,42 +205,14 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
             },
           ),
         ),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [accent, accent.withValues(alpha: 0.6)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.music_note_2,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.neteaseLyrics,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.neteaseLyricsSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-          ),
-          trailing: CupertinoSwitch(
+        _buildDivider(),
+        LuoboRow(
+          icon: CupertinoIcons.music_note_2,
+          title: AppLocalizations.of(context)!.neteaseLyrics,
+          subtitle: AppLocalizations.of(context)!.neteaseLyricsSubtitle,
+          showChevron: false,
+          trailing: LuoboSwitch(
             value: _neteaseFallback,
-            activeTrackColor: accent,
             onChanged: (v) async {
               final storage = StorageService();
               await storage.saveNeteaseFallback(v);
@@ -458,46 +227,16 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   Widget _buildGaplessSection() {
     return Consumer<PlayerProvider>(
       builder: (context, player, _) {
-        final accent = Theme.of(context).colorScheme.primary;
         return _buildSection(
           title: AppLocalizations.of(context)!.gaplessPlayback,
           children: [
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 4,
-              ),
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [accent, accent.withValues(alpha: 0.6)],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  CupertinoIcons.link,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-              title: Text(
-                AppLocalizations.of(context)!.gaplessPlayback,
-                style: const TextStyle(fontSize: 16),
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.gaplessPlaybackSubtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : Colors.black.withValues(alpha: 0.5),
-                ),
-              ),
-              trailing: CupertinoSwitch(
+            LuoboRow(
+              icon: CupertinoIcons.link,
+              title: AppLocalizations.of(context)!.gaplessPlayback,
+              subtitle: AppLocalizations.of(context)!.gaplessPlaybackSubtitle,
+              showChevron: false,
+              trailing: LuoboSwitch(
                 value: player.gaplessEnabled,
-                activeTrackColor: accent,
                 onChanged: (_) => player.toggleGaplessPlayback(),
               ),
             ),
@@ -512,45 +251,13 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
     return _buildSection(
       title: l10n.sectionFadeInOut,
       children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.waveform,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            l10n.fadeInOutEnable,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            l10n.fadeInOutSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
-            ),
-          ),
-          trailing: CupertinoSwitch(
+        LuoboRow(
+          icon: CupertinoIcons.waveform,
+          title: l10n.fadeInOutEnable,
+          subtitle: l10n.fadeInOutSubtitle,
+          showChevron: false,
+          trailing: LuoboSwitch(
             value: _fadeEnabled,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
             onChanged: (v) async {
               await _fadeSettingsService.setFadeEnabled(v);
               setState(() => _fadeEnabled = v);
@@ -559,31 +266,20 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
         ),
         if (_fadeEnabled) ...[
           _buildDivider(),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 4,
-            ),
-            title: Text(
-              l10n.fadeDuration(_fadeDurationMs),
-              style: const TextStyle(fontSize: 16),
-            ),
-            subtitle: Slider(
-              value: _fadeDurationMs.toDouble(),
-              min: 100,
-              max: 1000,
-              divisions: 18,
-              activeColor: Theme.of(context).colorScheme.primary,
-              onChanged: (value) async {
-                final duration = value.round();
-                await _fadeSettingsService.setFadeDurationMs(duration);
-                setState(() => _fadeDurationMs = duration);
-              },
-            ),
+          LuoboSliderRow(
+            title: l10n.fadeDuration(_fadeDurationMs),
+            value: _fadeDurationMs.toDouble(),
+            min: 100,
+            max: 1000,
+            divisions: 18,
+            onChanged: (value) async {
+              final duration = value.round();
+              await _fadeSettingsService.setFadeDurationMs(duration);
+              setState(() => _fadeDurationMs = duration);
+            },
           ),
         ],
       ],
     );
   }
-
 }

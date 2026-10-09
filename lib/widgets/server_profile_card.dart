@@ -86,9 +86,8 @@ class ServerProfileCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final info = ServerFamilyInfo.of(profile);
-    final secondary = isDark
-        ? AppTheme.darkSecondaryText
-        : AppTheme.lightSecondaryText;
+    final secondary =
+        isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText;
     final danger = const Color(0xFFFF3B30);
 
     return Material(
@@ -126,9 +125,8 @@ class ServerProfileCard extends StatelessWidget {
                               fontSize: 16,
                               fontWeight:
                                   isActive ? FontWeight.w600 : FontWeight.w500,
-                              color: isActive
-                                  ? theme.colorScheme.primary
-                                  : null,
+                              color:
+                                  isActive ? theme.colorScheme.primary : null,
                             ),
                           ),
                         ),

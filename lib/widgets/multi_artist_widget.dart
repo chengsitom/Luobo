@@ -177,8 +177,8 @@ class MultiArtistWidget extends StatelessWidget {
                   effectiveArtists[i].name,
                   style: style?.copyWith(
                     decoration: TextDecoration.underline,
-                    decorationColor: (style?.color ?? Colors.white)
-                        .withValues(alpha: 0.45),
+                    decorationColor:
+                        (style?.color ?? Colors.white).withValues(alpha: 0.45),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

@@ -19,7 +19,7 @@ class AndroidAutoService {
   );
 
   StreamSubscription? _eventSubscription;
-  
+
   // Track if a library data request was received before callback was registered
   bool _pendingLibraryDataRequest = false;
 
@@ -34,12 +34,12 @@ class AndroidAutoService {
 
   Future<List<Map<String, String>>> Function(String albumId)? onGetAlbumSongs;
   Future<List<Map<String, String>>> Function(String artistId)?
-  onGetArtistAlbums;
+      onGetArtistAlbums;
   Future<List<Map<String, String>>> Function(String playlistId)?
-  onGetPlaylistSongs;
+      onGetPlaylistSongs;
   Future<List<Map<String, String>>> Function(String query)? onSearch;
   Function(String query)? onPlayFromSearch;
-  
+
   VoidCallback? _onRequestLibraryData;
   VoidCallback? get onRequestLibraryData => _onRequestLibraryData;
   set onRequestLibraryData(VoidCallback? callback) {
@@ -57,9 +57,9 @@ class AndroidAutoService {
 
     try {
       _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
-        _handleEvent,
-        onError: _handleError,
-      );
+            _handleEvent,
+            onError: _handleError,
+          );
 
       await _methodChannel.invokeMethod('startService');
       debugPrint('AndroidAutoService initialized');
@@ -128,7 +128,8 @@ class AndroidAutoService {
         break;
       case 'search':
         final query = event['query'] as String?;
-        debugPrint('AndroidAuto: Search command received, query="$query", onSearch=${onSearch != null}');
+        debugPrint(
+            'AndroidAuto: Search command received, query="$query", onSearch=${onSearch != null}');
         if (query != null) {
           _handleSearch(query);
         }
@@ -144,7 +145,8 @@ class AndroidAutoService {
         if (onRequestLibraryData != null) {
           onRequestLibraryData!();
         } else {
-          debugPrint('AndroidAuto: Warning - onRequestLibraryData callback is not set, buffering request');
+          debugPrint(
+              'AndroidAuto: Warning - onRequestLibraryData callback is not set, buffering request');
           _pendingLibraryDataRequest = true;
         }
         break;

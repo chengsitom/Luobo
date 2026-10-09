@@ -20,7 +20,6 @@ import '../utils/refresh_feedback.dart';
 import 'album_screen.dart';
 import 'package:luobo/screens/playlist_screen.dart';
 import 'favorites_screen.dart';
-import 'liked_albums_screen.dart';
 import 'playlists_screen.dart';
 import 'ai_playlist_screen.dart';
 import 'settings_root_screen.dart';
@@ -215,8 +214,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             actions: [
               Consumer<LibraryProvider>(
                 builder: (context, lp, _) {
-                  final running =
-                      lp.refreshStatus == RefreshStatus.running;
+                  final running = lp.refreshStatus == RefreshStatus.running;
                   return IconButton(
                     icon: running
                         ? const SizedBox(
@@ -277,9 +275,8 @@ class _LibraryScreenState extends State<LibraryScreen>
               ),
               borderRadius: BorderRadius.circular(3),
             ),
-            dividerColor: isDark
-                ? const Color(0xFF38383A)
-                : const Color(0xFFE5E5EA),
+            dividerColor:
+                isDark ? const Color(0xFF38383A) : const Color(0xFFE5E5EA),
             tabs: [for (final f in filters) Tab(text: filterLabels[f])],
           ),
           // ── 内容：左右滑动切换的页面（每页独立滚动，ValueKey 防错位复用）──
@@ -352,12 +349,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         // Grid metrics: 列数由视口宽度推导，行高 = 卡宽 + 封面下
         // 8 + 固定 44px 文本区（ArtistGridCard 内文本区固定高度，
         // 与字体行高无关）。同时用于布局和右侧字母索引的偏移估算。
-        final availWidth =
-            MediaQuery.sizeOf(context).width - 16 * 2 - 28;
-        final colCount =
-            (availWidth / 140).floor().clamp(2, 6).toInt();
-        final cardWidth =
-            (availWidth - (colCount - 1) * 12) / colCount;
+        final availWidth = MediaQuery.sizeOf(context).width - 16 * 2 - 28;
+        final colCount = (availWidth / 140).floor().clamp(2, 6).toInt();
+        final cardWidth = (availWidth - (colCount - 1) * 12) / colCount;
         final rowHeight = cardWidth + 52;
         const headerH = 30.0;
         // shelf 实际高：分组头(12+20+8) + 两排网格 168 + 尾间距 12 ≈ 220。
@@ -438,8 +432,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: colCount,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
@@ -467,20 +460,17 @@ class _LibraryScreenState extends State<LibraryScreen>
                 selectedLetter: _selectedLetter,
                 onLetterDown: (letter) {
                   final idx = _letterIndexMap[letter];
-                  if (idx != null &&
-                      _artistsScrollController.hasClients) {
+                  if (idx != null && _artistsScrollController.hasClients) {
                     _artistsScrollController.jumpTo(
                       idx.toDouble().clamp(
                             0.0,
-                            _artistsScrollController
-                                .position.maxScrollExtent,
+                            _artistsScrollController.position.maxScrollExtent,
                           ),
                     );
                   }
                   setState(() => _selectedLetter = letter);
                 },
-                onLetterUp: () =>
-                    setState(() => _selectedLetter = null),
+                onLetterUp: () => setState(() => _selectedLetter = null),
               ),
             ),
           ],
@@ -524,15 +514,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                 isGradient: false,
                 onTap: () => _navigate(context, const AllSongsScreen()),
               ),
-              // Liked Albums folder
-              _SpotifyLibraryTile(
-                icon: CupertinoIcons.star_fill,
-                iconColor: const Color(0xFFFF9500),
-                title: AppLocalizations.of(context)!.likedAlbums,
-                subtitle: AppLocalizations.of(context)!.albums,
-                isGradient: false,
-                onTap: () => _navigate(context, const LikedAlbumsScreen()),
-              ),
+              // Liked Albums folder — 2026-10-08 删除（收藏专辑全删，见
+              // `docs/首页快捷入口与漫游技术方案.md` §12.1）
               // Radio Stations folder — 道理鱼下换成「有声书」入口（§7.1）。
               Selector<AuthProvider, bool>(
                 selector: (_, auth) => auth.config?.serverFamily == 'daoliyu',
@@ -1046,6 +1029,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       void addUrl(String? url) {
         if (url != null && url.isNotEmpty && seen.add(url)) urls.add(url);
       }
+
       // 前 24 位艺术家（首屏）：主图 + fallback + 拼贴各专辑封面。
       for (final artist in provider.artists.take(24)) {
         final cover = provider.resolveArtistCover(artist);

@@ -96,9 +96,8 @@ class AuthProvider extends ChangeNotifier {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       // 第 1 次尝试带备选地址兜底（LAN↔远端）；后续尝试按当前 activeBaseUrl
       // 重建 URL（后台探测已切换时自然落到备选地址）。
-      pingResult = attempt == 1
-          ? await _pingWithFailover()
-          : await _pingWithErrorOnce();
+      pingResult =
+          attempt == 1 ? await _pingWithFailover() : await _pingWithErrorOnce();
       if (pingResult.success) break;
       debugPrint(
           '[Auth] Ping attempt $attempt/$maxAttempts failed: ${pingResult.error}');
@@ -259,9 +258,8 @@ class AuthProvider extends ChangeNotifier {
         // 已登录时添加配置失败：恢复原状态（MainScreen 不被替换），
         // 与下方 ping 失败/catch 路径一致（见 login() 开头注释）——
         // 否则设置页添加 Jellyfin 失败会把整个设置栈换成登录页。
-        _state = prevState == AuthState.authenticated
-            ? prevState
-            : AuthState.error;
+        _state =
+            prevState == AuthState.authenticated ? prevState : AuthState.error;
         notifyListeners();
         return false;
       }
@@ -270,9 +268,8 @@ class AuthProvider extends ChangeNotifier {
       jellyfinUserId = user?['Id'] as String?;
       if (jellyfinToken == null || jellyfinUserId == null) {
         _error = 'Jellyfin returned an unexpected response.';
-        _state = prevState == AuthState.authenticated
-            ? prevState
-            : AuthState.error;
+        _state =
+            prevState == AuthState.authenticated ? prevState : AuthState.error;
         notifyListeners();
         return false;
       }

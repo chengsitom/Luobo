@@ -6,8 +6,8 @@ import '../l10n/app_localizations.dart';
 import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
-import '../services/local_music_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/local_library_launcher.dart';
 import '../utils/navigation_helper.dart';
 import '../utils/screen_helper.dart';
 import 'qr_scanner_screen.dart';
@@ -116,7 +116,8 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
       },
     );
     try {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
       await playerProvider.stop();
       await authProvider.switchProfile(profile);
     } catch (e) {
@@ -224,98 +225,29 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
   }
 
   Future<void> _useLocalFiles() async {
-    final localService = Provider.of<LocalMusicService>(context, listen: false);
-
-    final granted = await localService.requestPermission();
-    if (!granted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.storagePermissionRequired,
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (Platform.isIOS) {
-      setState(() {
-        _isScanning = true;
-        _scanProgress = 0.0;
-        _scanStatus = AppLocalizations.of(context)!.selectMusicFiles;
-      });
-      try {
-        final added = await localService.pickAndAddFiles();
-        if (mounted) {
-          if (localService.songs.isNotEmpty) {
-            final authProvider =
-                Provider.of<AuthProvider>(context, listen: false);
-            await authProvider.setLocalOnlyMode(true);
-            _popIfPushed();
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  added == 0
-                      ? AppLocalizations.of(context)!.noFilesSelected
-                      : AppLocalizations.of(context)!.noMusicFilesFound,
-                ),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
-      } finally {
-        if (mounted) setState(() => _isScanning = false);
-      }
-      return;
-    }
-
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _isScanning = true;
       _scanProgress = 0.0;
-      _scanStatus = AppLocalizations.of(context)!.startingScan;
+      _scanStatus = l10n.startingScan;
     });
-
-    void updateProgress() {
-      if (mounted) {
-        setState(() {
-          _scanProgress = localService.scanProgress;
-          _scanStatus = localService.scanStatus;
-        });
-      }
-    }
-
-    localService.addListener(updateProgress);
-
     try {
-      await localService.scanForMusic();
-
-      if (mounted) {
-        if (localService.songs.isNotEmpty) {
-          final authProvider = Provider.of<AuthProvider>(
-            context,
-            listen: false,
-          );
-          await authProvider.setLocalOnlyMode(true);
-          _popIfPushed();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.noMusicFilesFound),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
+      // 公共流程（utils/local_library_launcher.dart）——「添加服务器」页
+      // 的「其他方式」也用同一个实现，避免两份。
+      final switched = await launchLocalLibrary(
+        context,
+        onProgress: (progress, status) {
+          if (mounted) {
+            setState(() {
+              _scanProgress = progress;
+              _scanStatus = status;
+            });
+          }
+        },
+      );
+      if (switched) _popIfPushed();
     } finally {
-      localService.removeListener(updateProgress);
-      if (mounted) {
-        setState(() => _isScanning = false);
-      }
+      if (mounted) setState(() => _isScanning = false);
     }
   }
 
@@ -340,7 +272,8 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
+      backgroundColor:
+          _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
       body: SafeArea(
         child: Stack(
           children: [
@@ -412,11 +345,10 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
                               for (final profile in profiles) ...[
                                 ServerProfileCard(
                                   profile: profile,
-                                  isActive:
-                                      authProvider.config?.serverUrl ==
-                                              profile.serverUrl &&
-                                          authProvider.config?.username ==
-                                              profile.username,
+                                  isActive: authProvider.config?.serverUrl ==
+                                          profile.serverUrl &&
+                                      authProvider.config?.username ==
+                                          profile.username,
                                   onTap: () => _onProfileTap(profile),
                                 ),
                                 const SizedBox(height: 12),
@@ -603,9 +535,7 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
                     )
                   : const Icon(CupertinoIcons.folder),
               label: Text(
-                _isScanning
-                    ? _scanStatus
-                    : l10n.useLocalFiles,
+                _isScanning ? _scanStatus : l10n.useLocalFiles,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

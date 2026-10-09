@@ -104,9 +104,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         serverFamily: data['serverFamily'] as String? ?? 'subsonic',
         // 道理鱼只认明文 p=：无论 QR 是否携带 useLegacyAuth 都强制开启
         // （旧版导出的 QR 无此字段，回退 false 会导致 token 认证被拒 401）。
-        useLegacyAuth:
-            (data['useLegacyAuth'] as bool? ?? false) ||
-                (data['serverFamily'] as String? ?? '') == 'daoliyu',
+        useLegacyAuth: (data['useLegacyAuth'] as bool? ?? false) ||
+            (data['serverFamily'] as String? ?? '') == 'daoliyu',
         allowSelfSignedCertificates:
             data['allowSelfSignedCertificates'] as bool? ?? false,
         name: data['name'] as String?,

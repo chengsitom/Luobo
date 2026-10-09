@@ -63,8 +63,12 @@ void main() {
       await tester.pump();
       await tester.pump(); // 等待已保存配置的 FutureBuilder 解析
 
-      // 两步引导：第 1 步网关页 → 点「Add Server」进入第 2 步连接表单
+      // 两步引导：第 1 步网关页 → 点「Add Server」进入第 2 步。
+      // 第 2 步现在是**先选服务器类型**（设计稿 B3 类型网格），选定后才进表单。
       await tester.tap(find.text('Add Server'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Subsonic'));
       await tester.pumpAndSettle();
 
       expect(find.text('Server URL'), findsOneWidget);
@@ -97,6 +101,10 @@ void main() {
       await tester.pump(); // 等待已保存配置的 FutureBuilder 解析
 
       await tester.tap(find.text('Add Server'));
+      await tester.pumpAndSettle();
+
+      // 先过类型网格（设计稿 B3），再进表单校验空字段。
+      await tester.tap(find.text('Subsonic'));
       await tester.pumpAndSettle();
 
       final connectButton = find.text('Connect');

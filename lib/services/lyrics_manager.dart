@@ -39,11 +39,11 @@ class LyricsManager {
   factory LyricsManager.empty() => LyricsManager._([]);
 
   /// Parses an LRC file content and creates a LyricsManager
-  /// 
+  ///
   /// LRC format:
   /// [mm:ss.xx]Lyrics text
   /// [mm:ss.xx]Lyrics text
-  /// 
+  ///
   /// Also supports extended tags like [ar:Artist], [ti:Title], etc.
   factory LyricsManager.parse(String lrcContent) {
     if (lrcContent.trim().isEmpty) {
@@ -59,12 +59,12 @@ class LyricsManager {
 
       // Match all timestamps on this line (some formats have multiple [mm:ss.xx] tags)
       final matches = linePattern.allMatches(trimmed);
-      
+
       for (final match in matches) {
         final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
         final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
         final centiseconds = match.group(3) ?? '00';
-        
+
         // Handle both 2-digit (centiseconds) and 3-digit (milliseconds) formats
         final msDigits = centiseconds.length;
         final milliseconds = msDigits == 2
@@ -72,7 +72,7 @@ class LyricsManager {
             : int.tryParse(centiseconds.substring(0, 3)) ?? 0;
 
         final text = match.group(4)?.trim() ?? '';
-        
+
         if (text.isNotEmpty) {
           final timestamp = Duration(
             minutes: minutes,
@@ -86,7 +86,7 @@ class LyricsManager {
 
     // Sort by timestamp for binary search
     lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     return LyricsManager._(lines);
   }
 
@@ -116,7 +116,7 @@ class LyricsManager {
 
     // Find the line that corresponds to the current position
     final index = _findLineIndex(position);
-    
+
     if (index >= 0 && index < _lines.length) {
       _currentLine = _lines[index].text;
       return _currentLine;
@@ -134,11 +134,14 @@ class LyricsManager {
     }
 
     final index = _findLineIndex(position);
-    
+
     return LyricsContext(
       previousLine: index > 0 ? _lines[index - 1].text : null,
-      currentLine: index >= 0 && index < _lines.length ? _lines[index].text : null,
-      nextLine: index >= 0 && index < _lines.length - 1 ? _lines[index + 1].text : null,
+      currentLine:
+          index >= 0 && index < _lines.length ? _lines[index].text : null,
+      nextLine: index >= 0 && index < _lines.length - 1
+          ? _lines[index + 1].text
+          : null,
     );
   }
 
@@ -146,14 +149,12 @@ class LyricsManager {
   /// Returns the index of the line that should be displayed at the given position
   int _findLineIndex(Duration position) {
     // Optimize: check if we're still on the same line
-    if (_lastIndex != null && 
-        _lastIndex! >= 0 && 
-        _lastIndex! < _lines.length) {
+    if (_lastIndex != null && _lastIndex! >= 0 && _lastIndex! < _lines.length) {
       final currentLine = _lines[_lastIndex!];
-      final nextTimestamp = _lastIndex! < _lines.length - 1 
-          ? _lines[_lastIndex! + 1].timestamp 
+      final nextTimestamp = _lastIndex! < _lines.length - 1
+          ? _lines[_lastIndex! + 1].timestamp
           : null;
-      
+
       if (position >= currentLine.timestamp &&
           (nextTimestamp == null || position < nextTimestamp)) {
         return _lastIndex!;
@@ -182,7 +183,7 @@ class LyricsManager {
   }
 
   /// Creates a stream of lyrics lines synchronized to a position stream
-  /// 
+  ///
   /// Usage:
   /// ```dart
   /// final lyricsStream = lyricsManager.syncToPosition(

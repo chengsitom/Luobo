@@ -25,7 +25,8 @@ void main() {
       }
       final uri = Uri.parse(serverUrl);
       try {
-        final response = await http.get(uri).timeout(const Duration(seconds: 10));
+        final response =
+            await http.get(uri).timeout(const Duration(seconds: 10));
         expect(response.statusCode, anyOf(200, 401, 302, 404));
       } on SocketException catch (_) {
         fail('Cannot reach Navidrome at $serverUrl');

@@ -22,7 +22,9 @@ void main() {
     });
 
     test('编号型：英文 Chapter N 前缀', () {
-      final chapters = [for (var i = 1; i <= 6; i++) _ch('Chapter $i 面壁者', order: i)];
+      final chapters = [
+        for (var i = 1; i <= 6; i++) _ch('Chapter $i 面壁者', order: i)
+      ];
 
       expect(
         classifyAudiobookType(

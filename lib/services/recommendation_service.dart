@@ -752,8 +752,7 @@ class RecommendationService extends ChangeNotifier {
       // Prune dailyPlays / monthlyPlays to prevent unbounded storage growth.
       final now = DateTime.now();
       final dayCutoff = _dateKey(now.subtract(const Duration(days: 400)));
-      final monthCutoff =
-          _monthKey(DateTime(now.year - 2, now.month));
+      final monthCutoff = _monthKey(DateTime(now.year - 2, now.month));
       for (final p in _profiles.values) {
         p.dailyPlays.removeWhere((k, _) => k.compareTo(dayCutoff) < 0);
         p.monthlyPlays.removeWhere((k, _) => k.compareTo(monthCutoff) < 0);

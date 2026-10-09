@@ -32,8 +32,8 @@ class TestConfig {
     final configFile = File('test_server_config.json');
     if (configFile.existsSync()) {
       try {
-        final json = jsonDecode(configFile.readAsStringSync())
-            as Map<String, dynamic>;
+        final json =
+            jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
         _cachedJson = json;
         final url = json['url'] as String?;
         if (url != null && url.isNotEmpty) {
@@ -41,7 +41,8 @@ class TestConfig {
           return _cachedUrl!;
         }
       } catch (e) {
-        stderr.writeln('[TestConfig] Error reading test_server_config.json: $e');
+        stderr
+            .writeln('[TestConfig] Error reading test_server_config.json: $e');
       }
     }
 
@@ -70,7 +71,11 @@ class TestConfig {
       }
     }
 
-    _cachedJson = {'url': 'http://localhost:4533', 'username': '', 'password': ''};
+    _cachedJson = {
+      'url': 'http://localhost:4533',
+      'username': '',
+      'password': ''
+    };
     return _cachedJson!;
   }
 
@@ -81,22 +86,39 @@ class TestConfig {
   }
 
   static void printInstructions() {
-    stdout.writeln('╔══════════════════════════════════════════════════════════════╗');
-    stdout.writeln('║  Navidrome Test Server Not Configured                       ║');
-    stdout.writeln('╠══════════════════════════════════════════════════════════════╣');
-    stdout.writeln('║  To run integration tests against a real Navidrome server:   ║');
-    stdout.writeln('║                                                              ║');
-    stdout.writeln('║  1. Create test_server_config.json in the project root:      ║');
-    stdout.writeln('║     {                                                        ║');
-    stdout.writeln('║       "url": "http://YOUR_NAVIDROME_IP:4533",                ║');
-    stdout.writeln('║       "username": "your_user",                               ║');
-    stdout.writeln('║       "password": "your_pass"                                ║');
-    stdout.writeln('║     }                                                        ║');
-    stdout.writeln('║                                                              ║');
-    stdout.writeln('║  2. Or pass via dart-define:                                 ║');
-    stdout.writeln('║     flutter test --dart-define=NAVIDROME_TEST_URL=...        ║');
-    stdout.writeln('║                                                              ║');
-    stdout.writeln('║  Tests that require a real server will be SKIPPED.            ║');
-    stdout.writeln('╚══════════════════════════════════════════════════════════════╝');
+    stdout.writeln(
+        '╔══════════════════════════════════════════════════════════════╗');
+    stdout.writeln(
+        '║  Navidrome Test Server Not Configured                       ║');
+    stdout.writeln(
+        '╠══════════════════════════════════════════════════════════════╣');
+    stdout.writeln(
+        '║  To run integration tests against a real Navidrome server:   ║');
+    stdout.writeln(
+        '║                                                              ║');
+    stdout.writeln(
+        '║  1. Create test_server_config.json in the project root:      ║');
+    stdout.writeln(
+        '║     {                                                        ║');
+    stdout.writeln(
+        '║       "url": "http://YOUR_NAVIDROME_IP:4533",                ║');
+    stdout.writeln(
+        '║       "username": "your_user",                               ║');
+    stdout.writeln(
+        '║       "password": "your_pass"                                ║');
+    stdout.writeln(
+        '║     }                                                        ║');
+    stdout.writeln(
+        '║                                                              ║');
+    stdout.writeln(
+        '║  2. Or pass via dart-define:                                 ║');
+    stdout.writeln(
+        '║     flutter test --dart-define=NAVIDROME_TEST_URL=...        ║');
+    stdout.writeln(
+        '║                                                              ║');
+    stdout.writeln(
+        '║  Tests that require a real server will be SKIPPED.            ║');
+    stdout.writeln(
+        '╚══════════════════════════════════════════════════════════════╝');
   }
 }

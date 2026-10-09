@@ -8,6 +8,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
 import '../utils/image_cache.dart';
+import 'lyrics/lyrics_cache.dart';
 import 'subsonic_service.dart';
 
 class DownloadState {
@@ -142,15 +143,6 @@ class OfflineService {
     return totalSize;
   }
 
-  String formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
   Future<bool> downloadSong(
     Song song,
     SubsonicService subsonicService, {
@@ -202,7 +194,19 @@ class OfflineService {
           title: song.title,
         );
         if (plainLyrics != null) lyricsMap['lyrics'] = plainLyrics;
-        if (lyricsMap.isNotEmpty) await saveLyrics(song.id, lyricsMap);
+        if (lyricsMap.isNotEmpty) {
+          // 带来源标记（`docs/歌词源优先级修复技术方案.md` §5.3）：下载路径拿到
+          // 的都是服务器歌词，标记后不会被误判为「来源可疑」而触发会话级复查。
+          await saveLyrics(
+            song.id,
+            withLyricsCacheMeta(
+              lyricsMap,
+              subsonicService.isDaoliyu
+                  ? LyricsCacheSource.daoliyu
+                  : LyricsCacheSource.server,
+            ),
+          );
+        }
       } catch (e) {
         debugPrint('Error downloading lyrics for ${song.title}: $e');
       }
@@ -480,7 +484,6 @@ class OfflineService {
   }
 
   String getPlayableUrl(Song song, SubsonicService subsonicService) {
-    
     if (song.isLocal == true && song.path != null) {
       return 'file://${song.path}';
     }

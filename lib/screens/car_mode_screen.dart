@@ -12,6 +12,7 @@ import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
 import '../services/storage_service.dart';
 import '../services/lrclib_service.dart';
+import '../services/lyrics/lyrics_cache.dart';
 import '../services/netease_lyrics_service.dart';
 import '../models/lyrics.dart';
 import '../models/song.dart';
@@ -125,9 +126,31 @@ class _CarModeScreenState extends State<CarModeScreen>
       final subsonicService =
           Provider.of<SubsonicService>(context, listen: false);
       final offlineService = OfflineService();
+      final serverSource = subsonicService.isDaoliyu
+          ? LyricsCacheSource.daoliyu
+          : LyricsCacheSource.server;
       final cached = await offlineService.getLocalLyrics(song.id);
-      final syncedData = cached?['lyricsList'] as Map<String, dynamic>? ??
-          await subsonicService.getLyricsBySongId(song.id);
+      // 缓存来源可信（服务器来源）直接用；来源是兜底或旧缓存无标记时，本会话首次
+      // 复查一次服务器，命中则覆盖缓存 —— 解决「兜底永久占位」（§2.4 / §5.3）。
+      final outcome = await resolveLyricsCache(
+        songId: song.id,
+        cached: cached,
+        serverSource: serverSource,
+        fetchServerLyrics: () => subsonicService.getLyricsBySongId(song.id),
+        saveCache: (payload) => offlineService.saveLyrics(song.id, payload),
+      );
+      Map<String, dynamic>? syncedData =
+          outcome.payload?['lyricsList'] as Map<String, dynamic>?;
+      if (syncedData == null) {
+        syncedData = await subsonicService.getLyricsBySongId(song.id);
+        // 服务器命中 → 写缓存（§5.3）
+        if (syncedData != null) {
+          await offlineService.saveLyrics(
+            song.id,
+            withLyricsCacheMeta({'lyricsList': syncedData}, serverSource),
+          );
+        }
+      }
 
       if (!mounted) return;
 
@@ -162,12 +185,22 @@ class _CarModeScreenState extends State<CarModeScreen>
         }
       }
 
-      final plainData = cached?['lyrics'] as Map<String, dynamic>? ??
-          await subsonicService.getLyrics(
-            artist: song.artist,
-            title: song.title,
-            id: song.id,
+      Map<String, dynamic>? plainData =
+          outcome.payload?['lyrics'] as Map<String, dynamic>?;
+      if (plainData == null) {
+        plainData = await subsonicService.getLyrics(
+          artist: song.artist,
+          title: song.title,
+          id: song.id,
+        );
+        // 服务器命中 → 写缓存（§5.3）
+        if (plainData != null) {
+          await offlineService.saveLyrics(
+            song.id,
+            withLyricsCacheMeta({'lyrics': plainData}, serverSource),
           );
+        }
+      }
 
       if (!mounted) return;
 
@@ -207,7 +240,10 @@ class _CarModeScreenState extends State<CarModeScreen>
           } else {
             cacheMap['lyrics'] = fallbackLyrics;
           }
-          await offlineService.saveLyrics(song.id, cacheMap);
+          await offlineService.saveLyrics(
+            song.id,
+            withLyricsCacheMeta(cacheMap, LyricsCacheSource.lrclib),
+          );
 
           if (fallbackLyrics.containsKey('structuredLyrics')) {
             final structured = fallbackLyrics['structuredLyrics'];
@@ -274,7 +310,10 @@ class _CarModeScreenState extends State<CarModeScreen>
           } else {
             cacheMap['lyrics'] = neteaseLyrics;
           }
-          await offlineService.saveLyrics(song.id, cacheMap);
+          await offlineService.saveLyrics(
+            song.id,
+            withLyricsCacheMeta(cacheMap, LyricsCacheSource.netease),
+          );
 
           if (neteaseLyrics.containsKey('structuredLyrics')) {
             final structured = neteaseLyrics['structuredLyrics'];
@@ -635,7 +674,8 @@ class _CarModeScreenState extends State<CarModeScreen>
                                       child: CachedNetworkImage(
                                         cacheManager: coverCacheManager,
                                         imageUrl: coverUrl,
-                                        cacheKey: coverArtCacheKeyFromUrl(coverUrl),
+                                        cacheKey:
+                                            coverArtCacheKeyFromUrl(coverUrl),
                                         width: 120,
                                         height: 120,
                                         fit: BoxFit.cover,

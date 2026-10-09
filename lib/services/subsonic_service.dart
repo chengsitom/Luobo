@@ -11,6 +11,7 @@ import '../models/json_coerce.dart';
 import '../models/models.dart';
 import 'diagnostics/diagnostics.dart';
 import 'jellyfin_service.dart';
+import 'lyrics/lrc_parser.dart';
 import 'storage_service.dart';
 import 'youtube_service.dart';
 
@@ -144,7 +145,8 @@ class SubsonicService {
         lastActive != null &&
         lastActive == _config!.normalizedUrl) {
       _setActiveBaseUrl(_config!.normalizedUrl);
-      Log.i('Net', 'Last session on remote, skipping LAN probe: $_activeBaseUrl');
+      Log.i(
+          'Net', 'Last session on remote, skipping LAN probe: $_activeBaseUrl');
       DiagnosticsService.instance.record(
         EventType.netUrlResolved,
         LogLevel.info,
@@ -1095,11 +1097,12 @@ class SubsonicService {
       // 道理鱼自研层 coverArt 是 path 形式（/api/cover?path=...），与 Subsonic
       // getCoverArt?id=album:alb_xxx 不匹配，直接用会 404。改为专辑 id 前缀，
       // 与 Subsonic 层封面取法对齐。
-      coverArt: album?['id'] != null ? 'album:${album!['id']}' : t['coverArt']?.toString(),
+      coverArt: album?['id'] != null
+          ? 'album:${album!['id']}'
+          : t['coverArt']?.toString(),
       duration: jsonInt(t['durationSeconds']) ?? jsonInt(t['duration']),
       bitRate: jsonInt(t['bitrate']) ?? jsonInt(t['bitRate']),
-      suffix:
-          t['detectedContainer']?.toString() ?? t['fileFormat']?.toString(),
+      suffix: t['detectedContainer']?.toString() ?? t['fileFormat']?.toString(),
       samplingRate: jsonInt(t['sampleRate']),
       bitDepth: jsonInt(t['bitDepth']),
       created: t['createdAt'] != null
@@ -1137,7 +1140,7 @@ class SubsonicService {
     int take = 50,
   }) async {
     final data = await _apiGet(
-      '/api/library/audiobooks/$audiobookId/episodes?limit=$take&skip=$skip');
+        '/api/library/audiobooks/$audiobookId/episodes?limit=$take&skip=$skip');
     final chapters = data?['chapters'] as List<dynamic>? ?? [];
     return AudiobookChapterPage(
       chapters: chapters
@@ -1290,11 +1293,13 @@ class SubsonicService {
   /// 道理鱼自研歌词：GET /api/tracks/{id}/lyrics，取 effectiveCandidate.lyrics
   /// （LRC 含中英交错行）。
   ///
-  /// 直接返回 `{lyrics: <LRC 文本>}` —— 与 Subsonic getLyrics 返回形状一致，
-  /// 消费者（player_provider._loadAndSyncLyrics）走 `lyrics` 字符串分支喂给
-  /// lyricsManager，由既有 LRC 解析器处理时间轴。⚠️ 不要转 structuredLyrics：
-  /// 消费者 _convertStructuredToLrc 读的是 Jellyfin 的 {startTicks, text} 字段，
-  /// 用 {start, value} 会产出空行（此前 bug，真机会话确认）。
+  /// 返回**双键契约**（`docs/歌词源优先级修复技术方案.md` §4 方案 C / §5.1）：
+  ///   • `lyrics`：原始 LRC 文本（无损）→ 车机链走 LyricsManager 解析时间轴；
+  ///   • `structuredLyrics`：行数组 `{'synced': true, 'line': [{'start','value'}]}`
+  ///     → 三个 UI 入口（全屏歌词页 / 车载模式页 / 迷你播放器）逐行渲染。
+  ///
+  /// 仅当 LRC 含有效时间轴行时才产出 `structuredLyrics`；纯文本时只返回 `lyrics`
+  /// （此时两侧都拿不到有效歌词，仍走 LRCLIB/网易云兜底）。
   ///
   /// 拿不到有效歌词返回 null（走 LRCLIB/网易云兜底）。
   Future<Map<String, dynamic>?> _getDaoliyuLyrics(String songId) async {
@@ -1312,7 +1317,15 @@ class SubsonicService {
 
       final lrc = candidate['lyrics'] as String?;
       if (lrc == null || lrc.isEmpty) return null;
-      return {'lyrics': lrc};
+
+      final result = <String, dynamic>{'lyrics': lrc};
+      final lines = lrcToStructuredLines(lrc);
+      if (lines.isNotEmpty) {
+        result['structuredLyrics'] = [
+          {'synced': true, 'line': lines},
+        ];
+      }
+      return result;
     } catch (e) {
       // 服务端返回结构意外（类型/字段变化）时，降级走 LRCLIB/网易云兜底。
       Log.w('Daoliyu', 'Lyrics parse failed: $e');

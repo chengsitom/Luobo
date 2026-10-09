@@ -54,6 +54,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get yourPlaylists => '你的歌单';
 
   @override
+  String get roaming => '漫游';
+
+  @override
+  String get roamingSubtitle => '随机漫游曲库';
+
+  @override
+  String get quickStart => '快速开始';
+
+  @override
   String get favoritePlaylists => '收藏的歌单';
 
   @override
@@ -634,12 +643,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get likedSongs => '喜欢的歌曲';
 
   @override
-  String get likedAlbums => '喜欢的专辑';
-
-  @override
-  String get noLikedAlbums => '暂无喜欢的专辑';
-
-  @override
   String get localMusicLibrary => '本地音乐库';
 
   @override
@@ -818,7 +821,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsGroupDisplay => '显示与外观';
 
   @override
-  String get settingsDisplayEntry => '显示与外观';
+  String get settingsDisplayEntry => '播放器界面';
+
+  @override
+  String get settingsGroupAbout => '关于 Luobo';
 
   @override
   String get settingsGroupAi => 'AI 智能';
@@ -1387,12 +1393,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get songsWillAppearHere => '您播放的歌曲将显示在这里';
 
   @override
-  String get sortByTitleAZ => '标题 (A-Z)';
-
-  @override
-  String get sortByTitleZA => '标题 (Z-A)';
-
-  @override
   String get sortByArtistAZ => '艺术家 (A-Z)';
 
   @override
@@ -1501,6 +1501,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get serverUrlHint => 'https://your-server.com';
+
+  @override
+  String get usernameHint => '例如：admin';
+
+  @override
+  String get passwordHint => '请输入密码';
 
   @override
   String get profileNameLabel => '配置名称（可选）';
@@ -1819,6 +1825,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get themeModeSystem => '跟随系统';
+
+  @override
+  String get themeModeTitle => '主题模式';
+
+  @override
+  String get clearAppCache => '清除 App 缓存';
+
+  @override
+  String get appearanceGlassHint => '玻璃与卡片样式由设计体系统一定义，不提供调节。';
 
   @override
   String get themeModeLight => '浅色';
@@ -2149,12 +2164,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get gaplessPlaybackSubtitle => '消除歌曲之间的间隔';
-
-  @override
-  String get customizeNowPlaying => '自定义正在播放界面（Beta）';
-
-  @override
-  String get customizeNowPlayingSubtitle => '创建和管理自定义主题';
 
   @override
   String get lyricsSection => '歌词';
@@ -2534,9 +2543,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connecting => '连接中…';
 
   @override
-  String get nowPlayingThemesTitle => '正在播放主题';
-
-  @override
   String get newThemeDefaultName => '新主题';
 
   @override
@@ -2744,28 +2750,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noFavoriteSongs => '还没有收藏的歌曲';
 
   @override
-  String get noFavoriteAlbums => '还没有收藏的专辑';
-
-  @override
   String get listeningHistoryHint => '您播放的歌曲会显示在这里';
-
-  @override
-  String get sortTitleAz => '标题（A-Z）';
-
-  @override
-  String get sortTitleZa => '标题（Z-A）';
-
-  @override
-  String get sortArtistAz => '艺术家（A-Z）';
-
-  @override
-  String get sortArtistZa => '艺术家（Z-A）';
-
-  @override
-  String get sortAlbumAz => '专辑（A-Z）';
-
-  @override
-  String get sortAlbumZa => '专辑（Z-A）';
 
   @override
   String get searchInLibrary => '在曲库中搜索...';
@@ -2841,6 +2826,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noTranscoding => '原始格式（未转码）';
 
   @override
+  String get transcodeShortIdle => '不转码';
+
+  @override
+  String get transcodeShortActive => '转码中';
+
+  @override
+  String get transcodeShortDone => '已转码';
+
+  @override
   String get streamWillTranscode => '当前网络将转码';
 
   @override
@@ -2865,4 +2859,46 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get edit => '编辑';
+
+  @override
+  String get serverStatus => '服务器状态';
+
+  @override
+  String get rescanLibrary => '重新扫描曲库';
+
+  @override
+  String get removeConnection => '移除连接';
+
+  @override
+  String get connectedServers => '已连接的服务器';
+
+  @override
+  String get serversHint => '点击切换当前服务器；右上角可扫码或新增。';
+
+  @override
+  String get libraryRefreshed => '曲库已刷新';
+
+  @override
+  String get serverDetail => '服务器详情';
+
+  @override
+  String get formLocalOnlyNote => '以上信息仅保存在本设备';
+
+  @override
+  String get serverTypeGridHint => '选定类型后进入表单填写地址与账号 —— 表单样式与「修改连接」完全一致。';
+
+  @override
+  String get otherWays => '其他方式';
+
+  @override
+  String get operationFailed => '操作失败';
+
+  @override
+  String get useLocalFilesConfirmTitle => '切到本地音乐模式？';
+
+  @override
+  String get useLocalFilesConfirmBody => '会断开当前服务器连接，改用本机上的音乐文件。';
+
+  @override
+  String get sortFieldTitle => '标题';
 }

@@ -55,6 +55,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get yourPlaylists => 'Deine Playlisten';
 
   @override
+  String get roaming => 'Roaming';
+
+  @override
+  String get roamingSubtitle => 'Shuffle the whole library';
+
+  @override
+  String get quickStart => 'Quick Start';
+
+  @override
   String get favoritePlaylists => 'Favorite Playlists';
 
   @override
@@ -644,12 +653,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get likedSongs => 'Lieblingssongs';
 
   @override
-  String get likedAlbums => 'Liked Albums';
-
-  @override
-  String get noLikedAlbums => 'No liked albums yet';
-
-  @override
   String get localMusicLibrary => 'Local Music Library';
 
   @override
@@ -831,7 +834,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsGroupDisplay => 'Display & Appearance';
 
   @override
-  String get settingsDisplayEntry => 'Display & Appearance';
+  String get settingsDisplayEntry => 'Player Interface';
+
+  @override
+  String get settingsGroupAbout => 'About Luobo';
 
   @override
   String get settingsGroupAi => 'AI';
@@ -1409,12 +1415,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Songs, die du spielst, werden hier angezeigt';
 
   @override
-  String get sortByTitleAZ => 'Songs (A-Z)';
-
-  @override
-  String get sortByTitleZA => 'Songs (A-Z)';
-
-  @override
   String get sortByArtistAZ => 'Künstler (A-Z)';
 
   @override
@@ -1529,6 +1529,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get serverUrlHint => 'https://your-server.com';
+
+  @override
+  String get usernameHint => 'e.g. admin';
+
+  @override
+  String get passwordHint => 'Enter password';
 
   @override
   String get profileNameLabel => 'Profile Name (optional)';
@@ -1859,6 +1865,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get themeModeSystem => 'System';
+
+  @override
+  String get themeModeTitle => 'Theme Mode';
+
+  @override
+  String get clearAppCache => 'Clear App Cache';
+
+  @override
+  String get appearanceGlassHint =>
+      'Glass and card styling is defined by the design system and is not user-adjustable.';
 
   @override
   String get themeModeLight => 'Light';
@@ -2200,12 +2216,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get gaplessPlaybackSubtitle => 'Eliminate silence between songs';
-
-  @override
-  String get customizeNowPlaying => 'Customize Now Playing Screen (Beta)';
-
-  @override
-  String get customizeNowPlayingSubtitle => 'Create and manage custom themes';
 
   @override
   String get lyricsSection => 'LYRICS';
@@ -2642,9 +2652,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get connecting => 'Verbinde';
 
   @override
-  String get nowPlayingThemesTitle => 'Now Playing Themes';
-
-  @override
   String get newThemeDefaultName => 'New Theme';
 
   @override
@@ -2853,28 +2860,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get noFavoriteSongs => 'No favorite songs yet';
 
   @override
-  String get noFavoriteAlbums => 'No favorite albums yet';
-
-  @override
   String get listeningHistoryHint => 'Songs you play will appear here';
-
-  @override
-  String get sortTitleAz => 'Title (A-Z)';
-
-  @override
-  String get sortTitleZa => 'Title (Z-A)';
-
-  @override
-  String get sortArtistAz => 'Artist (A-Z)';
-
-  @override
-  String get sortArtistZa => 'Artist (Z-A)';
-
-  @override
-  String get sortAlbumAz => 'Album (A-Z)';
-
-  @override
-  String get sortAlbumZa => 'Album (Z-A)';
 
   @override
   String get searchInLibrary => 'Search in Library...';
@@ -2950,6 +2936,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get noTranscoding => 'Original (not transcoded)';
 
   @override
+  String get transcodeShortIdle => 'Direct';
+
+  @override
+  String get transcodeShortActive => 'Transcoding';
+
+  @override
+  String get transcodeShortDone => 'Transcoded';
+
+  @override
   String get streamWillTranscode => 'Will transcode on current network';
 
   @override
@@ -2974,4 +2969,50 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get edit => 'Bearbeiten';
+
+  @override
+  String get serverStatus => 'Server Status';
+
+  @override
+  String get rescanLibrary => 'Rescan Library';
+
+  @override
+  String get removeConnection => 'Remove Connection';
+
+  @override
+  String get connectedServers => 'Connected Servers';
+
+  @override
+  String get serversHint =>
+      'Tap to switch the active server; scan or add from the top right.';
+
+  @override
+  String get libraryRefreshed => 'Library refreshed';
+
+  @override
+  String get serverDetail => 'Server Details';
+
+  @override
+  String get formLocalOnlyNote =>
+      'This information is stored only on this device.';
+
+  @override
+  String get serverTypeGridHint =>
+      'Pick a type, then fill in the address and account — the form is identical to \"Modify connection\".';
+
+  @override
+  String get otherWays => 'Other ways';
+
+  @override
+  String get operationFailed => 'Operation failed';
+
+  @override
+  String get useLocalFilesConfirmTitle => 'Switch to local music mode?';
+
+  @override
+  String get useLocalFilesConfirmBody =>
+      'This disconnects the current server and uses music files stored on this device instead.';
+
+  @override
+  String get sortFieldTitle => 'Title';
 }

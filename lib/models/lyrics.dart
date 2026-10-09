@@ -28,7 +28,8 @@ class SyncedLyrics {
       final ms = msStr.length == 2 ? int.parse(msStr) * 10 : int.parse(msStr);
       final ts = Duration(minutes: minutes, seconds: seconds, milliseconds: ms);
       final textStart = m.end;
-      final textEnd = i + 1 < matches.length ? matches[i + 1].start : rawText.length;
+      final textEnd =
+          i + 1 < matches.length ? matches[i + 1].start : rawText.length;
       final segText = rawText.substring(textStart, textEnd).trim();
       if (segText.isNotEmpty) {
         segments.add(WordSegment(timestamp: ts, text: segText));
@@ -63,7 +64,8 @@ class SyncedLyrics {
         continue;
       }
 
-      final regex = RegExp(r'\[(\d{1,2}):(\d{2})[:.](\d{2,3})\](.*)', dotAll: true);
+      final regex =
+          RegExp(r'\[(\d{1,2}):(\d{2})[:.](\d{2,3})\](.*)', dotAll: true);
       final match = regex.firstMatch(trimmed);
 
       if (match != null) {
@@ -108,10 +110,8 @@ class SyncedLyrics {
   }
 
   factory SyncedLyrics.fromPlainText(String text) {
-    final lines = text
-        .split('\n')
-        .where((line) => line.trim().isNotEmpty)
-        .toList();
+    final lines =
+        text.split('\n').where((line) => line.trim().isNotEmpty).toList();
 
     return SyncedLyrics(
       lines: lines.asMap().entries.map((entry) {

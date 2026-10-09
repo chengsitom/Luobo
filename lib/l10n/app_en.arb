@@ -77,6 +77,21 @@
     "description": "Your playlists section title"
   },
 
+  "roaming": "Roaming",
+  "@roaming": {
+    "description": "Home quick-entry card: random playback across the whole library (fnos-style 'music roaming')"
+  },
+
+  "roamingSubtitle": "Shuffle the whole library",
+  "@roamingSubtitle": {
+    "description": "Subtitle under the Roaming card on the home screen"
+  },
+
+  "quickStart": "Quick Start",
+  "@quickStart": {
+    "description": "Home section title for the Roaming / Playlist / Favorites entry cards"
+  },
+
   "favoritePlaylists": "Favorite Playlists",
   "@favoritePlaylists": {
     "description": "Favorite playlists section title on home screen"
@@ -931,8 +946,6 @@
   "filterAlbums": "Albums",
   "filterArtists": "Artists",
   "likedSongs": "Liked Songs",
-  "likedAlbums": "Liked Albums",
-  "noLikedAlbums": "No liked albums yet",
   "localMusicLibrary": "Local Music Library",
   "mergeLocalLibrary": "Merge with Server Library",
   "mergeLocalLibrarySubtitle": "Show local music alongside your server library",
@@ -1029,7 +1042,9 @@
   "settingsGroupStorage": "Download & Storage",
   "settingsStorageEntry": "Download & Storage",
   "settingsGroupDisplay": "Display & Appearance",
-  "settingsDisplayEntry": "Display & Appearance",
+  "settingsDisplayEntry": "Player Interface",
+  "settingsGroupAbout": "About Luobo",
+  "@settingsGroupAbout": { "description": "Settings root group title: about this app" },
   "settingsGroupAi": "AI",
   "settingsAiEntry": "AI Playlists & Knowledge",
   "settingsGroupSupport": "Support & Help",
@@ -1442,11 +1457,7 @@
   "@songsWillAppearHere": { "description": "Empty state subtitle on the history screen" },
 
   "@_SORT_OPTIONS": {},
-  "sortByTitleAZ": "Title (A-Z)",
-  "@sortByTitleAZ": { "description": "Sort option: title ascending" },
 
-  "sortByTitleZA": "Title (Z-A)",
-  "@sortByTitleZA": { "description": "Sort option: title descending" },
 
   "sortByArtistAZ": "Artist (A-Z)",
   "@sortByArtistAZ": { "description": "Sort option: artist ascending" },
@@ -1562,6 +1573,12 @@
 
   "serverUrlHint": "https://your-server.com",
   "@serverUrlHint": { "description": "Hint text for the server URL field" },
+
+  "usernameHint": "e.g. admin",
+  "@usernameHint": { "description": "Hint text for the username field" },
+
+  "passwordHint": "Enter password",
+  "@passwordHint": { "description": "Hint text for the password field" },
 
   "profileNameLabel": "Profile Name (optional)",
   "@profileNameLabel": { "description": "Label for the optional profile name field" },
@@ -1928,6 +1945,12 @@
 
   "themeModeSystem": "System",
   "@themeModeSystem": { "description": "Theme mode option that follows the OS setting" },
+  "themeModeTitle": "Theme Mode",
+  "@themeModeTitle": { "description": "Appearance page section title: theme mode" },
+  "clearAppCache": "Clear App Cache",
+  "@clearAppCache": { "description": "App settings: clear cover image and app cache" },
+  "appearanceGlassHint": "Glass and card styling is defined by the design system and is not user-adjustable.",
+  "@appearanceGlassHint": { "description": "Appearance page hint: glass effect is not customizable" },
 
   "themeModeLight": "Light",
   "@themeModeLight": { "description": "Light theme mode option" },
@@ -2302,10 +2325,6 @@
   "@gaplessPlayback": { "description": "Section title for gapless playback setting" },
   "gaplessPlaybackSubtitle": "Eliminate silence between songs",
   "@gaplessPlaybackSubtitle": { "description": "Subtitle for gapless playback toggle" },
-  "customizeNowPlaying": "Customize Now Playing Screen (Beta)",
-  "@customizeNowPlaying": { "description": "Title for customize now playing screen option" },
-  "customizeNowPlayingSubtitle": "Create and manage custom themes",
-  "@customizeNowPlayingSubtitle": { "description": "Subtitle for customize now playing screen option" },
 
   "lyricsSection": "Lyrics",
   "@lyricsSection": { "description": "Section title for lyrics settings" },
@@ -2552,8 +2571,6 @@
   "serverType": "Server Type",
   "@serverType": { "description": "Section title for server type selector" },
 
-  "nowPlayingThemesTitle": "Now Playing Themes",
-  "@nowPlayingThemesTitle": { "description": "App bar title for theme manager screen" },
   "newThemeDefaultName": "New Theme",
   "@newThemeDefaultName": { "description": "Default name for a newly created theme" },
   "newThemeDefaultAuthor": "Me",
@@ -2685,26 +2702,12 @@
 
   "noFavoriteSongs": "No favorite songs yet",
   "@noFavoriteSongs": { "description": "Empty state when there are no favorite songs" },
-  "noFavoriteAlbums": "No favorite albums yet",
-  "@noFavoriteAlbums": { "description": "Empty state when there are no favorite albums" },
   "listeningHistory": "Listening History",
   "@listeningHistory": { "description": "App bar title for listening history screen" },
   "noListeningHistory": "No Listening History",
   "@noListeningHistory": { "description": "Empty state title for listening history" },
   "listeningHistoryHint": "Songs you play will appear here",
   "@listeningHistoryHint": { "description": "Empty state hint for listening history" },
-  "sortTitleAz": "Title (A-Z)",
-  "@sortTitleAz": { "description": "Sort option by title ascending" },
-  "sortTitleZa": "Title (Z-A)",
-  "@sortTitleZa": { "description": "Sort option by title descending" },
-  "sortArtistAz": "Artist (A-Z)",
-  "@sortArtistAz": { "description": "Sort option by artist ascending" },
-  "sortArtistZa": "Artist (Z-A)",
-  "@sortArtistZa": { "description": "Sort option by artist descending" },
-  "sortAlbumAz": "Album (A-Z)",
-  "@sortAlbumAz": { "description": "Sort option by album ascending" },
-  "sortAlbumZa": "Album (Z-A)",
-  "@sortAlbumZa": { "description": "Sort option by album descending" },
   "searchInLibrary": "Search in Library...",
   "@searchInLibrary": { "description": "Search field placeholder in library search" },
   "searchYourLibrary": "Search your library",
@@ -2765,6 +2768,12 @@
 
   "noTranscoding": "Original (not transcoded)",
   "@noTranscoding": { "description": "Audio quality status when transcoding is off" },
+  "transcodeShortIdle": "Direct",
+  "@transcodeShortIdle": { "description": "Short transcode status for compact rows (account card subtitle). 'No transcoding'." },
+  "transcodeShortActive": "Transcoding",
+  "@transcodeShortActive": { "description": "Short transcode status for compact rows: currently transcoding." },
+  "transcodeShortDone": "Transcoded",
+  "@transcodeShortDone": { "description": "Short transcode status for compact rows: stream already transcoded." },
   "streamWillTranscode": "Will transcode on current network",
   "@streamWillTranscode": { "description": "Status label when playback will be transcoded on the current network" },
   "streamWillTranscodeTo": "Will transcode to {format} {bitrate}kbps on current network ({network})",
@@ -2775,5 +2784,38 @@
   "@transcodedToNoNetwork": { "description": "Audio quality status when transcoding is enabled (network type shown as an icon)", "placeholders": { "format": { "type": "String" }, "bitrate": { "type": "int" } } },
   "transcodingInProgress": "Transcoding to {format} {bitrate}kbps",
   "@transcodingInProgress": { "description": "Status when playback is being/will be transcoded on the current network (network type shown by leading icon + text)", "placeholders": { "format": { "type": "String" }, "bitrate": { "type": "int" } } },
-  "edit": "Edit"
+  "edit": "Edit",
+  "serverStatus": "Server Status",
+  "@serverStatus": { "description": "Server action panel entry leading to the server detail page" },
+  "rescanLibrary": "Rescan Library",
+  "@rescanLibrary": { "description": "Server action panel entry that refreshes the library from the server" },
+  "removeConnection": "Remove Connection",
+  "@removeConnection": { "description": "Destructive server action; removes the saved server profile" },
+  "connectedServers": "Connected Servers",
+  "@connectedServers": { "description": "Title of the server management page" },
+  "serversHint": "Tap to switch the active server; scan or add from the top right.",
+  "@serversHint": { "description": "Hint shown below the server list" },
+  "libraryRefreshed": "Library refreshed",
+  "@libraryRefreshed": { "description": "Toast shown after a successful library rescan" },
+  "serverDetail": "Server Details",
+  "@serverDetail": { "description": "Title of the server detail page (B4)" },
+  "formLocalOnlyNote": "This information is stored only on this device.",
+  "@formLocalOnlyNote": { "description": "Footnote under the connect button on the server form. Deliberately does NOT claim encryption - credentials are kept in SharedPreferences, not encrypted." },
+  "serverTypeGridHint": "Pick a type, then fill in the address and account — the form is identical to \"Modify connection\".",
+  "@serverTypeGridHint": { "description": "Hint under the server type grid on the add-server step" },
+  "otherWays": "Other ways",
+  "@otherWays": { "description": "Section title for alternative add-server entries (QR scan)" },
+  "operationFailed": "Operation failed",
+  "@operationFailed": { "description": "Generic toast for a failed local I/O or save operation" },
+  "useLocalFilesConfirmTitle": "Switch to local music mode?",
+  "@useLocalFilesConfirmTitle": { "description": "Confirm dialog title before switching to the on-device library" },
+  "useLocalFilesConfirmBody": "This disconnects the current server and uses music files stored on this device instead.",
+  "@useLocalFilesConfirmBody": { "description": "Confirm dialog body explaining that the server connection is dropped" },
+  "sortFieldTitle": "Title",
+  "@sortFieldTitle": { "description": "Sort field label: song title. Direction is shown by a separate arrow, not baked into the label (unlike the legacy sortTitleAz/Za keys)." }
 }
+
+
+
+
+

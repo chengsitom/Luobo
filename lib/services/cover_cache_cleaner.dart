@@ -62,8 +62,7 @@ class CoverCacheCleaner {
       var deletedCount = 0;
       for (final entry in entries) {
         if (totalSize <= _maxBytes) break;
-        final key =
-            entry.file.path.split(Platform.pathSeparator).last;
+        final key = entry.file.path.split(Platform.pathSeparator).last;
         await coverCacheManager.removeFile(key);
         totalSize -= entry.size;
         deletedBytes += entry.size;

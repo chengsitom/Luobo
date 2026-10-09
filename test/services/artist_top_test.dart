@@ -55,11 +55,16 @@ void main() {
   group('artistAlbumCoverArt 拼贴收集', () {
     test('按 artistId 收集 ≤4 张专辑封面', () {
       final albums = [
-        Album(id: '1', name: 'a1', artistId: 'x', artist: 'Jay', coverArt: 'c1'),
-        Album(id: '2', name: 'a2', artistId: 'x', artist: 'Jay', coverArt: 'c2'),
-        Album(id: '3', name: 'a3', artistId: 'x', artist: 'Jay', coverArt: 'c3'),
-        Album(id: '4', name: 'a4', artistId: 'x', artist: 'Jay', coverArt: 'c4'),
-        Album(id: '5', name: 'a5', artistId: 'x', artist: 'Jay', coverArt: 'c5'),
+        Album(
+            id: '1', name: 'a1', artistId: 'x', artist: 'Jay', coverArt: 'c1'),
+        Album(
+            id: '2', name: 'a2', artistId: 'x', artist: 'Jay', coverArt: 'c2'),
+        Album(
+            id: '3', name: 'a3', artistId: 'x', artist: 'Jay', coverArt: 'c3'),
+        Album(
+            id: '4', name: 'a4', artistId: 'x', artist: 'Jay', coverArt: 'c4'),
+        Album(
+            id: '5', name: 'a5', artistId: 'x', artist: 'Jay', coverArt: 'c5'),
       ];
       final covers = artistAlbumCoverArt(albums, Artist(id: 'x', name: 'Jay'));
       // 只取前 4，跳过第 5 张
@@ -82,7 +87,8 @@ void main() {
         Album(id: '1', name: 'a1', artistId: 'x'),
         Album(id: '2', name: 'a2', artistId: 'x', coverArt: ''),
       ];
-      expect(artistAlbumCoverArt(albums, Artist(id: 'x', name: 'Jay')), isEmpty);
+      expect(
+          artistAlbumCoverArt(albums, Artist(id: 'x', name: 'Jay')), isEmpty);
     });
 
     test('少于 4 张时返回全部', () {

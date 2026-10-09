@@ -118,8 +118,8 @@ void main() {
       expect(rep, containsAll(['a', 'b', 'c']));
       expect(rep, isNot(contains('d')));
 
-      final repExcluded =
-          engine.representativeSongs(topTags: 2, perTag: 2, exclude: {'a', 'b'});
+      final repExcluded = engine
+          .representativeSongs(topTags: 2, perTag: 2, exclude: {'a', 'b'});
       expect(repExcluded, contains('c'));
       expect(repExcluded, isNot(contains('a')));
       expect(repExcluded, isNot(contains('b')));

@@ -119,8 +119,8 @@ void main() {
     // 模拟被接管：锁文件 token 被其他实例改写
     final dir = Directory('$docsPath/diagnostics');
     final lock = File('${dir.path}/.writer.lock');
-    await lock.writeAsString(
-        '${DateTime.now().millisecondsSinceEpoch} tok-other');
+    await lock
+        .writeAsString('${DateTime.now().millisecondsSinceEpoch} tok-other');
 
     await a.flush(); // 心跳校验发现 token 不符 → lockLost
     expect(a.lockLost, isTrue);

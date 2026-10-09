@@ -12,7 +12,6 @@ enum AccentColor {
 }
 
 extension AccentColorExt on AccentColor {
-  
   Color get color {
     switch (this) {
       case AccentColor.red:
@@ -74,15 +73,12 @@ extension AccentColorExt on AccentColor {
 class ThemeService extends ChangeNotifier {
   static const String _keyThemeMode = 'app_theme_mode';
   static const String _keyAccentColor = 'app_accent_color';
-  static const String _keyLiquidGlass = 'app_liquid_glass';
 
   ThemeMode _themeMode = ThemeMode.system;
   AccentColor _accentColor = AccentColor.red;
-  bool _liquidGlass = false;
 
   ThemeMode get themeMode => _themeMode;
   AccentColor get accentColor => _accentColor;
-  bool get liquidGlass => _liquidGlass;
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
@@ -92,8 +88,6 @@ class ThemeService extends ChangeNotifier {
 
     final colorKey = prefs.getString(_keyAccentColor) ?? 'red';
     _accentColor = AccentColorExt.fromKey(colorKey);
-
-    _liquidGlass = prefs.getBool(_keyLiquidGlass) ?? false;
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -108,13 +102,6 @@ class ThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyAccentColor, color.persistKey);
-  }
-
-  Future<void> setLiquidGlass(bool enabled) async {
-    _liquidGlass = enabled;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyLiquidGlass, enabled);
   }
 
   static ThemeMode _themeModeFromKey(String key) {

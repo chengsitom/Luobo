@@ -9,7 +9,7 @@ import '../models/radio_station.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/player_ui_settings_service.dart';
-import '../services/theme_service.dart';
+import '../theme/design_tokens.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
@@ -51,8 +51,7 @@ class MiniPlayer extends StatelessWidget {
           coverArt = null;
         } else if (currentSong != null) {
           title = currentSong.title;
-          subtitle =
-              currentSong.artistParticipants != null &&
+          subtitle = currentSong.artistParticipants != null &&
                   currentSong.artistParticipants!.isNotEmpty
               ? currentSong.artistParticipants!.map((a) => a.name).join(', ')
               : currentSong.artist;
@@ -64,8 +63,6 @@ class MiniPlayer extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        final bool isGlass = Provider.of<ThemeService>(context).liquidGlass;
-
         final Widget row = _MiniPlayerRow(
           title: title,
           subtitle: subtitle,
@@ -73,87 +70,94 @@ class MiniPlayer extends StatelessWidget {
           isPlayingRadio: isPlayingRadio,
         );
 
-        if (isGlass) {
-          return RepaintBoundary(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: BackdropFilter(
-                  // Lower sigma keeps the glass look while costing far less
-                  // GPU per frame (this blur renders on every frame).
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: GestureDetector(
-                    onTap: onTap,
-                    child: Container(
-                      height: 64,
-                      decoration: BoxDecoration(
+        // 玻璃样式固定（`liquidGlass` 用户开关已删除，方案 §7 ⑭）。
+        // 迷你播放条属于**小面积固定元素**，允许毛玻璃；sigma 取 12 而非 24
+        // 是为省 GPU —— 这条每帧都在渲染。
+        return RepaintBoundary(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: LuoboGlass.blurBar,
+                  sigmaY: LuoboGlass.blurBar,
+                ),
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    // 显式撑满：父级 Column 默认 crossAxisAlignment.center，传下来的
+                    // 是松宽度约束（同 SettingsSubPage 踩过的坑）。这里原本靠
+                    // `_MiniPlayerRow` 内部的 Row 撑开，写明确更稳。
+                    width: double.infinity,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.45)
+                          : Colors.white.withValues(alpha: 0.62),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
                         color: isDark
-                            ? Colors.black.withValues(alpha: 0.45)
-                            : Colors.white.withValues(alpha: 0.62),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.14)
-                              : Colors.white.withValues(alpha: 0.85),
-                          width: 0.8,
-                        ),
+                            ? Colors.white.withValues(alpha: 0.14)
+                            : Colors.white.withValues(alpha: 0.85),
+                        width: 0.8,
                       ),
-                      child: row,
+                    ),
+                    child: Stack(
+                      children: [
+                        row,
+                        // 底部细进度线。
+                        // ⚠️ 原来默认（非玻璃）分支里有一条 LinearProgressIndicator
+                        // 显示播放进度，随「删 liquidGlass 用户开关」一并被删掉了 ——
+                        // 迷你条上没有进度，就等于「不点开播放页不知道听到哪了」。
+                        // 只包一层 Selector，避免整条播放条跟着进度每帧重建。
+                        Positioned(
+                          left: 14,
+                          right: 14,
+                          bottom: 4,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(1.5),
+                            child: SizedBox(
+                              height: 2.5,
+                              child: Selector<PlayerProvider, double>(
+                                selector: (_, p) => p.progress,
+                                builder: (_, progress, __) => Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ColoredBox(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.18)
+                                          : Colors.black.withValues(
+                                              alpha: 0.10,
+                                            ),
+                                    ),
+                                    FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: progress.clamp(0.0, 1.0),
+                                      child: const ColoredBox(
+                                        color: LuoboAccent.accent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }
-
-        return RepaintBoundary(
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              height: 64,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.95)
-                    : Colors.white.withValues(alpha: 0.95),
-                border: Border(
-                  top: BorderSide(
-                    color: isDark
-                        ? AppTheme.darkDivider
-                        : AppTheme.lightDivider,
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: Column(
-                children: [
-                  if (!isPlayingRadio)
-                    Selector<PlayerProvider, double>(
-                      selector: (ctx, p) => p.progress,
-                      builder: (ctx, progress, __) => LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: Colors.transparent,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.primary,
-                        ),
-                        minHeight: 2,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 2),
-                  Expanded(child: row),
-                ],
               ),
             ),
           ),
@@ -244,12 +248,12 @@ class _MiniPlayerRow extends StatelessWidget {
                     final baseStyle = theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ) ??
-                        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+                        const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600);
                     final baseSize = baseStyle.fontSize ?? 16;
                     // Cache the computed font size per (title, width) so the
                     // mini player doesn't re-measure on every rebuild.
-                    final cacheKey =
-                        '$title|${constraints.maxWidth.round()}';
+                    final cacheKey = '$title|${constraints.maxWidth.round()}';
                     final cached = _titleSizeCache[cacheKey];
                     final double size;
                     if (cached != null) {
@@ -345,7 +349,8 @@ class _MiniPlayerControls extends StatelessWidget {
               valueListenable: playerUiSettings.showMiniPlayerRepeatNotifier,
               builder: (context, showRepeat, _) {
                 return ValueListenableBuilder<bool>(
-                  valueListenable: playerUiSettings.showMiniPlayerShuffleNotifier,
+                  valueListenable:
+                      playerUiSettings.showMiniPlayerShuffleNotifier,
                   builder: (context, showShuffle, _) {
                     return Row(
                       mainAxisSize: MainAxisSize.min,
@@ -359,12 +364,17 @@ class _MiniPlayerControls extends StatelessWidget {
                               return IconButton(
                                 onPressed: provider.toggleFavorite,
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
                                 icon: Icon(
-                                  isStarred ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                  size: ScreenHelper.miniPlayerIconSize(context),
+                                  isStarred
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  size:
+                                      ScreenHelper.miniPlayerIconSize(context),
                                 ),
-                                color: isStarred ? AppTheme.appleMusicRed : color,
+                                color:
+                                    isStarred ? AppTheme.appleMusicRed : color,
                               );
                             },
                           ),
@@ -376,12 +386,16 @@ class _MiniPlayerControls extends StatelessWidget {
                               return IconButton(
                                 onPressed: provider.toggleShuffle,
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
                                 icon: Icon(
                                   CupertinoIcons.shuffle,
-                                  size: ScreenHelper.miniPlayerIconSize(context),
+                                  size:
+                                      ScreenHelper.miniPlayerIconSize(context),
                                 ),
-                                color: shuffleEnabled ? Theme.of(context).colorScheme.primary : color,
+                                color: shuffleEnabled
+                                    ? Theme.of(context).colorScheme.primary
+                                    : color,
                               );
                             },
                           ),
@@ -389,9 +403,12 @@ class _MiniPlayerControls extends StatelessWidget {
                         IconButton(
                           onPressed: provider.togglePlayPause,
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          constraints:
+                              const BoxConstraints(minWidth: 40, minHeight: 40),
                           icon: Icon(
-                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
                             size: ScreenHelper.miniPlayerPlayIconSize(context),
                           ),
                           color: color,
@@ -411,9 +428,14 @@ class _MiniPlayerControls extends StatelessWidget {
                               return IconButton(
                                 onPressed: provider.toggleRepeat,
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                                icon: Icon(icon, size: ScreenHelper.miniPlayerIconSize(context)),
-                                color: active ? Theme.of(context).colorScheme.primary : color,
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
+                                icon: Icon(icon,
+                                    size: ScreenHelper.miniPlayerIconSize(
+                                        context)),
+                                color: active
+                                    ? Theme.of(context).colorScheme.primary
+                                    : color,
                               );
                             },
                           ),
@@ -422,8 +444,11 @@ class _MiniPlayerControls extends StatelessWidget {
                           IconButton(
                             onPressed: hasNext ? provider.skipNext : null,
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                            icon: Icon(Icons.skip_next_rounded, size: ScreenHelper.miniPlayerSkipIconSize(context)),
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                            icon: Icon(Icons.skip_next_rounded,
+                                size: ScreenHelper.miniPlayerSkipIconSize(
+                                    context)),
                             color: color,
                           ),
                       ],
@@ -447,12 +472,8 @@ Color _networkBorderColor(BuildContext context) {
       Provider.of<SubsonicService>(context, listen: false).isUsingLocalUrl;
   final isDark = Theme.of(context).brightness == Brightness.dark;
   return isLan
-      ? (isDark
-          ? const Color(0x804CAF50)
-          : const Color(0x4D43A047))
-      : (isDark
-          ? const Color(0x80FB8C00)
-          : const Color(0x4DFB8C00));
+      ? (isDark ? const Color(0x804CAF50) : const Color(0x4D43A047))
+      : (isDark ? const Color(0x80FB8C00) : const Color(0x4DFB8C00));
 }
 
 /// Currently visible transcode toast (replaced on re-trigger so repeated
@@ -488,28 +509,33 @@ void _showTranscodeToast(BuildContext context) {
 
   // Transcode status — actual for the current stream, settings-implied
   // otherwise. Network type is shown as a leading icon + label group.
-    final isDark = theme.brightness == Brightness.dark;
-    // 网络信息前置成组（图标 + 文字），状态描述在后，避免行尾孤立图标。
-    final isWifi = transcoding.currentConnectionType == ConnectionType.wifi;
-    final network = isWifi ? l10n.networkWifi : l10n.networkMobile;
-    final String statusLabel;
-    final Color statusColor;
-    if (player.isActiveStreamTranscoded) {
-      statusLabel = l10n.transcodedToNoNetwork(
-        TranscodeFormat.getLabel(player.activeStreamFormat ?? ''),
-        player.activeStreamBitrate ?? 0,
-      );
-      statusColor = isDark ? const Color(0xFFFFB74D) : const Color(0xFFE65100);
-    } else if (transcoding.getCurrentBitrate() != null) {
-      statusLabel = l10n.transcodingInProgress(
-        TranscodeFormat.getLabel(transcoding.getCurrentFormat() ?? ''),
-        transcoding.getCurrentBitrate() ?? 0,
-      );
-      statusColor = isDark ? const Color(0xFFFFB74D) : const Color(0xFFE65100);
-    } else {
-      statusLabel = l10n.noTranscoding;
-      statusColor = theme.colorScheme.primary;
-    }
+  //
+  // ⚠️ 与 `utils/connection_status.dart`（账号卡用的短形态）**故意不合并**：
+  // 这里问的是「**当前流**转没转码」，而 song_tile 的 `_QualityInfo` 问的是
+  // 「**这首歌**（可能不是当前曲目）会怎样」—— 两个不同的问题，硬合会丢语义。
+  // 三处共享的只有**橙色深浅档**，那部分已收敛到 `LuoboAccent.warnFor`。
+  final isDark = theme.brightness == Brightness.dark;
+  // 网络信息前置成组（图标 + 文字），状态描述在后，避免行尾孤立图标。
+  final isWifi = transcoding.currentConnectionType == ConnectionType.wifi;
+  final network = isWifi ? l10n.networkWifi : l10n.networkMobile;
+  final String statusLabel;
+  final Color statusColor;
+  if (player.isActiveStreamTranscoded) {
+    statusLabel = l10n.transcodedToNoNetwork(
+      TranscodeFormat.getLabel(player.activeStreamFormat ?? ''),
+      player.activeStreamBitrate ?? 0,
+    );
+    statusColor = LuoboAccent.warnFor(isDark);
+  } else if (transcoding.getCurrentBitrate() != null) {
+    statusLabel = l10n.transcodingInProgress(
+      TranscodeFormat.getLabel(transcoding.getCurrentFormat() ?? ''),
+      transcoding.getCurrentBitrate() ?? 0,
+    );
+    statusColor = LuoboAccent.warnFor(isDark);
+  } else {
+    statusLabel = l10n.noTranscoding;
+    statusColor = theme.colorScheme.primary;
+  }
 
   // Insert into the root overlay so the toast floats above every screen, and
   // keep a reference to replace it on re-trigger instead of stacking.

@@ -3,7 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../services/transcoding_service.dart';
-import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/sheet_shell.dart';
 
 /// 音质与流媒体（转码设置）二级页。
 /// 内容自 `settings_playback_tab.dart:609-897`（_buildTranscodingSection +
@@ -14,12 +17,9 @@ class SettingsStreamingTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Consumer<TranscodingService>(
       builder: (context, ts, _) {
-        final accent = Theme.of(context).colorScheme.primary;
-        final secondaryText =
-            isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText;
+        final secondaryText = LuoboColors.of(context).fg2;
 
         Widget connectionBadge() {
           final isWifi = ts.currentConnectionType == ConnectionType.wifi;
@@ -58,122 +58,52 @@ class SettingsStreamingTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           children: [
             _buildSection(
-              isDark,
               title: AppLocalizations.of(context)!.sectionStreamingQuality,
               children: [
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  leading: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF9500), Color(0xFFFF3B30)],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.waveform,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  title: Text(
-                    AppLocalizations.of(context)!.transcodingEnable,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  subtitle: Text(
-                    AppLocalizations.of(context)!.transcodingEnableSubtitle,
-                    style: TextStyle(fontSize: 13, color: secondaryText),
-                  ),
-                  trailing: CupertinoSwitch(
+                LuoboRow(
+                  icon: CupertinoIcons.waveform,
+                  title: AppLocalizations.of(context)!.transcodingEnable,
+                  subtitle:
+                      AppLocalizations.of(context)!.transcodingEnableSubtitle,
+                  showChevron: false,
+                  trailing: LuoboSwitch(
                     value: ts.enabled,
-                    activeTrackColor: accent,
                     onChanged: (v) => ts.setEnabled(v),
                   ),
                 ),
                 // 局域网连接时强制原码（规则 1）：即便设置了转码码率也
                 // 不生效，这里显式提示，避免用户以为设置失效。
                 if (ts.isLanOverrideActive) ...[
-                  _buildDivider(isDark),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.lan_rounded,
-                          size: 16,
-                          color: Colors.green,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            AppLocalizations.of(context)!
-                                .transcodingLanForceOriginal,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: secondaryText,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildDivider(),
+                  _infoRow(
+                    context,
+                    icon: Icons.lan_rounded,
+                    iconColor: LuoboAccent.ok,
+                    text: AppLocalizations.of(context)!
+                        .transcodingLanForceOriginal,
                   ),
                 ],
                 if (ts.enabled) ...[
-                  _buildDivider(isDark),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    leading: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [accent, accent.withValues(alpha: 0.6)],
+                  _buildDivider(),
+                  LuoboRow(
+                    icon: Icons.auto_fix_high_rounded,
+                    title: AppLocalizations.of(context)!.smartTranscoding,
+                    titleSuffix: GestureDetector(
+                      onTap: () => _showSmartTranscodingHelp(context),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: secondaryText,
                         ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.auto_fix_high_rounded,
-                        color: Colors.white,
-                        size: 18,
                       ),
                     ),
-                    title: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.smartTranscoding,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () => _showSmartTranscodingHelp(context),
-                          child: Padding(
-                            padding: const EdgeInsets.all(2),
-                            child: Icon(
-                              Icons.info_outline_rounded,
-                              size: 16,
-                              color: secondaryText,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    subtitle: Text(
-                      AppLocalizations.of(context)!.smartTranscodingSubtitle,
-                      style: TextStyle(fontSize: 13, color: secondaryText),
-                    ),
-                    trailing: CupertinoSwitch(
+                    subtitle:
+                        AppLocalizations.of(context)!.smartTranscodingSubtitle,
+                    showChevron: false,
+                    trailing: LuoboSwitch(
                       value: ts.smartEnabled,
-                      activeTrackColor: accent,
                       onChanged: (v) => ts.setSmartEnabled(v),
                     ),
                   ),
@@ -185,7 +115,8 @@ class SettingsStreamingTab extends StatelessWidget {
                           Text(
                             AppLocalizations.of(context)!
                                 .smartTranscodingDetectedNetwork,
-                            style: TextStyle(fontSize: 12, color: secondaryText),
+                            style:
+                                TextStyle(fontSize: 12, color: secondaryText),
                           ),
                           connectionBadge(),
                           const SizedBox(width: 5),
@@ -208,128 +139,64 @@ class SettingsStreamingTab extends StatelessWidget {
                       ),
                     ),
                   if (ts.smartEnabled) ...[
-                    _buildDivider(isDark),
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      leading: const Icon(Icons.wifi_rounded, size: 20),
-                      title: Text(
-                          AppLocalizations.of(context)!.transcodingWifiQuality),
-                      subtitle: Text(
-                        AppLocalizations.of(context)!
-                            .transcodingWifiQualitySubtitleSmart,
-                        style: TextStyle(fontSize: 12, color: secondaryText),
-                      ),
-                      trailing: DropdownButton<int>(
-                        value: ts.wifiBitrate,
-                        underline: const SizedBox(),
-                        items: TranscodeBitrate.options.map((bitrate) {
-                          final label = bitrate == TranscodeBitrate.original
-                              ? AppLocalizations.of(context)!
-                                  .transcodingBitrateOriginal
-                              : '$bitrate kbps';
-                          return DropdownMenuItem(
-                              value: bitrate, child: Text(label));
-                        }).toList(),
-                        onChanged: (v) {
-                          if (v != null) ts.setWifiBitrate(v);
-                        },
-                      ),
+                    _buildDivider(),
+                    _bitrateRow(
+                      context,
+                      icon: Icons.wifi_rounded,
+                      title:
+                          AppLocalizations.of(context)!.transcodingWifiQuality,
+                      subtitle: AppLocalizations.of(context)!
+                          .transcodingWifiQualitySubtitleSmart,
+                      value: ts.wifiBitrate,
+                      onChanged: (v) => ts.setWifiBitrate(v),
                     ),
-                    _buildDivider(isDark),
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      leading: const Icon(
-                        Icons.signal_cellular_alt_rounded,
-                        size: 20,
-                      ),
-                      title: Text(
-                          AppLocalizations.of(context)!.transcodingMobileQuality),
-                      subtitle: Text(
-                        AppLocalizations.of(context)!
-                            .transcodingMobileQualitySubtitleSmart,
-                        style: TextStyle(fontSize: 12, color: secondaryText),
-                      ),
-                      trailing: DropdownButton<int>(
-                        value: ts.mobileBitrate,
-                        underline: const SizedBox(),
-                        items: TranscodeBitrate.options.map((bitrate) {
-                          final label = bitrate == TranscodeBitrate.original
-                              ? AppLocalizations.of(context)!
-                                  .transcodingBitrateOriginal
-                              : '$bitrate kbps';
-                          return DropdownMenuItem(
-                              value: bitrate, child: Text(label));
-                        }).toList(),
-                        onChanged: (v) {
-                          if (v != null) ts.setMobileBitrate(v);
-                        },
-                      ),
+                    _buildDivider(),
+                    _bitrateRow(
+                      context,
+                      icon: Icons.signal_cellular_alt_rounded,
+                      title: AppLocalizations.of(context)!
+                          .transcodingMobileQuality,
+                      subtitle: AppLocalizations.of(context)!
+                          .transcodingMobileQualitySubtitleSmart,
+                      value: ts.mobileBitrate,
+                      onChanged: (v) => ts.setMobileBitrate(v),
                     ),
                   ] else ...[
-                    _buildDivider(isDark),
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      leading: const Icon(Icons.speed_rounded, size: 20),
-                      title: Text(
-                          AppLocalizations.of(context)!.transcodingManualBitrate),
-                      subtitle: Text(
-                        AppLocalizations.of(context)!
-                            .transcodingManualBitrateSubtitle,
-                        style: TextStyle(fontSize: 12, color: secondaryText),
-                      ),
-                      trailing: DropdownButton<int>(
-                        value: ts.manualBitrate,
-                        underline: const SizedBox(),
-                        items: TranscodeBitrate.options.map((bitrate) {
-                          final label = bitrate == TranscodeBitrate.original
-                              ? AppLocalizations.of(context)!
-                                  .transcodingBitrateOriginal
-                              : '$bitrate kbps';
-                          return DropdownMenuItem(
-                              value: bitrate, child: Text(label));
-                        }).toList(),
-                        onChanged: (v) {
-                          if (v != null) ts.setManualBitrate(v);
-                        },
-                      ),
+                    _buildDivider(),
+                    _bitrateRow(
+                      context,
+                      icon: Icons.speed_rounded,
+                      title: AppLocalizations.of(context)!
+                          .transcodingManualBitrate,
+                      subtitle: AppLocalizations.of(context)!
+                          .transcodingManualBitrateSubtitle,
+                      value: ts.manualBitrate,
+                      onChanged: (v) => ts.setManualBitrate(v),
                     ),
                   ],
-                  _buildDivider(isDark),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    leading: const Icon(Icons.audio_file_rounded, size: 20),
-                    title: Text(AppLocalizations.of(context)!.transcodingFormat),
-                    subtitle: Text(
-                      AppLocalizations.of(context)!.transcodingFormatSubtitle,
-                      style: TextStyle(fontSize: 12, color: secondaryText),
-                    ),
-                    trailing: DropdownButton<String>(
-                      value: ts.format,
-                      underline: const SizedBox(),
-                      items: TranscodeFormat.options.map((format) {
-                        final label = format == TranscodeFormat.original
-                            ? AppLocalizations.of(context)!
-                                .transcodingFormatOriginal
-                            : format.toUpperCase();
-                        return DropdownMenuItem(
-                            value: format, child: Text(label));
-                      }).toList(),
-                      onChanged: (v) {
-                        if (v != null) ts.setFormat(v);
-                      },
-                    ),
+                  _buildDivider(),
+                  LuoboRow(
+                    icon: Icons.audio_file_rounded,
+                    title: AppLocalizations.of(context)!.transcodingFormat,
+                    subtitle:
+                        AppLocalizations.of(context)!.transcodingFormatSubtitle,
+                    value: _formatLabel(context, ts.format),
+                    showChevron: true,
+                    onTap: () async {
+                      final title =
+                          AppLocalizations.of(context)!.transcodingFormat;
+                      final picked = await showLuoboPickerSheet<String>(
+                        context: context,
+                        title: title,
+                        options: [
+                          for (final f in TranscodeFormat.options)
+                            (value: f, label: _formatLabel(context, f)),
+                        ],
+                        selected: ts.format,
+                      );
+                      if (picked == null || !context.mounted) return;
+                      ts.setFormat(picked);
+                    },
                   ),
                 ],
               ],
@@ -358,50 +225,94 @@ class SettingsStreamingTab extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(
-    bool isDark, {
+  Widget _buildSection({
     required String title,
     required List<Widget> children,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
-        ),
+        LuoboSectionHeader(title),
+        LuoboCard(children: children),
       ],
     );
   }
 
-  Widget _buildDivider(bool isDark) {
+  Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
+
+  /// 卡内的「说明 / 状态」提示行（无 chevron、不可点）。
+  Widget _infoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+    Color? iconColor,
+  }) {
+    final c = LuoboColors.of(context);
     return Padding(
-      padding: const EdgeInsets.only(left: 56),
-      child: Container(
-        height: 0.5,
-        color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
+      padding: const EdgeInsets.fromLTRB(
+        LuoboSpacing.rowX,
+        10,
+        LuoboSpacing.rowX,
+        10,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: iconColor ?? c.fg2),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: LuoboType.caption.copyWith(
+                color: c.fg2,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  /// 码率选择行：标题 + 副标题 + **状态值 + chevron**，点开是**单选 Sheet**
+  /// （不再用 `DropdownButton` —— 它的 Material 弹窗是方角白面板，与设计体系差太远）。
+  Widget _bitrateRow(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return LuoboRow(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      value: _bitrateLabel(context, value),
+      showChevron: true,
+      onTap: () async {
+        final picked = await showLuoboPickerSheet<int>(
+          context: context,
+          title: title,
+          options: [
+            for (final b in TranscodeBitrate.options)
+              (value: b, label: _bitrateLabel(context, b)),
+          ],
+          selected: value,
+        );
+        if (picked == null || !context.mounted) return;
+        onChanged(picked);
+      },
+    );
+  }
+
+  String _formatLabel(BuildContext context, String format) =>
+      format == TranscodeFormat.original
+          ? AppLocalizations.of(context)!.transcodingFormatOriginal
+          : format.toUpperCase();
+
+  String _bitrateLabel(BuildContext context, int bitrate) =>
+      bitrate == TranscodeBitrate.original
+          ? AppLocalizations.of(context)!.transcodingBitrateOriginal
+          : '$bitrate kbps';
 }

@@ -8,12 +8,9 @@ class ServerConfig {
   final List<String> selectedMusicFolderIds;
   final String? serverType;
   final String? serverVersion;
-  final String?
-  customCertificatePath; 
-  final String?
-  clientCertificatePath; 
-  final String?
-  clientCertificatePassword;
+  final String? customCertificatePath;
+  final String? clientCertificatePath;
+  final String? clientCertificatePassword;
   final String? name;
   final String serverFamily;
   final String? apiToken;
@@ -48,8 +45,7 @@ class ServerConfig {
       password: json['password'] ?? '',
       useLegacyAuth: json['useLegacyAuth'] ?? false,
       allowSelfSignedCertificates: json['allowSelfSignedCertificates'] ?? false,
-      selectedMusicFolderIds:
-          (json['selectedMusicFolderIds'] as List<dynamic>?)
+      selectedMusicFolderIds: (json['selectedMusicFolderIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],
@@ -153,6 +149,16 @@ class ServerConfig {
   }
 
   bool get hasLocalUrl => localUrl != null && localUrl!.trim().isNotEmpty;
+
+  /// 展示用名称：优先用户起的 [name]，否则回退 `用户名@主机`。
+  ///
+  /// ⚠️ 这是**单一来源**：`saved_profiles_screen` 与 `server_detail_page` 都取它。
+  /// `widgets/server_profile_card.dart` 里还有一份同名私有 getter（那个文件与
+  /// 登录网关页共用、不许改），改动时两处要一起改。
+  String get displayName {
+    if (name?.isNotEmpty == true) return name!;
+    return '$username@${Uri.tryParse(serverUrl)?.host ?? serverUrl}';
+  }
 
   bool get isValid {
     return serverUrl.isNotEmpty && username.isNotEmpty && password.isNotEmpty;

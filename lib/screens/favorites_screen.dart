@@ -8,6 +8,12 @@ import '../services/playback_context_tracker.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 
+/// 收藏页 —— **只列收藏的歌曲**。
+///
+/// 2026-10-08 拍板：**砍掉「专辑」tab**（连带 `LikedAlbumsScreen` 页面与音乐库
+/// 「喜欢的专辑」入口）。理由是用户找不到入口、且收藏专辑没有使用价值。
+/// 于是「收藏」的语义收窄为「收藏歌曲」（`starred.songs`），首页那张「收藏」卡的
+/// 计数与这里从此同义。
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -17,9 +23,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   List<Song> _favoriteSongs = [];
-  List<Album> _favoriteAlbums = [];
   bool _isLoading = true;
-  int _selectedTab = 0;
 
   @override
   void initState() {
@@ -40,7 +44,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       if (mounted) {
         setState(() {
           _favoriteSongs = starred.songs;
-          _favoriteAlbums = starred.albums;
           _isLoading = false;
         });
       }
@@ -55,36 +58,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.favorites),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              children: [
-                _TabButton(
-                  title: l10n.songs,
-                  isSelected: _selectedTab == 0,
-                  onTap: () => setState(() => _selectedTab = 0),
-                ),
-                const SizedBox(width: 8),
-                _TabButton(
-                  title: l10n.albums,
-                  isSelected: _selectedTab == 1,
-                  onTap: () => setState(() => _selectedTab = 1),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      appBar: AppBar(title: Text(l10n.favorites)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _selectedTab == 0
-              ? _buildSongsList()
-              : _buildAlbumsList(),
+          : _buildSongsList(),
     );
   }
 
@@ -199,13 +176,16 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> _removeFromFavorites(Song song, int index) async {
-    final subsonicService = Provider.of<SubsonicService>(
+    // ⚠️ 必须走 `LibraryProvider.unstar`（它内部会 `loadStarred()` 刷新 `_starred`）：
+    // 直连 `subsonicService.unstar` 时 provider 缓存不刷新，首页「收藏」卡的计数与
+    // 随机取色会一直停在旧值，直到冷启动。
+    final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
     );
 
     try {
-      await subsonicService.unstar(id: song.id);
+      await libraryProvider.unstar(songId: song.id);
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
@@ -228,77 +208,5 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         );
       }
     }
-  }
-
-  Widget _buildAlbumsList() {
-    if (_favoriteAlbums.isEmpty) {
-      final l10n = AppLocalizations.of(context)!;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.favorite_border, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(l10n.noFavoriteAlbums),
-          ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(16).copyWith(bottom: 150),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: _favoriteAlbums.length,
-      itemBuilder: (context, index) {
-        final album = _favoriteAlbums[index];
-        return AlbumCard(album: album, size: double.infinity, onTap: () {});
-      },
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  final String title;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _TabButton({
-    required this.title,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Expanded(
-      child: Material(
-        color: isSelected
-            ? (isDark
-                ? Colors.white.withValues(alpha: 0.15)
-                : Colors.black.withValues(alpha: 0.08))
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Center(
-            child: Text(
-              title,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

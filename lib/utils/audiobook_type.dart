@@ -19,9 +19,8 @@ AudiobookContentType classifyAudiobookType({
   required List<AudiobookChapter> chapters,
 }) {
   // ① 服务端分类字段优先（集合类标记 → 合集型）。
-  final labels = [...book.categories, ...book.tags]
-      .map((s) => s.toLowerCase())
-      .toList();
+  final labels =
+      [...book.categories, ...book.tags].map((s) => s.toLowerCase()).toList();
   if (labels.any((s) => _collectionLabelPattern.hasMatch(s))) {
     return AudiobookContentType.collection;
   }

@@ -25,8 +25,11 @@ import '../services/storage_service.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../services/audio_handler.dart';
+import '../services/audio_interruption_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
+import '../services/lyrics/lrc_parser.dart';
+import '../services/lyrics/lyrics_source.dart';
 import '../services/audiobook_progress_store.dart';
 import '../services/diagnostics/diagnostics.dart';
 import '../services/transcoding_service.dart';
@@ -52,6 +55,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final CastService _castService;
   late final UpnpService _upnpService;
   final LockScreenLyricsService _lyricsService = LockScreenLyricsService();
+
+  /// 歌词取源链的唯一实现（`docs/歌词源优先级修复技术方案.md` §4.1）——
+  /// 车机副标题 / 通知栏 / 锁屏与 App 内入口共用同一取源顺序。
+  late final LyricsSourceService _lyricsSourceService =
+      LyricsSourceService(subsonic: _subsonicService);
   LibraryProvider? _libraryProvider;
   RecommendationService? _recommendationService;
 
@@ -152,6 +160,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final FadeSettingsService _fadeSettingsService = FadeSettingsService();
   Timer? _fadeTimer;
   bool _isFading = false;
+
+  /// 打断前是否在播放（等价 MusicFree 的 `resumeState`）。
+  ///
+  /// 只在**瞬时打断**（`begin + type=pause`）时置位；打断结束且标记为真才恢复播放。
+  /// 语义与置位/清位规则见 `docs/音频打断处理技术方案.md` §4.1：
+  /// **`pause()` 内不得清此标记**（打断开始时是「先置位、再 pause」）。
+  bool _wasPlayingBeforeInterruption = false;
 
   final TranscodingService _transcodingService;
 
@@ -310,7 +325,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 若与当前服务器不一致（切服后冷启动），丢弃旧服务器队列，
       // 避免用旧 songId 打新服务器导致 stream/lyrics 404。
       if (!await _queueMatchesCurrentServer()) {
-        debugPrint('[Player] Queue server mismatch — discarding restored queue');
+        debugPrint(
+            '[Player] Queue server mismatch — discarding restored queue');
         DiagnosticsService.instance.record(
           EventType.restoreError,
           LogLevel.info,
@@ -1108,6 +1124,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       viaTimeOffset: false,
     );
   }
+
   bool get shuffleEnabled => _shuffleEnabled;
   bool get gaplessEnabled => _gaplessEnabled;
   RepeatMode get repeatMode => _repeatMode;
@@ -1382,8 +1399,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 // 与 positionStream 一致：道理鱼转码重起流后加基准偏移。
                 final effective = _streamBaseOffsetMs > 0
                     ? Duration(
-                        milliseconds:
-                            pos.inMilliseconds + _streamBaseOffsetMs)
+                        milliseconds: pos.inMilliseconds + _streamBaseOffsetMs)
                     : pos;
                 if (_lastPolledPosition == null ||
                     effective.inMilliseconds !=
@@ -1585,28 +1601,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           LogLevel.info,
           {'begin': event.begin, 'type': event.type.name},
         );
-        if (event.begin) {
-          switch (event.type) {
-            case AudioInterruptionType.duck:
-              _audioPlayer.setVolume(0.3);
-              break;
-            case AudioInterruptionType.pause:
-            case AudioInterruptionType.unknown:
-              if (isRemotePlayback) return;
-              pause();
-              break;
-          }
-        } else {
-          switch (event.type) {
-            case AudioInterruptionType.duck:
-              _audioPlayer.setVolume(_volume);
-              break;
-            case AudioInterruptionType.pause:
-            case AudioInterruptionType.unknown:
-              // Optionally resume after interruption ends
-              break;
-          }
-        }
+        // 方案 B（docs/音频打断处理技术方案.md §4.1）：Android 的库内打断处理
+        // 已关闭（audio_handler.dart），这里是唯一决策点。
+        unawaited(_handleInterruptionEvent(event));
       });
 
       // Listen for headphone/bluetooth disconnection
@@ -1621,6 +1618,61 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       });
     } catch (e) {
       Log.e('Player', 'AudioSession 配置失败', error: e);
+    }
+  }
+
+  /// 打断处理的**唯一入口**（方案 B：Android 侧 `just_audio` 的库内处理已关闭）。
+  ///
+  /// 决策由纯函数 [decideInterruption] 完成（可单测），这里只执行副作用。
+  /// 背景：此前「暂停」由 App 层做（把音量压到 0），「恢复播放」却被库内抢走，
+  /// 恢复路径不经过 `play()/_fadeIn()` ⇒ 音量停在 0，位置照走但完全无声。
+  /// 详见 `docs/音频打断处理技术方案.md` §3.1。
+  Future<void> _handleInterruptionEvent(AudioInterruptionEvent event) async {
+    // 远程播放：本地播放器被有意暂停，不干预（沿用既有守卫语义）。
+    if (isRemotePlayback) return;
+
+    try {
+      final decision = decideInterruption(
+        begin: event.begin,
+        type: event.type,
+        isPlaying: _audioPlayer.playing,
+        wasPlayingBeforeInterruption: _wasPlayingBeforeInterruption,
+      );
+      _wasPlayingBeforeInterruption = decision.wasPlayingBeforeInterruption;
+
+      switch (decision.action) {
+        case InterruptionAction.none:
+          break;
+        case InterruptionAction.duck:
+          // 保持既有 duck 语义（直接设 0.3），不顺手改成渐变，避免扩大回归面。
+          _audioPlayer.setVolume(0.3);
+          break;
+        case InterruptionAction.restoreVolume:
+          _audioPlayer.setVolume(_volume);
+          break;
+        case InterruptionAction.pause:
+          // skipFade：打断要立刻静音，不能留淡出尾巴（库内处理已关闭，没人替我们停）。
+          // keepInterruptionResume：保留上面刚写入的标记，供打断结束后决定是否恢复。
+          await pause(skipFade: true, keepInterruptionResume: true);
+          break;
+        case InterruptionAction.resume:
+          // 走 App 层 play() ⇒ `_fadeIn()` 恢复音量（这正是方案 B 的目的）。
+          await play();
+          break;
+      }
+    } catch (e) {
+      // 打断处理不得把异常抛进 zone（监听器是 unawaited 调用）：play() 的网络错误、
+      // setVolume 失败等都应被吞掉并留痕，避免未捕获异步异常（code-review R4）。
+      debugPrint('[Player] Interruption handling failed: $e');
+      DiagnosticsService.instance.record(
+        EventType.audioInterruption,
+        LogLevel.warn,
+        {
+          'begin': event.begin,
+          'type': event.type.name,
+          'error': '$e',
+        },
+      );
     }
   }
 
@@ -1639,9 +1691,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return null;
       final session = await AudioSession.instance;
-      final devices = await session
-          .getDevices()
-          .timeout(const Duration(milliseconds: 300));
+      final devices =
+          await session.getDevices().timeout(const Duration(milliseconds: 300));
       return devices.map((d) => '${d.name}:${d.type.name}').toList()..sort();
     } catch (_) {
       return null;
@@ -2459,7 +2510,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Load and sync lyrics for the given song
+  /// 加载并同步当前歌的歌词（车机副标题 / 通知栏 / 锁屏）。
+  ///
+  /// 取源走 [LyricsSourceService]（唯一实现，与 App 内入口同一顺序）。此前这里
+  /// 只有 `getLyricsBySongId` 一条来源，服务器没歌词时车机链一条都拿不到，而 App
+  /// 内靠网易云兜底照常显示 —— 见 `docs/歌词源优先级修复技术方案.md` §2.6。
   Future<void> _loadAndSyncLyrics(Song song) async {
     // 有声书无歌词：完全短路（章节标题可能被 LRCLIB 误匹配到奇怪歌词），
     // 且 return 前必须 stopSync + 清空，否则锁屏/歌词区残留上一首歌歌词（B13）。
@@ -2472,39 +2527,35 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Stop any previous sync
       _lyricsService.stopSync();
 
-      // Fetch lyrics from Subsonic API
-      final lyricsResponse = await _subsonicService.getLyricsBySongId(song.id);
+      final result = await _lyricsSourceService.fetchForSong(song);
 
-      if (lyricsResponse != null) {
-        // Extract lyrics content from response
-        // Subsonic returns lyrics in various formats
-        String? lyricsContent;
+      // 取源链含缓存/服务器/外部兜底多段网络，期间可能已经切歌。若不设守卫，先发起
+      // 的慢请求后完成会覆盖新歌歌词，通知栏/车机副标题显示错歌（code-review R3）。
+      // 参照 `_checkSilentPlayback` 的守卫写法；`_currentSong == null` 时（电台/切远端
+      // 过渡）不判定，保持原有行为。
+      if (_currentSong != null && song.id != _currentSong!.id) {
+        debugPrint('[Lyrics] Discarded stale lyrics for "${song.title}"');
+        return;
+      }
 
-        if (lyricsResponse.containsKey('lyrics')) {
-          // Standard Subsonic format
-          lyricsContent = lyricsResponse['lyrics'] as String?;
-        } else if (lyricsResponse.containsKey('structuredLyrics')) {
-          // Jellyfin format - convert to LRC
-          final structured =
-              lyricsResponse['structuredLyrics'] as List<dynamic>?;
-          if (structured != null && structured.isNotEmpty) {
-            lyricsContent = _convertStructuredToLrc(structured);
-          }
-        }
+      // 纯文本（无时间轴）歌词：合成静态单行 LRC，副标题静态显示首行
+      // （§5.5 选项 A）；过滤后无可选行则退化为不推。
+      final String? lrc;
+      if (result == null) {
+        lrc = null;
+      } else if (result.isLrc) {
+        lrc = result.raw;
+      } else {
+        lrc = plainTextToStaticLrc(result.raw);
+      }
 
-        if (lyricsContent != null && lyricsContent.isNotEmpty) {
-          // Load lyrics into the service
-          await _lyricsService.loadLyrics(lyricsContent);
-
-          // Start syncing with position stream
-          _lyricsService.startSync(_audioPlayer.positionStream);
-
-          debugPrint('[Lyrics] Loaded and started sync for "${song.title}"');
-        } else {
-          // No lyrics available - clear any existing
-          await _lyricsService.loadLyrics(null);
-          debugPrint('[Lyrics] No lyrics available for "${song.title}"');
-        }
+      if (lrc != null && lrc.isNotEmpty) {
+        await _lyricsService.loadLyrics(lrc);
+        _lyricsService.startSync(_audioPlayer.positionStream);
+        debugPrint(
+          '[Lyrics] Loaded and started sync for "${song.title}" '
+          '(source=${result!.source.wireName}, isLrc=${result.isLrc})',
+        );
       } else {
         // No lyrics available - clear any existing
         await _lyricsService.loadLyrics(null);
@@ -2515,24 +2566,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Don't block playback if lyrics fail
       await _lyricsService.loadLyrics(null);
     }
-  }
-
-  /// Convert Jellyfin structured lyrics to LRC format
-  String _convertStructuredToLrc(List<dynamic> structured) {
-    final buffer = StringBuffer();
-    for (final line in structured) {
-      if (line is Map<String, dynamic>) {
-        final text = line['text'] as String? ?? '';
-        final startTicks = line['startTicks'] as int? ?? 0;
-        final startMs = startTicks ~/ 10000; // Convert to milliseconds
-        final minutes = startMs ~/ 60000;
-        final seconds = (startMs % 60000) ~/ 1000;
-        final centiseconds = (startMs % 1000) ~/ 10;
-        buffer.writeln(
-            '[$minutes:${seconds.toString().padLeft(2, '0')}.${centiseconds.toString().padLeft(2, '0')}]$text');
-      }
-    }
-    return buffer.toString();
   }
 
   void _updateSystemServicesForRadio(RadioStation station) {
@@ -2561,6 +2594,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Future 上抛错，fire-and-forget 必须吞掉，避免未捕获异步异常。
   /// [onError] 供调用方感知 play 失败（如电台失败复位状态）。
   void _startPlayback({void Function(Object error)? onError}) {
+    // 任何「开始播放」都让挂起的「打断后自动恢复」意图失效（方案 B §4.1 步骤 3）：
+    // 覆盖 play() / playSong()（不经 play()）/ 无声自愈 / 会话重激活。
+    _wasPlayingBeforeInterruption = false;
     unawaited(_audioPlayer.play().catchError((Object e) {
       debugPrint('[Player] play() error (ignored): $e');
       onError?.call(e);
@@ -2667,11 +2703,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         'fadeEnabled': _fadeSettingsService.getFadeEnabled(),
         // 「位置前进但无声」指纹：playing && ready && 位置推进 && 音量>0。
         // 若满足而用户没听到声音，说明输出管线/会话未接上。
-        'silentLikely':
-            _audioPlayer.playing &&
-                _audioPlayer.processingState == ProcessingState.ready &&
-                advancedMs >= 500 &&
-                _audioPlayer.volume > 0.01,
+        'silentLikely': _audioPlayer.playing &&
+            _audioPlayer.processingState == ProcessingState.ready &&
+            advancedMs >= 500 &&
+            _audioPlayer.volume > 0.01,
       });
       if (_currentSong?.id != songId) return; // 已切歌，不误报
       if (_currentSong == null) return; // radio（_currentSong==null）不在此列
@@ -2687,7 +2722,39 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _audioPlayer.processingState == ProcessingState.idle ||
           (_audioPlayer.processingState == ProcessingState.ready &&
               advancedMs < 500);
-      if (!stuck) return;
+      // 第四类无声（方案 B §4.4）：在播 + 位置前进 + **音量≈0**。
+      // 这是「暂停把音量压到 0、恢复播放却被库内抢走」的静音失联指纹，
+      // 上面三条判定都抓不到。`_volume > 0.01` 是为了排除用户把 App 内音量
+      // 拉到 0 的正常情况，避免误报。
+      final silentByVolume = _audioPlayer.playing &&
+          _audioPlayer.processingState == ProcessingState.ready &&
+          advancedMs >= 500 &&
+          _audioPlayer.volume < 0.01 &&
+          _volume > 0.01;
+      if (!stuck && !silentByVolume) return;
+
+      if (silentByVolume) {
+        // 音量型无声：只需把音量拉回，不必重建输出管线。
+        DiagnosticsService.instance.record(
+          EventType.audioSilentPlayback,
+          LogLevel.warn,
+          {
+            'posBeforeMs': startPos.inMilliseconds,
+            'posAfterMs': nowPos.inMilliseconds,
+            'route': DiagnosticsService.instance.currentRoute,
+            'songId': songId,
+            'volume': _audioPlayer.volume,
+            'recovery': 'restoreVolume',
+          },
+        );
+        try {
+          await _audioPlayer.setVolume(_volume);
+          unawaited(_recordAudioSessionState('selfHealVolume'));
+        } catch (e) {
+          debugPrint('[Player] Self-heal volume restore failed: $e');
+        }
+        return;
+      }
 
       DiagnosticsService.instance.record(
         EventType.audioSilentPlayback,
@@ -2720,7 +2787,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> pause() async {
+  /// 暂停。
+  ///
+  /// [skipFade] 为真时跳过淡出，立刻静音并暂停 —— 打断路径（方案 B §4.1 步骤 4）
+  /// 用它，避免打断后还继续出声 `fadeDurationMs`（默认 300ms）。
+  ///
+  /// [keepInterruptionResume] 为真时**保留**「打断后自动恢复」标记，仅供打断路径
+  /// 使用（打断是「先置位、再调 pause()」）。其余调用一律清标记 —— 用户主动暂停 /
+  /// 拔耳机 / 媒体会话暂停都意味着「不想继续播」，结束后不得被自动恢复
+  /// （2026-10-08 code-review R1：原先 `pause()` 一律不清，用户手动暂停后仍会被
+  /// `end + pause` 自动拉起）。
+  Future<void> pause({
+    bool skipFade = false,
+    bool keepInterruptionResume = false,
+  }) async {
+    if (!keepInterruptionResume) _wasPlayingBeforeInterruption = false;
     _silentCheckToken++; // 使挂起的无声检测失效
     DiagnosticsService.instance.record(
       EventType.audioPlayerAction,
@@ -2733,6 +2814,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         'durationMs': _audioPlayer.duration?.inMilliseconds,
         'volume': _audioPlayer.volume,
         'fadeEnabled': _fadeSettingsService.getFadeEnabled(),
+        'skipFade': skipFade,
       },
     );
     if (_castService.isConnected) {
@@ -2746,9 +2828,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
     } else {
-      await _fadeOut(onComplete: () async {
-        await _audioPlayer.pause();
-      });
+      await _fadeOut(
+        onComplete: () async {
+          await _audioPlayer.pause();
+        },
+        immediate: skipFade,
+      );
       _isPlaying = false;
       notifyListeners();
       _updateAndroidAuto();
@@ -2773,6 +2858,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await _audioPlayer.stop();
     }
+
+    // 用户主动停止 ⇒ 作废挂起的「打断后自动恢复」意图（方案 B §4.1 步骤 3）。
+    _wasPlayingBeforeInterruption = false;
 
     _isPlaying = false;
     _position = Duration.zero;
@@ -2818,10 +2906,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _fadeOut({VoidCallback? onComplete}) async {
+  /// 淡出并回调（默认把音量压到 0）。
+  ///
+  /// [immediate] 为真时跳过淡出动画，直接静音后回调 —— 供打断路径使用
+  /// （`pause(skipFade: true)`），避免打断后继续出声。
+  Future<void> _fadeOut(
+      {VoidCallback? onComplete, bool immediate = false}) async {
     _stopFade();
 
-    if (!_fadeSettingsService.getFadeEnabled()) {
+    if (immediate || !_fadeSettingsService.getFadeEnabled()) {
       await _audioPlayer.setVolume(0.0);
       onComplete?.call();
       return;
@@ -2908,6 +3001,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
     _position = position;
     _lastSeekRequest = position; // 供重起流被取代后按最新目标重试
+    // 用户主动 seek ⇒ 作废挂起的「打断后自动恢复」意图（方案 B §4.1 步骤 3）。
+    _wasPlayingBeforeInterruption = false;
     notifyListeners();
     if (_castService.isConnected) {
       await _castService.seek(position);
@@ -2989,12 +3084,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 流加载成功后才设基准：避免旧源被替换前发出的位置 tick 被加上新基准
     // （短暂错位）。
     _streamBaseOffsetMs = position.inMilliseconds;
-    if (_isPlaying) _startPlayback(); // 用当前态而非入口快照；不 await（play Future 播放停止才完成，否则下方歌词重同步被延迟到暂停时）
+    if (_isPlaying)
+      _startPlayback(); // 用当前态而非入口快照；不 await（play Future 播放停止才完成，否则下方歌词重同步被延迟到暂停时）
 
     // 重起流后播放器位置从 0 计起：锁屏歌词同步到「流位置 + 基准」才正确。
     _lyricsService.stopSync();
-    _lyricsService.startSync(_audioPlayer.positionStream.map((p) =>
-        Duration(milliseconds: p.inMilliseconds + _streamBaseOffsetMs)));
+    _lyricsService.startSync(_audioPlayer.positionStream.map(
+        (p) => Duration(milliseconds: p.inMilliseconds + _streamBaseOffsetMs)));
   }
 
   Future<void> seekToProgress(double progress) async {
@@ -3140,6 +3236,47 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _rebuildShuffleOrder();
       await skipToIndex(_shuffleOrder.isNotEmpty ? _shuffleOrder.first : 0);
     }
+  }
+
+  /// 漫游起播时塞进队列的歌曲数。
+  ///
+  /// 不塞全库：队列会被持久化（`_keyQueue`），gapless 下还要重建拼接音源，几千首
+  /// 的队列在冷启动恢复与拼接源构建上都吃不消。100 首约撑 5~6 小时，之后的续播
+  /// 会接上。
+  static const int roamingSeedCount = 100;
+
+  /// 首页「漫游」入口：立刻用**本地全曲库**乱序起播，并打开 AutoDJ 续播，形成
+  /// 「播不完」的随机漫游（对标飞牛音乐的「全曲库随机漫游」）。
+  ///
+  /// 返回 false 表示**没有可播的内容**（曲库还没同步 / 未登录），调用方应给出提示
+  /// ——否则点一下毫无反应，看起来像坏了。
+  ///
+  /// ⚠️ `AutoDjMode` 是**全局持久化**状态：点过一次之后，**任何**播放都会在队列
+  /// 快播完时自动续歌。这是已拍板接受的连带效应（方案 §5.4），不是 bug。
+  Future<bool> startRoaming() async {
+    final library = _libraryProvider;
+    if (library == null) return false;
+
+    // 池子优先用本地全量缓存（真·全曲库）；全量同步还没完成时退回服务端随机池。
+    final pool = library.cachedAllSongs.isNotEmpty
+        ? library.cachedAllSongs
+        : library.randomSongs;
+    if (pool.isEmpty) return false;
+
+    final shuffled = List<Song>.from(pool)..shuffle();
+    final seedCount =
+        shuffled.length < roamingSeedCount ? shuffled.length : roamingSeedCount;
+    final queue = shuffled.take(seedCount).toList();
+
+    // 先把池子交给 AutoDJ 再起播：否则队列很短时第一首还没播完就可能触发续播，
+    // 那一次会退化成服务端随机。
+    if (_autoDjService.mode == AutoDjMode.off) {
+      await _autoDjService.setMode(AutoDjMode.shuffleLibrary);
+    }
+    _autoDjService.setLocalPool(pool);
+
+    await playSong(queue.first, playlist: queue, startIndex: 0);
+    return true;
   }
 
   Future<void> _addAutoDjSongs() async {
@@ -3550,7 +3687,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _seekRestartToken++;
     var restoredViaTimeOffset = false; // 道理鱼转码按 timeOffset 起播时置位
     try {
-      if (_gaplessEnabled && _queue.isNotEmpty && !_isDaoliyuTranscodeRequested) {
+      if (_gaplessEnabled &&
+          _queue.isNotEmpty &&
+          !_isDaoliyuTranscodeRequested) {
         await _buildAndSetConcatenatingSource(initialIndex: _currentIndex);
       } else {
         final String playUrl;
@@ -3983,6 +4122,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_castService.isConnected) {
       _audioPlayer.pause();
       _silentCheckToken++; // 使挂起的无声检测失效：切远端后不误触发本地自愈
+      // 切远端 ⇒ 作废挂起的「打断后自动恢复」意图（方案 B §4.1 步骤 3）。
+      _wasPlayingBeforeInterruption = false;
       _androidSystemService.setRemotePlayback(isRemote: true, volume: 50);
       if (_currentSong != null) {
         final song = _currentSong!;
@@ -4012,6 +4153,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _upnpWasPlaying = false;
       if (_audioPlayer.playing) _audioPlayer.pause();
       _silentCheckToken++; // 使挂起的无声检测失效：切远端后不误触发本地自愈
+      // 切远端 ⇒ 作废挂起的「打断后自动恢复」意图（方案 B §4.1 步骤 3）。
+      _wasPlayingBeforeInterruption = false;
       final vol = _upnpService.volume;
 
       if (vol >= 0) _volume = vol / 100.0;

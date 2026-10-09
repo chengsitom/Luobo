@@ -47,9 +47,8 @@ class _ArtistGridCardState extends State<ArtistGridCard> {
       listen: false,
     );
     final cover = libraryProvider.resolveArtistCover(widget.artist);
-    final secondaryText = isDark
-        ? AppTheme.darkSecondaryText
-        : AppTheme.lightSecondaryText;
+    final secondaryText =
+        isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText;
 
     return PressableScale(
       child: MouseRegion(

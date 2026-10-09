@@ -43,12 +43,11 @@ class LibraryDatabaseService {
     if (oldVersion < 2) {
       // v1 -> v2: add starred / userRating columns if missing
       try {
-        await db.execute(
-            'ALTER TABLE songs ADD COLUMN starred INTEGER DEFAULT 0');
+        await db
+            .execute('ALTER TABLE songs ADD COLUMN starred INTEGER DEFAULT 0');
       } catch (_) {}
       try {
-        await db.execute(
-            'ALTER TABLE songs ADD COLUMN userRating INTEGER');
+        await db.execute('ALTER TABLE songs ADD COLUMN userRating INTEGER');
       } catch (_) {}
     }
   }
@@ -184,9 +183,8 @@ class LibraryDatabaseService {
     await db.transaction((txn) async {
       for (var i = 0; i < artists.length; i += _batchSize) {
         final batch = txn.batch();
-        final end = (i + _batchSize < artists.length)
-            ? i + _batchSize
-            : artists.length;
+        final end =
+            (i + _batchSize < artists.length) ? i + _batchSize : artists.length;
         for (var j = i; j < end; j++) {
           batch.insert(
             'artists',
@@ -248,19 +246,22 @@ class LibraryDatabaseService {
 
   // ── Paginated / low-memory queries ──────────────────────────────────────
 
-  Future<List<Song>> getSongsPaginated({int limit = 500, int offset = 0}) async {
+  Future<List<Song>> getSongsPaginated(
+      {int limit = 500, int offset = 0}) async {
     final db = await database;
     final maps = await db.query('songs', limit: limit, offset: offset);
     return maps.map((m) => _songFromMap(m)).toList();
   }
 
-  Future<List<Album>> getAlbumsPaginated({int limit = 500, int offset = 0}) async {
+  Future<List<Album>> getAlbumsPaginated(
+      {int limit = 500, int offset = 0}) async {
     final db = await database;
     final maps = await db.query('albums', limit: limit, offset: offset);
     return maps.map((m) => _albumFromMap(m)).toList();
   }
 
-  Future<List<Artist>> getArtistsPaginated({int limit = 500, int offset = 0}) async {
+  Future<List<Artist>> getArtistsPaginated(
+      {int limit = 500, int offset = 0}) async {
     final db = await database;
     final maps = await db.query('artists', limit: limit, offset: offset);
     return maps.map((m) => _artistFromMap(m)).toList();

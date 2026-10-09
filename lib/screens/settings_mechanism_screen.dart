@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 
 /// 「机制说明」入口：解释 App 内各功能的实现机理。
@@ -23,8 +24,9 @@ class SettingsMechanismScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(l10n.settingsMechanicsEntry),
         centerTitle: false,
-        backgroundColor:
-            _isDark(context) ? AppTheme.darkBackground : AppTheme.lightBackground,
+        backgroundColor: _isDark(context)
+            ? AppTheme.darkBackground
+            : AppTheme.lightBackground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
@@ -57,7 +59,8 @@ class SettingsMechanismDetailScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final isDark = _isDark(context);
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
+      backgroundColor:
+          isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
       appBar: AppBar(
         title: Text(item.title),
         centerTitle: false,
@@ -128,8 +131,8 @@ const List<MechanismItem> _homeItems = [
   ),
   MechanismItem(
     title: '继续播放',
-    summary:
-        '就是「最近播放」列表——最近点过的歌按时间倒序取前 10 首，没有任何算法，方便一键回到上次没听完的地方。',
+    summary: '就是「最近播放」列表——最近点过的歌按时间倒序取前 10 首，'
+        '没有任何算法，方便一键回到上次没听完的地方。',
     details:
         '依据：home_v2_screen.dart:296-359、recommendation_service.dart（最近播放列表，上限 500）',
   ),
@@ -149,8 +152,8 @@ const List<MechanismItem> _homeItems = [
   ),
   MechanismItem(
     title: '最近播放混合区',
-    summary:
-        '上半部分是你最近播放过的歌单和收藏（记录保存在本机，最多 10 条），下半部分是你最近浏览过的专辑，拼在一起方便继续之前的探索。',
+    summary: '上半部分是你最近播放过的歌单和收藏（记录保存在本机，最多 10 条），'
+        '下半部分是你最近浏览过的专辑，拼在一起方便继续之前的探索。',
     details:
         'PlaybackContextTracker（SharedPreferences 持久化，上限 10）+ LibraryProvider.recentAlbums（服务端）。\n依据：home_v2_screen.dart:458-505、playback_context_tracker.dart',
   ),
@@ -299,8 +302,8 @@ const List<MechanismItem> _audioItems = [
   ),
   MechanismItem(
     title: 'Dolby Atmos 检测',
-    summary:
-        '仅检测 Android 设备是否支持/开启 Dolby Atmos 空间音频，作能力展示与提示，不改变音轨本身。',
+    summary: '仅检测 Android 设备是否支持/开启 Dolby Atmos 空间音频，'
+        '作能力展示与提示，不改变音轨本身。',
     details: '依据：dolby_atmos_service.dart:20-35',
   ),
 ];
@@ -310,35 +313,31 @@ const List<MechanismItem> _connectivityItems = [
     title: '服务器连接（Navidrome / Subsonic / Jellyfin）',
     summary:
         'Luobo 是纯播放器——所有音乐都存在你自己的服务器上（Navidrome，走 Subsonic 协议；也兼容 Jellyfin）。App 通过 API 拉曲库、播放、管理收藏，不上传你的任何听歌数据（听歌报告等全部本地）。连不上服务器时，只有已下载的歌能播。',
-    details: '依据：subsonic_service.dart、jellyfin_service.dart、auth_provider.dart',
+    details:
+        '依据：subsonic_service.dart、jellyfin_service.dart、auth_provider.dart',
   ),
   MechanismItem(
     title: '网络电台',
-    summary:
-        '服务端维护的在线电台列表，点播后当普通流播放，不占曲库。',
-    details:
-        '电台走 getInternetRadioStations。\n依据：subsonic_service.dart:1296',
+    summary: '服务端维护的在线电台列表，点播后当普通流播放，不占曲库。',
+    details: '电台走 getInternetRadioStations。\n依据：subsonic_service.dart:1296',
   ),
   MechanismItem(
     title: 'Auto DJ 自动续播',
     summary:
         '队列剩余不足（默认 2 首）时自动补歌，不会听断。5 种模式：随机曲库 / 相似歌曲 / 同风格 / 同歌手 / 智能混音。智能混音按「BPM 差 ≤15、能量差 ≤0.15」的规则链式选歌，风格相近、年代接近加分；最近补过的 100 首不重复。',
-    details:
-        '依据：auto_dj_service.dart:140-192,482-515,517-614',
+    details: '依据：auto_dj_service.dart:140-192,482-515,517-614',
   ),
   MechanismItem(
     title: '投屏（Cast / UPnP）',
     summary:
         '两种投屏。Google Cast：投到 Chromecast（走 Cast 协议）；UPnP/DLNA：在局域网自动发现音箱、电视等渲染器（组播搜索 + SOAP 控制）。两者都是把播放交给外部设备、App 做遥控。',
-    details:
-        '依据：cast_service.dart:72-308、upnp_service.dart:91-156,306-380',
+    details: '依据：cast_service.dart:72-308、upnp_service.dart:91-156,306-380',
   ),
   MechanismItem(
     title: '车载（Android Auto / 车载模式）',
     summary:
         'Android Auto：通过系统原生媒体服务把播放状态和曲库推送到车载屏，在车上直接控制。车载模式：App 内的一键全屏简化播放页，进入后屏幕常亮、界面更适合驾驶操作，下拉即可退出。',
-    details:
-        '依据：android_auto_service.dart:55-352、car_mode_screen.dart:57-109',
+    details: '依据：android_auto_service.dart:55-352、car_mode_screen.dart:57-109',
   ),
 ];
 
@@ -412,9 +411,8 @@ List<_MechanismGroup> _buildGroups(AppLocalizations l10n) {
 bool _isDark(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark;
 
-Color _secondaryText(BuildContext context) => _isDark(context)
-    ? AppTheme.darkSecondaryText
-    : AppTheme.lightSecondaryText;
+Color _secondaryText(BuildContext context) =>
+    _isDark(context) ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText;
 
 Widget _sectionHeader(BuildContext context, _MechanismGroup group) {
   final accent = Theme.of(context).colorScheme.primary;
@@ -464,8 +462,12 @@ Widget _groupCard(BuildContext context, _MechanismGroup group) {
               ListTile(
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                title: Text(group.items[i].title,
-                    style: const TextStyle(fontSize: 16)),
+                title: Text(
+                  group.items[i].title,
+                  // 飞牛实测行标题 14dp（同机同字体，见方案 §9.21.1）；
+                  // 原来硬编码 16 偏大 2dp
+                  style: LuoboType.body,
+                ),
                 trailing: Icon(
                   CupertinoIcons.chevron_right,
                   size: 16,
@@ -503,7 +505,8 @@ Widget _summaryCard(BuildContext context, MechanismItem item) {
   );
 }
 
-Widget _techCard(BuildContext context, AppLocalizations l10n, MechanismItem item) {
+Widget _techCard(
+    BuildContext context, AppLocalizations l10n, MechanismItem item) {
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 16),
     decoration: BoxDecoration(
@@ -523,12 +526,8 @@ Widget _techCard(BuildContext context, AppLocalizations l10n, MechanismItem item
               size: 18,
               color: Theme.of(context).colorScheme.primary,
             ),
-            title: Text(
-              l10n.mechanicsTechDetails,
-              style: const TextStyle(fontSize: 16),
-            ),
-            childrenPadding:
-                const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            title: Text(l10n.mechanicsTechDetails, style: LuoboType.body),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -10,17 +9,20 @@ import '../providers/providers.dart';
 import '../services/diagnostics/diagnostics.dart';
 import '../services/local_music_service.dart';
 import '../services/recommendation_service.dart';
-import '../services/theme_service.dart';
 import '../services/update_service.dart';
+import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
+import '../widgets/home_v2_tokens.dart';
+import '../widgets/luobo/glass_pill_nav.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'home_v2_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
+import 'settings_root_screen.dart';
 import 'now_playing_screen.dart';
-import 'fantasy_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final bool isOfflineMode;
@@ -33,23 +35,36 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  int _searchTapCount = 0;
-  DateTime _lastSearchTap = DateTime.fromMillisecondsSinceEpoch(0);
   bool _showRightSidebar = true;
 
+  /// 桌面端仍用「首页 / 音乐库 / 搜索」（**桌面端本轮不一起改**，见方案 §7 ⑫）。
   final List<Widget> _screens = const [
     HomeV2Screen(), // 首页重构：v2 新首页（旧 HomeScreen 保留未删，回退改回 HomeScreen()）
     LibraryScreen(),
     SearchScreen(),
   ];
 
+  /// 移动端底栏（C2 改造）：首页 / 音乐库 / **设置**。
+  /// 搜索不再占 tab，改由首页 + 音乐库的右上角圆钮进入。
+  final List<Widget> _mobileScreens = const [
+    HomeV2Screen(),
+    LibraryScreen(),
+    SettingsRootScreen(),
+  ];
+
+  /// 切换 tab 的**唯一入口**：既改本地状态，也向 `NavigationHelper.tabIndex`
+  /// 广播。广播是给「订阅 tab 变化」的页面用的（首页靠它实现「每次回到首页换
+  /// 漫游卡配色」）——桌面端与移动端的切换路径不同，统一走这里才不会漏。
+  void _setTab(int index) {
+    setState(() => _currentIndex = index);
+    NavigationHelper.tabIndex.value = index;
+  }
+
   @override
   void initState() {
     super.initState();
 
-    NavigationHelper.registerTabChangeCallback((index) {
-      setState(() => _currentIndex = index);
-    });
+    NavigationHelper.registerTabChangeCallback(_setTab);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -357,7 +372,7 @@ class _MainScreenState extends State<MainScreen> {
                   DesktopNavigationSidebar(
                     selectedIndex: _currentIndex,
                     onDestinationSelected: (index) {
-                      setState(() => _currentIndex = index);
+                      _setTab(index);
                       NavigationHelper.desktopNavigatorKey.currentState
                           ?.popUntil((route) => route.isFirst);
                     },
@@ -410,7 +425,6 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    final bool liquidGlass = Provider.of<ThemeService>(context).liquidGlass;
     return Selector<PlayerProvider, bool>(
       selector: (_, p) => p.currentSong != null || p.isPlayingRadio,
       builder: (context, hasCurrentSong, _) {
@@ -527,10 +541,10 @@ class _MainScreenState extends State<MainScreen> {
                           // true)` 包住未选中项，TickerMode 不会被关掉——不额外
                           // 包一层的话，首页流体背景等动画在切走后仍会逐帧产帧。
                           children: [
-                            for (var i = 0; i < _screens.length; i++)
+                            for (var i = 0; i < _mobileScreens.length; i++)
                               TickerMode(
                                 enabled: _currentIndex == i,
-                                child: _screens[i],
+                                child: _mobileScreens[i],
                               ),
                           ],
                         ),
@@ -538,14 +552,21 @@ class _MainScreenState extends State<MainScreen> {
                     },
                   ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (hasCurrentSong) MiniPlayer(onTap: _openNowPlaying),
-                    liquidGlass
-                        ? _buildGlassBottomNav(context)
-                        : _buildBottomNav(context),
-                  ],
+                // ⚠️ 底部条带必须**跟随当前 tab 的页面底色**：
+                // 首页亮色是纯白（`HomeV2Tokens`），音乐库/设置是全局 `#F2F2F7`，
+                // 而这条条带在 `Expanded` 内容区之外、露的是 Scaffold 的底色 ——
+                // 不跟的话首页底部会出现一条明显比内容暗的灰带，
+                // 观感就是「悬浮的播放条与底栏背后有一块背景」。
+                ColoredBox(
+                  color: _bottomStripBackground(context),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasCurrentSong) MiniPlayer(onTap: _openNowPlaying),
+                      // 玻璃样式固定为设计体系（liquidGlass 用户开关已删除）。
+                      _buildBottomNav(context),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -563,207 +584,74 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (_currentIndex != 0) {
-      setState(() => _currentIndex = 0);
+      _setTab(0);
       return;
     }
 
     SystemNavigator.pop();
   }
 
-  Widget _buildGlassBottomNav(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final accent = theme.colorScheme.primary;
-    final safeBottom = MediaQuery.of(context).padding.bottom;
-    final l10n = AppLocalizations.of(context)!;
-
-    final items = [
-      (
-        icon: CupertinoIcons.music_house,
-        activeIcon: CupertinoIcons.music_house_fill,
-        label: l10n.home,
-      ),
-      (
-        icon: CupertinoIcons.collections,
-        activeIcon: CupertinoIcons.collections_solid,
-        label: l10n.library,
-      ),
-      (
-        icon: CupertinoIcons.search,
-        activeIcon: CupertinoIcons.search,
-        label: l10n.search,
-      ),
-    ];
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 4, 12, safeBottom > 0 ? safeBottom : 12),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.14),
-              blurRadius: 28,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: 62,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.5)
-                    : Colors.white.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.white.withValues(alpha: 0.8),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                children: List.generate(items.length, (idx) {
-                  final item = items[idx];
-                  final isSelected = _currentIndex == idx;
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        final navigatorState =
-                            NavigationHelper.mobileNavigatorKey.currentState;
-                        navigatorState?.popUntil((route) => route.isFirst);
-
-                        if (idx == 2) {
-                          final now = DateTime.now();
-                          if (now.difference(_lastSearchTap).inSeconds > 3) {
-                            _searchTapCount = 0;
-                          }
-                          _searchTapCount++;
-                          _lastSearchTap = now;
-                          if (_searchTapCount >= 11) {
-                            _searchTapCount = 0;
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const FantasyScreen(),
-                              ),
-                            );
-                            return;
-                          }
-                        } else {
-                          _searchTapCount = 0;
-                        }
-
-                        setState(() => _currentIndex = idx);
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 150),
-                            child: Icon(
-                              isSelected ? item.activeIcon : item.icon,
-                              key: ValueKey(isSelected),
-                              color: isSelected
-                                  ? accent
-                                  : (isDark ? Colors.white54 : Colors.black38),
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            item.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: isSelected
-                                  ? accent
-                                  : (isDark ? Colors.white54 : Colors.black38),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// 底栏（C2 改造）—— 3 项纯图标（首页 / 音乐库 / **设置**）均匀分布
+  /// + 分隔线 + 专辑封面等宽槽。
+  ///
+  /// 设计稿：`~/Downloads/fnosmusic/设计稿/04-C1-地基组件总览.png` ③ 节。
+  /// 与旧版的差异：
+  /// - 第 3 项由「搜索」改为「**设置**」（对齐 fnos：设置与音乐库平级）
+  /// - **纯图标、无文字标签**
+  /// - 搜索改由首页 / 音乐库右上角圆钮进入
+  /// - **彩蛋页（连点搜索 11 次）已按用户要求移除**
+  /// - 玻璃样式**固定为设计体系**（`liquidGlass` 用户开关已删除）
+  /// 底部条带（迷你播放条 + 底栏）的底色 —— 与当前 tab 的页面底色一致，
+  /// 避免两条悬浮元素背后出现色差带。首页有独立 token（亮色纯白）。
+  Color _bottomStripBackground(BuildContext context) => _currentIndex == 0
+      ? HomeV2Tokens.of(context).background
+      : LuoboColors.of(context).bg;
 
   Widget _buildBottomNav(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? const Color(0xFF38383A) : const Color(0xFFE5E5EA),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: BottomNavigationBar(
+    return Selector<PlayerProvider, bool>(
+      selector: (_, p) => p.currentSong != null,
+      builder: (context, hasSong, _) => Padding(
+        padding:
+            EdgeInsets.fromLTRB(12, 6, 12, safeBottom > 0 ? safeBottom : 14),
+        child: GlassPillNav(
           currentIndex: _currentIndex,
+          items: [
+            GlassPillNavItem(icon: AppIcons.home, label: l10n.home),
+            GlassPillNavItem(icon: AppIcons.library, label: l10n.library),
+            GlassPillNavItem(
+              icon: AppIcons.settings,
+              label: l10n.settingsTitle,
+            ),
+          ],
           onTap: (index) {
             final navigatorState =
                 NavigationHelper.mobileNavigatorKey.currentState;
             navigatorState?.popUntil((route) => route.isFirst);
-
-            if (index == 2) {
-              final now = DateTime.now();
-              if (now.difference(_lastSearchTap).inSeconds > 3) {
-                _searchTapCount = 0;
-              }
-              _searchTapCount++;
-              _lastSearchTap = now;
-              if (_searchTapCount >= 11) {
-                _searchTapCount = 0;
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FantasyScreen()),
-                );
-                return;
-              }
-            } else {
-              _searchTapCount = 0;
-            }
-
-            setState(() => _currentIndex = index);
+            _setTab(index);
           },
-          items: [
-            BottomNavigationBarItem(
-              icon: const Icon(CupertinoIcons.music_house),
-              activeIcon: const Icon(CupertinoIcons.music_house_fill),
-              label: l10n.home,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(CupertinoIcons.collections),
-              activeIcon: const Icon(CupertinoIcons.collections_solid),
-              label: l10n.library,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(CupertinoIcons.search),
-              activeIcon: const Icon(CupertinoIcons.search),
-              label: l10n.search,
-            ),
-          ],
+          art: hasSong ? const _NavAlbumArt() : null,
+          onArtTap: _openNowPlaying,
         ),
       ),
     );
+  }
+}
+
+/// 底栏最右的**当前专辑圆封面**（点击进播放页）。
+/// 无播放时由 [GlassPillNav] 的 `art == null` 决定不渲染该槽。
+class _NavAlbumArt extends StatelessWidget {
+  const _NavAlbumArt();
+
+  @override
+  Widget build(BuildContext context) {
+    final song = context.watch<PlayerProvider>().currentSong;
+    if (song == null) return const SizedBox.shrink();
+    final coverArt = Provider.of<LibraryProvider>(context, listen: false)
+        .effectiveCoverArt(song);
+    return AlbumArtwork(coverArt: coverArt, size: 34);
   }
 }
 

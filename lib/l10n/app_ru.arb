@@ -889,14 +889,6 @@
     "description": "Empty state subtitle on the history screen"
   },
   "@_SORT_OPTIONS": {},
-  "sortByTitleAZ": "Название (А-Я)",
-  "@sortByTitleAZ": {
-    "description": "Sort option: title ascending"
-  },
-  "sortByTitleZA": "Название (Я-А)",
-  "@sortByTitleZA": {
-    "description": "Sort option: title descending"
-  },
   "sortByArtistAZ": "Исполнитель (А-Я)",
   "@sortByArtistAZ": {
     "description": "Sort option: artist ascending"

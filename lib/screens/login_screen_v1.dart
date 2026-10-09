@@ -88,8 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _serverFamily =
         config.serverFamily.isEmpty ? 'subsonic' : config.serverFamily;
     // 道理鱼只认明文 p=，从已存 profile 恢复表单时同样强制。
-    _useLegacyAuth =
-        config.useLegacyAuth || config.serverFamily == 'daoliyu';
+    _useLegacyAuth = config.useLegacyAuth || config.serverFamily == 'daoliyu';
     _allowSelfSignedCertificates = config.allowSelfSignedCertificates;
     _customCertificatePath = config.customCertificatePath;
     if (config.customCertificatePath != null) {
@@ -492,8 +491,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _serverFamily = config.serverFamily;
       // 道理鱼只认明文 p=，从已存 profile / 扫描配置恢复时同样强制。
-      _useLegacyAuth =
-          config.useLegacyAuth || config.serverFamily == 'daoliyu';
+      _useLegacyAuth = config.useLegacyAuth || config.serverFamily == 'daoliyu';
       _allowSelfSignedCertificates = config.allowSelfSignedCertificates;
     });
 
@@ -788,7 +786,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 // 与 _login() 的「至少填一个地址」校验一致，避免
                                 // 空表单提交时只走 submit-time 的硬编码中文提示。
                                 if (url.isEmpty &&
-                                    _localServerController.text.trim().isEmpty) {
+                                    _localServerController.text
+                                        .trim()
+                                        .isEmpty) {
                                   return AppLocalizations.of(context)!
                                       .pleaseEnterServerUrl;
                                 }

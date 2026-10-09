@@ -95,6 +95,7 @@ class TranscodingService extends ChangeNotifier {
             : _mobileBitrate)
         : _manualBitrate;
   }
+
   String get format => _format;
   bool get enabled => _enabled;
   bool get smartEnabled => _smartEnabled;

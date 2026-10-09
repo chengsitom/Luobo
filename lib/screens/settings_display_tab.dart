@@ -5,13 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import '../services/recommendation_service.dart';
 import '../services/player_ui_settings_service.dart';
-import '../services/theme_service.dart';
-import '../services/locale_service.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_surface.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/sheet_shell.dart';
 import '../l10n/app_localizations.dart';
-import 'theme_manager_screen.dart';
 
 class SettingsDisplayTab extends StatefulWidget {
   const SettingsDisplayTab({super.key});
@@ -33,10 +33,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   String _artworkShadowColor = 'black';
   bool _liveSearch = true;
 
-  ThemeMode _themeMode = ThemeMode.system;
-  AccentColor _accentColor = AccentColor.red;
-  bool _liquidGlass = false;
-
   bool get _isDesktop {
     if (kIsWeb) return false;
     return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -54,7 +50,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     await _playerUiSettings.initialize();
 
     if (!mounted) return;
-    final themeService = Provider.of<ThemeService>(context, listen: false);
 
     setState(() {
       _showVolumeSlider = _playerUiSettings.getShowVolumeSlider();
@@ -67,9 +62,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
       _artworkShadow = _playerUiSettings.getArtworkShadow();
       _artworkShadowColor = _playerUiSettings.getArtworkShadowColor();
       _liveSearch = _playerUiSettings.getLiveSearch();
-      _themeMode = themeService.themeMode;
-      _accentColor = themeService.accentColor;
-      _liquidGlass = themeService.liquidGlass;
     });
   }
 
@@ -78,16 +70,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
-        _buildSection(
-          title: AppLocalizations.of(context)!.appearanceSection.toUpperCase(),
-          children: [_buildAppearanceEditor()],
-        ),
-        const SizedBox(height: 24),
-        _buildSection(
-          title: AppLocalizations.of(context)!.language.toUpperCase(),
-          children: [_buildLanguageSelector()],
-        ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.playerInterface.toUpperCase(),
           children: [
@@ -108,22 +90,12 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             ],
           ],
         ),
-        const SizedBox(height: 24),
-        _buildSection(
-          title:
-              AppLocalizations.of(context)!.nowPlayingThemesTitle.toUpperCase(),
-          children: [
-            _buildNowPlayingThemesButton(),
-          ],
-        ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.liveSearchSection.toUpperCase(),
           children: [
             _buildLiveSearchToggle(),
           ],
         ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(
             context,
@@ -132,7 +104,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
               .toUpperCase(),
           children: [_buildArtworkStyleEditor()],
         ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(
             context,
@@ -152,162 +123,30 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-  Widget _buildAppearanceEditor() {
-    final themeService = Provider.of<ThemeService>(context, listen: false);
-    final isDark = _isDark;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildEditorRow(
-            icon: CupertinoIcons.moon_stars_fill,
-            iconColor: const Color(0xFF5856D6),
-            label: AppLocalizations.of(context)!.themeLabel,
-            child: _ThemeModeSelector(
-              value: _themeMode,
-              isDark: isDark,
-              onChanged: (mode) async {
-                setState(() => _themeMode = mode);
-                await themeService.setThemeMode(mode);
-              },
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildEditorRow(
-            icon: Icons.palette_rounded,
-            iconColor: const Color(0xFFFF9500),
-            label: AppLocalizations.of(context)!.accentColorLabel,
-            child: _AccentColorPicker(
-              selected: _accentColor,
-              onChanged: (color) async {
-                setState(() => _accentColor = color);
-                await themeService.setAccentColor(color);
-              },
-            ),
-          ),
-          ...[
-            const SizedBox(height: 20),
-            _buildEditorRow(
-              icon: CupertinoIcons.sparkles,
-              iconColor: const Color(0xFF64D2FF),
-              label: AppLocalizations.of(context)!.circularDesignLabel,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppLocalizations.of(context)!.circularDesignSubtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark
-                          ? AppTheme.darkSecondaryText
-                          : AppTheme.lightSecondaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Spacer(),
-                      CupertinoSwitch(
-                        value: _liquidGlass,
-                        activeTrackColor: const Color(0xFF64D2FF),
-                        onChanged: (value) async {
-                          setState(() => _liquidGlass = value);
-                          await themeService.setLiquidGlass(value);
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _buildSection({
     required String title,
     required List<Widget> children,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: _isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
-        ),
+        LuoboSectionHeader(title),
+        LuoboCard(children: children),
       ],
     );
   }
 
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 56),
-      child: Container(
-        height: 0.5,
-        color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-      ),
-    );
-  }
+  Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
 
   Widget _buildVolumeSliderToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF007AFF), Color(0xFF5AC8FA)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.speaker_2,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showVolumeSlider,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showVolumeSliderSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.speaker_2,
+      title: AppLocalizations.of(context)!.showVolumeSlider,
+      subtitle: AppLocalizations.of(context)!.showVolumeSliderSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _showVolumeSlider,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _showVolumeSlider = value);
           await _playerUiSettings.setShowVolumeSlider(value);
@@ -317,39 +156,13 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   }
 
   Widget _buildStarRatingsToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.star_fill,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showStarRatings,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showStarRatingsSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.star_fill,
+      title: AppLocalizations.of(context)!.showStarRatings,
+      subtitle: AppLocalizations.of(context)!.showStarRatingsSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _showStarRatings,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _showStarRatings = value);
           await _playerUiSettings.setShowStarRatings(value);
@@ -359,39 +172,13 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   }
 
   Widget _buildMiniPlayerHeartToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.heart_fill,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerHeart,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerHeartSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.heart_fill,
+      title: AppLocalizations.of(context)!.showMiniPlayerHeart,
+      subtitle: AppLocalizations.of(context)!.showMiniPlayerHeartSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _showMiniPlayerHeart,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _showMiniPlayerHeart = value);
           await _playerUiSettings.setShowMiniPlayerHeart(value);
@@ -401,39 +188,13 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   }
 
   Widget _buildMiniPlayerRepeatToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF34C759), Color(0xFF30D158)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.repeat,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerRepeat,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerRepeatSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.repeat,
+      title: AppLocalizations.of(context)!.showMiniPlayerRepeat,
+      subtitle: AppLocalizations.of(context)!.showMiniPlayerRepeatSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _showMiniPlayerRepeat,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _showMiniPlayerRepeat = value);
           await _playerUiSettings.setShowMiniPlayerRepeat(value);
@@ -443,39 +204,13 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   }
 
   Widget _buildMiniPlayerShuffleToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF5856D6), Color(0xFF7B68EE)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.shuffle,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerShuffle,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerShuffleSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.shuffle,
+      title: AppLocalizations.of(context)!.showMiniPlayerShuffle,
+      subtitle: AppLocalizations.of(context)!.showMiniPlayerShuffleSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _showMiniPlayerShuffle,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _showMiniPlayerShuffle = value);
           await _playerUiSettings.setShowMiniPlayerShuffle(value);
@@ -484,85 +219,14 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-  Widget _buildNowPlayingThemesButton() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF8B5CF6), Color(0xFFFA243C)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.paintbrush,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.customizeNowPlaying,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.customizeNowPlayingSubtitle,
-        style: const TextStyle(
-          fontSize: 13,
-          color: Colors.grey,
-        ),
-      ),
-      trailing: const Icon(
-        CupertinoIcons.chevron_right,
-        color: Colors.grey,
-        size: 18,
-      ),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const ThemeManagerScreen(),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildLiveSearchToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF9500), Color(0xFFFFCC00)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.search,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.liveSearch,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.liveSearchSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.search,
+      title: AppLocalizations.of(context)!.liveSearch,
+      subtitle: AppLocalizations.of(context)!.liveSearchSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _liveSearch,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _liveSearch = value);
           await _playerUiSettings.setLiveSearch(value);
@@ -704,8 +368,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
                           _albumArtCornerRadius.round() == 0
                               ? l10n.artworkCornerRadiusNone
                               : '${_albumArtCornerRadius.round()}px',
-                          style: TextStyle(
-                            fontSize: 13,
+                          style: LuoboType.value.copyWith(
                             fontWeight: FontWeight.w600,
                             color: Theme.of(context).colorScheme.primary,
                           ),
@@ -872,8 +535,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             ),
             child: Text(
               opt.label,
-              style: TextStyle(
-                fontSize: 13,
+              style: LuoboType.body.copyWith(
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: isSelected
                     ? Colors.white
@@ -889,42 +551,13 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   Widget _buildRecommendationsToggle() {
     return Consumer<RecommendationService>(
       builder: (context, service, _) {
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.sparkles,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.enableRecommendations,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.enableRecommendationsSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: CupertinoSwitch(
+        return LuoboRow(
+          icon: CupertinoIcons.sparkles,
+          title: AppLocalizations.of(context)!.enableRecommendations,
+          subtitle: AppLocalizations.of(context)!.enableRecommendationsSubtitle,
+          showChevron: false,
+          trailing: LuoboSwitch(
             value: service.enabled,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
             onChanged: (value) => service.setEnabled(value),
           ),
         );
@@ -938,45 +571,20 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         final stats = service.getListeningStats();
         final uniqueSongs = stats['uniqueSongs'] ?? 0;
         final totalPlays = stats['totalPlays'] ?? 0;
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.listeningData,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.totalPlays(totalPlays),
-            style: TextStyle(
-              fontSize: 13,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: Text(
-            AppLocalizations.of(context)!.songsCount(uniqueSongs),
-            style: TextStyle(
-              fontSize: 14,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
+        return LuoboRow(
+          title: AppLocalizations.of(context)!.listeningData,
+          subtitle: AppLocalizations.of(context)!.totalPlays(totalPlays),
+          value: AppLocalizations.of(context)!.songsCount(uniqueSongs),
+          showChevron: false,
         );
       },
     );
   }
 
   Widget _buildClearRecommendationsButton() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(
-        AppLocalizations.of(context)!.clearListeningHistory,
-        style: const TextStyle(fontSize: 16, color: Color(0xFFFF3B30)),
-      ),
+    return LuoboRow(
+      title: AppLocalizations.of(context)!.clearListeningHistory,
+      danger: true,
       onTap: () {
         showDialog(
           context: context,
@@ -1018,43 +626,15 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   Widget _buildDiscordRpcToggle() {
     return Consumer<PlayerProvider>(
       builder: (context, player, _) {
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5865F2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.game_controller,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.discordStatus,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.discordStatusSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: CupertinoSwitch(
+        return LuoboRow(
+          icon: CupertinoIcons.game_controller,
+          title: AppLocalizations.of(context)!.discordStatus,
+          subtitle: AppLocalizations.of(context)!.discordStatusSubtitle,
+          showChevron: false,
+          trailing: LuoboSwitch(
             value: player.discordRpcEnabled,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
             onChanged: (value) async {
               await player.setDiscordRpcEnabled(value);
-
               setState(() {});
             },
           ),
@@ -1072,346 +652,30 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     ];
     return Consumer<PlayerProvider>(
       builder: (context, player, _) {
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5865F2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.text_bubble,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(l10n.discordStatusText,
-              style: const TextStyle(fontSize: 16)),
-          subtitle: Text(
-            l10n.discordStatusTextSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: DropdownButton<String>(
-            value: player.discordRpcStateStyle,
-            underline: const SizedBox.shrink(),
-            items: styles
-                .map(
-                  (s) => DropdownMenuItem(
-                    value: s.$1,
-                    child: Text(s.$2, style: const TextStyle(fontSize: 14)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) player.setDiscordRpcStateStyle(value);
-            },
-          ),
+        final current = styles.firstWhere(
+          (s) => s.$1 == player.discordRpcStateStyle,
+          orElse: () => styles.first,
+        );
+        return LuoboRow(
+          icon: CupertinoIcons.text_bubble,
+          title: l10n.discordStatusText,
+          subtitle: l10n.discordStatusTextSubtitle,
+          value: current.$2,
+          showChevron: true,
+          onTap: () async {
+            final picked = await showLuoboPickerSheet<String>(
+              context: context,
+              title: l10n.discordStatusText,
+              options: [
+                for (final s in styles) (value: s.$1, label: s.$2),
+              ],
+              selected: player.discordRpcStateStyle,
+            );
+            if (picked == null || !context.mounted) return;
+            player.setDiscordRpcStateStyle(picked);
+          },
         );
       },
-    );
-  }
-
-  Widget _buildLanguageSelector() {
-    return Consumer<LocaleService>(
-      builder: (context, localeService, _) {
-        final currentLocale = localeService.currentLocale;
-        final currentLanguageCode = currentLocale?.languageCode ?? 'en';
-        final currentLanguageName =
-            LocaleService.supportedLanguages[currentLanguageCode] ?? 'English';
-
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF34C759), Color(0xFF30D158)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              CupertinoIcons.globe,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.language,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            currentLanguageName,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: const Icon(Icons.chevron_right, size: 20),
-          onTap: () => _showLanguagePicker(context, localeService),
-        );
-      },
-    );
-  }
-
-  void _showLanguagePicker(BuildContext context, LocaleService localeService) {
-    showGlassBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: _isDark ? AppTheme.darkSurface : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 8, bottom: 4),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: _isDark ? Colors.grey[600] : Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(CupertinoIcons.globe, size: 24),
-                  const SizedBox(width: 12),
-                  Text(
-                    AppLocalizations.of(context)!.selectLanguage,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(CupertinoIcons.device_phone_portrait),
-              title: Text(AppLocalizations.of(context)!.systemDefault),
-              trailing: localeService.currentLocale == null
-                  ? Icon(Icons.check,
-                      color: Theme.of(context).colorScheme.primary)
-                  : null,
-              onTap: () {
-                localeService.setLocale(null);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView(
-                children: LocaleService.supportedLanguages.entries.map((entry) {
-                  final isSelected =
-                      localeService.currentLocale?.languageCode == entry.key;
-                  return ListTile(
-                    leading: Text(
-                      _getFlagEmoji(entry.key),
-                      style: const TextStyle(fontSize: 24),
-                    ),
-                    title: Text(entry.value),
-                    trailing: isSelected
-                        ? Icon(Icons.check,
-                            color: Theme.of(context).colorScheme.primary)
-                        : null,
-                    onTap: () {
-                      localeService.setLocale(Locale(entry.key));
-                      Navigator.pop(context);
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _getFlagEmoji(String languageCode) {
-    const Map<String, String> flagMap = {
-      'en': '🇬🇧',
-      'sq': '🇦🇱',
-      'it': '🇮🇹',
-      'bn': '🇧🇩',
-      'zh': '🇨🇳',
-      'da': '🇩🇰',
-      'fi': '🇫🇮',
-      'fr': '🇫🇷',
-      'de': '🇩🇪',
-      'el': '🇬🇷',
-      'hi': '🇮🇳',
-      'id': '🇮🇩',
-      'ga': '🇮🇪',
-      'no': '🇳🇴',
-      'pl': '🇵🇱',
-      'pt': '🇵🇹',
-      'ro': '🇷🇴',
-      'ru': '🇷🇺',
-      'es': '🇪🇸',
-      'sv': '🇸🇪',
-      'te': '🇮🇳',
-      'tr': '🇹🇷',
-      'uk': '🇺🇦',
-      'vi': '🇻🇳',
-    };
-    return flagMap[languageCode] ?? '🌐';
-  }
-}
-
-class _ThemeModeSelector extends StatelessWidget {
-  const _ThemeModeSelector({
-    required this.value,
-    required this.isDark,
-    required this.onChanged,
-  });
-
-  final ThemeMode value;
-  final bool isDark;
-  final ValueChanged<ThemeMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = [
-      (
-        mode: ThemeMode.system,
-        label: AppLocalizations.of(context)!.themeModeSystem,
-        icon: CupertinoIcons.device_phone_portrait
-      ),
-      (
-        mode: ThemeMode.light,
-        label: AppLocalizations.of(context)!.themeModeLight,
-        icon: CupertinoIcons.sun_max_fill
-      ),
-      (
-        mode: ThemeMode.dark,
-        label: AppLocalizations.of(context)!.themeModeDark,
-        icon: CupertinoIcons.moon_fill
-      ),
-    ];
-
-    final accent = Theme.of(context).colorScheme.primary;
-
-    return Row(
-      children: options.map((opt) {
-        final selected = value == opt.mode;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => onChanged(opt.mode),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: selected
-                    ? accent
-                    : (isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.06)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    opt.icon,
-                    size: 18,
-                    color: selected
-                        ? Colors.white
-                        : (isDark ? Colors.white70 : Colors.black54),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    opt.label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      color: selected
-                          ? Colors.white
-                          : (isDark ? Colors.white70 : Colors.black54),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _AccentColorPicker extends StatelessWidget {
-  const _AccentColorPicker({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final AccentColor selected;
-  final ValueChanged<AccentColor> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: AccentColor.values.map((color) {
-        final isSelected = selected == color;
-        return GestureDetector(
-          onTap: () => onChanged(color),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.color,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSelected ? Colors.white : Colors.transparent,
-                width: 2.5,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: color.color.withValues(alpha: 0.6),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: isSelected
-                ? const Icon(Icons.check, color: Colors.white, size: 16)
-                : null,
-          ),
-        );
-      }).toList(),
     );
   }
 }

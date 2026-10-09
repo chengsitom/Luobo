@@ -402,8 +402,14 @@ class _PlayerControls extends StatelessWidget {
         p.isPlayingAudiobook,
       ),
       builder: (context, data, _) {
-        final (isPlaying, shuffleEnabled, hasPrevious, hasNext, repeatMode,
-            isAudiobook) = data;
+        final (
+          isPlaying,
+          shuffleEnabled,
+          hasPrevious,
+          hasNext,
+          repeatMode,
+          isAudiobook
+        ) = data;
         final provider = context.read<PlayerProvider>();
 
         return Row(

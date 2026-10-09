@@ -658,8 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 24),
                                 ElevatedButton.icon(
-                                  onPressed: () =>
-                                      refreshLibraryWithFeedback(
+                                  onPressed: () => refreshLibraryWithFeedback(
                                     context,
                                     libraryProvider,
                                   ),
@@ -925,7 +924,8 @@ class _QuickAccessTileState extends State<_QuickAccessTile> {
                               : CachedNetworkImage(
                                   cacheManager: coverCacheManager,
                                   imageUrl: widget.imageUrl!,
-                                  cacheKey: coverArtCacheKeyFromUrl(widget.imageUrl!),
+                                  cacheKey:
+                                      coverArtCacheKeyFromUrl(widget.imageUrl!),
                                   fit: BoxFit.cover,
                                   placeholder: (ctx, e) =>
                                       Container(color: Colors.grey[800]),

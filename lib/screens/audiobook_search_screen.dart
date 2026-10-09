@@ -126,11 +126,10 @@ class _AudiobookSearchScreenState extends State<AudiobookSearchScreen> {
                   itemCount: results.length,
                   itemBuilder: (context, index) {
                     final chapter = results[index];
-                    final duration =
-                        chapter.durationSeconds != null &&
-                                chapter.durationSeconds! > 0
-                            ? formatDuration(chapter.durationSeconds!)
-                            : '';
+                    final duration = chapter.durationSeconds != null &&
+                            chapter.durationSeconds! > 0
+                        ? formatDuration(chapter.durationSeconds!)
+                        : '';
                     return ListTile(
                       leading: SizedBox(
                         width: 32,

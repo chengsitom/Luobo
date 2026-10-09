@@ -238,6 +238,24 @@ abstract class AppLocalizations {
   /// **'Your Playlists'**
   String get yourPlaylists;
 
+  /// Home quick-entry card: random playback across the whole library (fnos-style 'music roaming')
+  ///
+  /// In en, this message translates to:
+  /// **'Roaming'**
+  String get roaming;
+
+  /// Subtitle under the Roaming card on the home screen
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle the whole library'**
+  String get roamingSubtitle;
+
+  /// Home section title for the Roaming / Playlist / Favorites entry cards
+  ///
+  /// In en, this message translates to:
+  /// **'Quick Start'**
+  String get quickStart;
+
   /// Favorite playlists section title on home screen
   ///
   /// In en, this message translates to:
@@ -1312,18 +1330,6 @@ abstract class AppLocalizations {
   /// **'Liked Songs'**
   String get likedSongs;
 
-  /// No description provided for @likedAlbums.
-  ///
-  /// In en, this message translates to:
-  /// **'Liked Albums'**
-  String get likedAlbums;
-
-  /// No description provided for @noLikedAlbums.
-  ///
-  /// In en, this message translates to:
-  /// **'No liked albums yet'**
-  String get noLikedAlbums;
-
   /// No description provided for @localMusicLibrary.
   ///
   /// In en, this message translates to:
@@ -1663,8 +1669,14 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDisplayEntry.
   ///
   /// In en, this message translates to:
-  /// **'Display & Appearance'**
+  /// **'Player Interface'**
   String get settingsDisplayEntry;
+
+  /// Settings root group title: about this app
+  ///
+  /// In en, this message translates to:
+  /// **'About Luobo'**
+  String get settingsGroupAbout;
 
   /// No description provided for @settingsGroupAi.
   ///
@@ -2710,18 +2722,6 @@ abstract class AppLocalizations {
   /// **'Songs you play will appear here'**
   String get songsWillAppearHere;
 
-  /// Sort option: title ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Title (A-Z)'**
-  String get sortByTitleAZ;
-
-  /// Sort option: title descending
-  ///
-  /// In en, this message translates to:
-  /// **'Title (Z-A)'**
-  String get sortByTitleZA;
-
   /// Sort option: artist ascending
   ///
   /// In en, this message translates to:
@@ -2937,6 +2937,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'https://your-server.com'**
   String get serverUrlHint;
+
+  /// Hint text for the username field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. admin'**
+  String get usernameHint;
+
+  /// Hint text for the password field
+  ///
+  /// In en, this message translates to:
+  /// **'Enter password'**
+  String get passwordHint;
 
   /// Label for the optional profile name field
   ///
@@ -3537,6 +3549,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System'**
   String get themeModeSystem;
+
+  /// Appearance page section title: theme mode
+  ///
+  /// In en, this message translates to:
+  /// **'Theme Mode'**
+  String get themeModeTitle;
+
+  /// App settings: clear cover image and app cache
+  ///
+  /// In en, this message translates to:
+  /// **'Clear App Cache'**
+  String get clearAppCache;
+
+  /// Appearance page hint: glass effect is not customizable
+  ///
+  /// In en, this message translates to:
+  /// **'Glass and card styling is defined by the design system and is not user-adjustable.'**
+  String get appearanceGlassHint;
 
   /// Light theme mode option
   ///
@@ -4143,18 +4173,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Eliminate silence between songs'**
   String get gaplessPlaybackSubtitle;
-
-  /// Title for customize now playing screen option
-  ///
-  /// In en, this message translates to:
-  /// **'Customize Now Playing Screen (Beta)'**
-  String get customizeNowPlaying;
-
-  /// Subtitle for customize now playing screen option
-  ///
-  /// In en, this message translates to:
-  /// **'Create and manage custom themes'**
-  String get customizeNowPlayingSubtitle;
 
   /// Section title for lyrics settings
   ///
@@ -4810,12 +4828,6 @@ abstract class AppLocalizations {
   /// **'Connecting…'**
   String get connecting;
 
-  /// App bar title for theme manager screen
-  ///
-  /// In en, this message translates to:
-  /// **'Now Playing Themes'**
-  String get nowPlayingThemesTitle;
-
   /// Default name for a newly created theme
   ///
   /// In en, this message translates to:
@@ -5206,53 +5218,11 @@ abstract class AppLocalizations {
   /// **'No favorite songs yet'**
   String get noFavoriteSongs;
 
-  /// Empty state when there are no favorite albums
-  ///
-  /// In en, this message translates to:
-  /// **'No favorite albums yet'**
-  String get noFavoriteAlbums;
-
   /// Empty state hint for listening history
   ///
   /// In en, this message translates to:
   /// **'Songs you play will appear here'**
   String get listeningHistoryHint;
-
-  /// Sort option by title ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Title (A-Z)'**
-  String get sortTitleAz;
-
-  /// Sort option by title descending
-  ///
-  /// In en, this message translates to:
-  /// **'Title (Z-A)'**
-  String get sortTitleZa;
-
-  /// Sort option by artist ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Artist (A-Z)'**
-  String get sortArtistAz;
-
-  /// Sort option by artist descending
-  ///
-  /// In en, this message translates to:
-  /// **'Artist (Z-A)'**
-  String get sortArtistZa;
-
-  /// Sort option by album ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Album (A-Z)'**
-  String get sortAlbumAz;
-
-  /// Sort option by album descending
-  ///
-  /// In en, this message translates to:
-  /// **'Album (Z-A)'**
-  String get sortAlbumZa;
 
   /// Search field placeholder in library search
   ///
@@ -5380,6 +5350,24 @@ abstract class AppLocalizations {
   /// **'Original (not transcoded)'**
   String get noTranscoding;
 
+  /// Short transcode status for compact rows (account card subtitle). 'No transcoding'.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct'**
+  String get transcodeShortIdle;
+
+  /// Short transcode status for compact rows: currently transcoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcoding'**
+  String get transcodeShortActive;
+
+  /// Short transcode status for compact rows: stream already transcoded.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcoded'**
+  String get transcodeShortDone;
+
   /// Status label when playback will be transcoded on the current network
   ///
   /// In en, this message translates to:
@@ -5415,6 +5403,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit'**
   String get edit;
+
+  /// Server action panel entry leading to the server detail page
+  ///
+  /// In en, this message translates to:
+  /// **'Server Status'**
+  String get serverStatus;
+
+  /// Server action panel entry that refreshes the library from the server
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan Library'**
+  String get rescanLibrary;
+
+  /// Destructive server action; removes the saved server profile
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Connection'**
+  String get removeConnection;
+
+  /// Title of the server management page
+  ///
+  /// In en, this message translates to:
+  /// **'Connected Servers'**
+  String get connectedServers;
+
+  /// Hint shown below the server list
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to switch the active server; scan or add from the top right.'**
+  String get serversHint;
+
+  /// Toast shown after a successful library rescan
+  ///
+  /// In en, this message translates to:
+  /// **'Library refreshed'**
+  String get libraryRefreshed;
+
+  /// Title of the server detail page (B4)
+  ///
+  /// In en, this message translates to:
+  /// **'Server Details'**
+  String get serverDetail;
+
+  /// Footnote under the connect button on the server form. Deliberately does NOT claim encryption - credentials are kept in SharedPreferences, not encrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'This information is stored only on this device.'**
+  String get formLocalOnlyNote;
+
+  /// Hint under the server type grid on the add-server step
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a type, then fill in the address and account — the form is identical to \"Modify connection\".'**
+  String get serverTypeGridHint;
+
+  /// Section title for alternative add-server entries (QR scan)
+  ///
+  /// In en, this message translates to:
+  /// **'Other ways'**
+  String get otherWays;
+
+  /// Generic toast for a failed local I/O or save operation
+  ///
+  /// In en, this message translates to:
+  /// **'Operation failed'**
+  String get operationFailed;
+
+  /// Confirm dialog title before switching to the on-device library
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to local music mode?'**
+  String get useLocalFilesConfirmTitle;
+
+  /// Confirm dialog body explaining that the server connection is dropped
+  ///
+  /// In en, this message translates to:
+  /// **'This disconnects the current server and uses music files stored on this device instead.'**
+  String get useLocalFilesConfirmBody;
+
+  /// Sort field label: song title. Direction is shown by a separate arrow, not baked into the label (unlike the legacy sortTitleAz/Za keys).
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get sortFieldTitle;
 }
 
 class _AppLocalizationsDelegate

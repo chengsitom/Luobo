@@ -178,8 +178,8 @@ class _CoverCellState extends State<_CoverCell> {
       // 只检测已缓存文件，不发起独立下载：getSingleFile 在 URL 未缓存时会
       // 下载，与正常封面加载（CachedNetworkImage）双重下载同一文件，几十格
       // 并发会明显拖慢首屏。未缓存 → 信任正常渲染，下次缓存命中再检测。
-      final cachedFile =
-          await coverCacheManager.getFileFromCache(coverArtCacheKeyFromUrl(url));
+      final cachedFile = await coverCacheManager
+          .getFileFromCache(coverArtCacheKeyFromUrl(url));
       if (cachedFile == null || !mounted) return;
       final hash =
           sha256.convert(await cachedFile.file.readAsBytes()).toString();
@@ -257,7 +257,8 @@ class _TriangleClipper extends CustomClipper<Path> {
   }
 
   @override
-  bool shouldReclip(_TriangleClipper oldClipper) => oldClipper.topLeft != topLeft;
+  bool shouldReclip(_TriangleClipper oldClipper) =>
+      oldClipper.topLeft != topLeft;
 }
 
 /// 左上→右下 1px 斜分隔线。
@@ -379,5 +380,6 @@ class _SlantLinesPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SlantLinesPainter oldDelegate) => oldDelegate.count != count;
+  bool shouldRepaint(_SlantLinesPainter oldDelegate) =>
+      oldDelegate.count != count;
 }

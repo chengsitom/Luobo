@@ -128,9 +128,12 @@ class AppTheme {
             height: 1.35,
             color: Colors.black,
           ),
-          bodyLarge: const TextStyle(fontSize: 17, height: 1.4, color: Colors.black),
-          bodyMedium: const TextStyle(fontSize: 15, height: 1.4, color: Colors.black),
-          bodySmall: const TextStyle(fontSize: 13, height: 1.4, color: lightSecondaryText),
+          bodyLarge:
+              const TextStyle(fontSize: 17, height: 1.4, color: Colors.black),
+          bodyMedium:
+              const TextStyle(fontSize: 15, height: 1.4, color: Colors.black),
+          bodySmall: const TextStyle(
+              fontSize: 13, height: 1.4, color: lightSecondaryText),
           labelLarge: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
@@ -222,9 +225,12 @@ class AppTheme {
             height: 1.35,
             color: Colors.white,
           ),
-          bodyLarge: const TextStyle(fontSize: 17, height: 1.4, color: Colors.white),
-          bodyMedium: const TextStyle(fontSize: 15, height: 1.4, color: Colors.white),
-          bodySmall: const TextStyle(fontSize: 13, height: 1.4, color: darkSecondaryText),
+          bodyLarge:
+              const TextStyle(fontSize: 17, height: 1.4, color: Colors.white),
+          bodyMedium:
+              const TextStyle(fontSize: 15, height: 1.4, color: Colors.white),
+          bodySmall: const TextStyle(
+              fontSize: 13, height: 1.4, color: darkSecondaryText),
           labelLarge: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
@@ -293,19 +299,22 @@ class AppTheme {
             letterSpacing: -0.5,
             height: 1.15,
             color: fg),
-        headlineLarge:
-            TextStyle(fontSize: 22, fontWeight: FontWeight.bold, height: 1.2, color: fg),
-        headlineMedium:
-            TextStyle(fontSize: 20, fontWeight: FontWeight.w600, height: 1.25, color: fg),
-        titleLarge:
-            TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.3, color: fg),
-        titleMedium:
-            TextStyle(fontSize: 15, fontWeight: FontWeight.w500, height: 1.35, color: fg),
+        headlineLarge: TextStyle(
+            fontSize: 22, fontWeight: FontWeight.bold, height: 1.2, color: fg),
+        headlineMedium: TextStyle(
+            fontSize: 20, fontWeight: FontWeight.w600, height: 1.25, color: fg),
+        titleLarge: TextStyle(
+            fontSize: 17, fontWeight: FontWeight.w600, height: 1.3, color: fg),
+        titleMedium: TextStyle(
+            fontSize: 15, fontWeight: FontWeight.w500, height: 1.35, color: fg),
         bodyLarge: TextStyle(fontSize: 17, height: 1.4, color: fg),
         bodyMedium: TextStyle(fontSize: 15, height: 1.4, color: fg),
         bodySmall: TextStyle(fontSize: 13, height: 1.4, color: secondary),
-        labelLarge:
-            TextStyle(fontSize: 15, fontWeight: FontWeight.w500, height: 1.3, color: accent),
+        labelLarge: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            height: 1.3,
+            color: accent),
       ),
       iconTheme: IconThemeData(color: accent),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(

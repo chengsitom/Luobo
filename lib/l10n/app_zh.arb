@@ -49,6 +49,18 @@
   "@yourPlaylists": {
     "description": "Your playlists section title"
   },
+  "roaming": "漫游",
+  "@roaming": {
+    "description": "Home quick-entry card: random playback across the whole library (fnos-style 'music roaming')"
+  },
+  "roamingSubtitle": "随机漫游曲库",
+  "@roamingSubtitle": {
+    "description": "Subtitle under the Roaming card on the home screen"
+  },
+  "quickStart": "快速开始",
+  "@quickStart": {
+    "description": "Home section title for the Roaming / Playlist / Favorites entry cards"
+  },
   "madeForYou": "为你制作",
   "@madeForYou": {
     "description": "Made for you section title"
@@ -820,7 +832,9 @@
   "settingsGroupStorage": "下载与存储",
   "settingsStorageEntry": "下载与存储",
   "settingsGroupDisplay": "显示与外观",
-  "settingsDisplayEntry": "显示与外观",
+  "settingsDisplayEntry": "播放器界面",
+  "settingsGroupAbout": "关于 Luobo",
+  "@settingsGroupAbout": { "description": "设置根页分组标题：关于本应用" },
   "settingsGroupAi": "AI 智能",
   "settingsAiEntry": "AI 歌单与知识库",
   "settingsGroupSupport": "支持与帮助",
@@ -1202,14 +1216,6 @@
     "description": "Empty state subtitle on the history screen"
   },
   "@_SORT_OPTIONS": {},
-  "sortByTitleAZ": "标题 (A-Z)",
-  "@sortByTitleAZ": {
-    "description": "Sort option: title ascending"
-  },
-  "sortByTitleZA": "标题 (Z-A)",
-  "@sortByTitleZA": {
-    "description": "Sort option: title descending"
-  },
   "sortByArtistAZ": "艺术家 (A-Z)",
   "@sortByArtistAZ": {
     "description": "Sort option: artist ascending"
@@ -1360,6 +1366,14 @@
   "serverUrlHint": "https://your-server.com",
   "@serverUrlHint": {
     "description": "Hint text for the server URL field"
+  },
+  "usernameHint": "例如：admin",
+  "@usernameHint": {
+    "description": "Hint text for the username field"
+  },
+  "passwordHint": "请输入密码",
+  "@passwordHint": {
+    "description": "Hint text for the password field"
   },
   "profileNameLabel": "配置名称（可选）",
   "@profileNameLabel": {
@@ -1849,8 +1863,6 @@
   "showMiniPlayerShuffle": "显示随机按钮",
   "showMiniPlayerShuffleSubtitle": "在迷你播放器中切换随机播放",
   "faves": "收藏",
-  "likedAlbums": "喜欢的专辑",
-  "noLikedAlbums": "暂无喜欢的专辑",
   "localMusicLibrary": "本地音乐库",
   "mergeLocalLibrary": "与服务器合并",
   "mergeLocalLibrarySubtitle": "将本地音乐与服务器音乐一起显示",
@@ -1914,6 +1926,12 @@
   "circularDesignLabel": "圆润设计",
   "circularDesignSubtitle": "浮动、圆角 UI，播放器和导航栏带有半透明面板和玻璃模糊效果。",
   "themeModeSystem": "跟随系统",
+  "themeModeTitle": "主题模式",
+  "@themeModeTitle": { "description": "外观页小节标题：主题模式" },
+  "clearAppCache": "清除 App 缓存",
+  "@clearAppCache": { "description": "App 设置页：清除封面等应用缓存" },
+  "appearanceGlassHint": "玻璃与卡片样式由设计体系统一定义，不提供调节。",
+  "@appearanceGlassHint": { "description": "外观页底部说明：玻璃效果不可自定义" },
   "themeModeLight": "浅色",
   "themeModeDark": "深色",
   "liveLabel": "直播",
@@ -2012,8 +2030,6 @@
   "save": "保存",
   "gaplessPlayback": "无缝播放",
   "gaplessPlaybackSubtitle": "消除歌曲之间的间隔",
-  "customizeNowPlaying": "自定义正在播放界面（Beta）",
-  "customizeNowPlayingSubtitle": "创建和管理自定义主题",
 
   "lyricsSection": "歌词",
   "@lyricsSection": { "description": "Section title for lyrics settings" },
@@ -2260,8 +2276,6 @@
   "serverType": "服务器类型",
   "@serverType": { "description": "服务器类型选择区块标题" },
 
-  "nowPlayingThemesTitle": "正在播放主题",
-  "@nowPlayingThemesTitle": { "description": "主题管理页标题" },
   "newThemeDefaultName": "新主题",
   "@newThemeDefaultName": { "description": "新建主题的默认名称" },
   "newThemeDefaultAuthor": "我",
@@ -2393,26 +2407,12 @@
 
   "noFavoriteSongs": "还没有收藏的歌曲",
   "@noFavoriteSongs": { "description": "没有收藏歌曲时的空状态" },
-  "noFavoriteAlbums": "还没有收藏的专辑",
-  "@noFavoriteAlbums": { "description": "没有收藏专辑时的空状态" },
   "listeningHistory": "播放历史",
   "@listeningHistory": { "description": "播放历史页面标题" },
   "noListeningHistory": "暂无播放历史",
   "@noListeningHistory": { "description": "播放历史空状态标题" },
   "listeningHistoryHint": "您播放的歌曲会显示在这里",
   "@listeningHistoryHint": { "description": "播放历史空状态提示" },
-  "sortTitleAz": "标题（A-Z）",
-  "@sortTitleAz": { "description": "按标题升序排序" },
-  "sortTitleZa": "标题（Z-A）",
-  "@sortTitleZa": { "description": "按标题降序排序" },
-  "sortArtistAz": "艺术家（A-Z）",
-  "@sortArtistAz": { "description": "按艺术家升序排序" },
-  "sortArtistZa": "艺术家（Z-A）",
-  "@sortArtistZa": { "description": "按艺术家降序排序" },
-  "sortAlbumAz": "专辑（A-Z）",
-  "@sortAlbumAz": { "description": "按专辑升序排序" },
-  "sortAlbumZa": "专辑（Z-A）",
-  "@sortAlbumZa": { "description": "按专辑降序排序" },
   "searchInLibrary": "在曲库中搜索...",
   "@searchInLibrary": { "description": "曲库搜索框占位文字" },
   "searchYourLibrary": "搜索您的曲库",
@@ -2484,6 +2484,12 @@
   "@filePath": { "description": "文件路径标签" },
   "noTranscoding": "原始格式（未转码）",
   "@noTranscoding": { "description": "未启用转码时的音质状态" },
+  "transcodeShortIdle": "不转码",
+  "@transcodeShortIdle": { "description": "紧凑行（账号卡副标题）用的短转码状态：未转码" },
+  "transcodeShortActive": "转码中",
+  "@transcodeShortActive": { "description": "紧凑行用的短转码状态：正在转码" },
+  "transcodeShortDone": "已转码",
+  "@transcodeShortDone": { "description": "紧凑行用的短转码状态：流已转码" },
   "actualStream": "实际播放",
   "@actualStream": { "description": "当前正在播放的流的状态标签" },
   "streamWillTranscode": "当前网络将转码",
@@ -2496,5 +2502,33 @@
   "@transcodedToNoNetwork": { "description": "启用转码时的音质状态（网络类型以图标展示，不显示文字）", "placeholders": { "format": { "type": "String" }, "bitrate": { "type": "int" } } },
   "transcodingInProgress": "转码中：{format} {bitrate}kbps",
   "@transcodingInProgress": { "description": "当前网络下正在/即将转码为指定格式的状态文案（网络类型由前置图标+文字展示）", "placeholders": { "format": { "type": "String" }, "bitrate": { "type": "int" } } },
-  "edit": "编辑"
+  "edit": "编辑",
+  "serverStatus": "服务器状态",
+  "@serverStatus": { "description": "服务器操作面板入口，进入服务器详情页" },
+  "rescanLibrary": "重新扫描曲库",
+  "@rescanLibrary": { "description": "服务器操作面板入口，向服务端重新拉取曲库" },
+  "removeConnection": "移除连接",
+  "@removeConnection": { "description": "危险操作：删除已保存的服务器配置" },
+  "connectedServers": "已连接的服务器",
+  "@connectedServers": { "description": "服务器管理页标题" },
+  "serversHint": "点击切换当前服务器；右上角可扫码或新增。",
+  "@serversHint": { "description": "服务器列表下方的说明" },
+  "libraryRefreshed": "曲库已刷新",
+  "@libraryRefreshed": { "description": "重新扫描曲库成功后的提示" },
+  "serverDetail": "服务器详情",
+  "@serverDetail": { "description": "服务器详情页标题（B4）" },
+  "formLocalOnlyNote": "以上信息仅保存在本设备",
+  "@formLocalOnlyNote": { "description": "连接按钮下方的说明。刻意**不写「加密」**——凭据存在 SharedPreferences 里，并未加密" },
+  "serverTypeGridHint": "选定类型后进入表单填写地址与账号 —— 表单样式与「修改连接」完全一致。",
+  "@serverTypeGridHint": { "description": "添加服务器第一步：类型网格下方的说明" },
+  "otherWays": "其他方式",
+  "@otherWays": { "description": "添加服务器的其他方式分组标题（扫码）" },
+  "operationFailed": "操作失败",
+  "@operationFailed": { "description": "本地 I/O 或保存失败时的通用提示" },
+  "useLocalFilesConfirmTitle": "切到本地音乐模式？",
+  "@useLocalFilesConfirmTitle": { "description": "切到本地曲库前的确认框标题" },
+  "useLocalFilesConfirmBody": "会断开当前服务器连接，改用本机上的音乐文件。",
+  "@useLocalFilesConfirmBody": { "description": "确认框正文：说明会断开服务器" },
+  "sortFieldTitle": "标题",
+  "@sortFieldTitle": { "description": "排序字段名：歌曲标题。方向由单独的箭头表示，不再写进文案（区别于旧的 sortTitleAz/Za）" }
 }

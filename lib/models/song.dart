@@ -1,3 +1,4 @@
+import '../utils/byte_format.dart';
 import 'artist_ref.dart';
 import 'json_coerce.dart';
 
@@ -144,20 +145,13 @@ class Song {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  /// Human readable file size, e.g. "28.14 MB".
+  /// Human readable file size, e.g. "28.14 MB". Empty when unknown.
+  ///
+  /// 格式化本身收敛在 `utils/byte_format.dart`，这里只保留「未知为空串」的语义。
   String get formattedSize {
     final bytes = size;
     if (bytes == null || bytes <= 0) return '';
-    if (bytes >= 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-    }
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    if (bytes >= 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    return '$bytes B';
+    return formatBytes(bytes);
   }
 
   /// Sample rate in kHz (e.g. "44.1 kHz"), empty when unknown.

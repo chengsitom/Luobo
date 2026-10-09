@@ -23,7 +23,8 @@ class PlayerUiSettingsService {
   final ValueNotifier<bool> showStarRatingsNotifier = ValueNotifier(false);
   final ValueNotifier<bool> showMiniPlayerHeartNotifier = ValueNotifier(false);
   final ValueNotifier<bool> showMiniPlayerRepeatNotifier = ValueNotifier(false);
-  final ValueNotifier<bool> showMiniPlayerShuffleNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> showMiniPlayerShuffleNotifier =
+      ValueNotifier(false);
   final ValueNotifier<bool> liveSearchNotifier = ValueNotifier(true);
   final ValueNotifier<double> albumArtCornerRadiusNotifier = ValueNotifier(8.0);
 

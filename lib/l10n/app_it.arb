@@ -894,14 +894,6 @@
     "description": "Empty state subtitle on the history screen"
   },
   "@_SORT_OPTIONS": {},
-  "sortByTitleAZ": "Titolo (A-Z)",
-  "@sortByTitleAZ": {
-    "description": "Sort option: title ascending"
-  },
-  "sortByTitleZA": "Titolo (Z-A)",
-  "@sortByTitleZA": {
-    "description": "Sort option: title descending"
-  },
   "sortByArtistAZ": "Artista (A-Z)",
   "@sortByArtistAZ": {
     "description": "Sort option: artist ascending"

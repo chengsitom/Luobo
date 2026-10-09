@@ -111,10 +111,8 @@ class AiPlaylistService {
       if (_cancelled || serial != _generationSerial) break;
 
       final batchIds = uncached.skip(i).take(_batchSize).toList();
-      final batchSongs = batchIds
-          .map((id) => songMap[id])
-          .whereType<Song>()
-          .toList();
+      final batchSongs =
+          batchIds.map((id) => songMap[id]).whereType<Song>().toList();
 
       final tags = await _generateBatchTags(dio, batchSongs);
       // An empty map means the API call succeeded but no line matched the
@@ -192,12 +190,12 @@ $songList''';
           // deepseek-v4-* defaults to thinking mode, which can burn all
           // max_tokens on reasoning and return an empty content. Disable it
           // for the batch tagging task.
-          if (model.startsWith('deepseek'))
-            'thinking': {'type': 'disabled'},
+          if (model.startsWith('deepseek')) 'thinking': {'type': 'disabled'},
         },
       );
 
-      final content = response.data['choices'][0]['message']['content'] as String;
+      final content =
+          response.data['choices'][0]['message']['content'] as String;
       final parsed = _parseBatchResponse(content, songs);
       if (parsed.isEmpty) {
         // Log the full response shape so empty-content / format drift from
@@ -280,9 +278,8 @@ $songList''';
     );
 
     // Build candidate song list with tags (use knowledge base for pre-filtering)
-    final filterText = mode == AiPlaylistMode.freeText
-        ? freeText
-        : sceneDescription;
+    final filterText =
+        mode == AiPlaylistMode.freeText ? freeText : sceneDescription;
     final candidates = _buildCandidateList(allSongs, mode, filterText);
 
     // Build user request
@@ -314,8 +311,7 @@ $candidates
           'max_tokens': 2000,
           // deepseek-v4-* defaults to thinking mode; disable it so the
           // playlist JSON lands in content instead of reasoning output.
-          if (model.startsWith('deepseek'))
-            'thinking': {'type': 'disabled'},
+          if (model.startsWith('deepseek')) 'thinking': {'type': 'disabled'},
           // Guarantee valid JSON output (prompt already instructs the model
           // to return a JSON array of song IDs).
           'response_format': {'type': 'json_object'},
@@ -359,7 +355,8 @@ $candidates
       final topCompleted = profiles.entries
           .where((e) => e.value.completedPlays >= 3)
           .toList()
-        ..sort((a, b) => b.value.completedPlays.compareTo(a.value.completedPlays));
+        ..sort(
+            (a, b) => b.value.completedPlays.compareTo(a.value.completedPlays));
       if (topCompleted.isNotEmpty) {
         final names = topCompleted
             .take(10)
@@ -453,11 +450,13 @@ $candidates
       // Use knowledge base tags to pre-filter relevant songs
       switch (mode) {
         case AiPlaylistMode.scene:
-          candidates = _filterByScene(allSongs, allTags, sceneDescription ?? '');
+          candidates =
+              _filterByScene(allSongs, allTags, sceneDescription ?? '');
         case AiPlaylistMode.recentListening:
           candidates = _filterByRecentStyle(allSongs, allTags);
         case AiPlaylistMode.freeText:
-          candidates = _filterByKeywords(allSongs, allTags, sceneDescription ?? '');
+          candidates =
+              _filterByKeywords(allSongs, allTags, sceneDescription ?? '');
       }
     }
 
@@ -536,7 +535,10 @@ $candidates
 
     if (recentTags.isEmpty) {
       // No knowledge data, fall back to genre-based
-      return allSongs.where((s) => allTags.containsKey(s.id)).take(300).toList();
+      return allSongs
+          .where((s) => allTags.containsKey(s.id))
+          .take(300)
+          .toList();
     }
 
     // Get the most frequent tag keywords from recent listening
@@ -584,7 +586,10 @@ $candidates
     final keywords = _extractKeywords(text);
     if (keywords.isEmpty) {
       // No usable keywords, return all tagged songs
-      return allSongs.where((s) => allTags.containsKey(s.id)).take(300).toList();
+      return allSongs
+          .where((s) => allTags.containsKey(s.id))
+          .take(300)
+          .toList();
     }
     return _filterByScene(allSongs, allTags, text);
   }
@@ -629,7 +634,7 @@ $candidates
     // for matching against tags
     final textLower = text.toLowerCase();
     final words = textLower
-        .replaceAll(RegExp('[，。！？、；：""''（）\\s]+'), ' ')
+        .replaceAll(RegExp('[，。！？、；：""' '（）\\s]+'), ' ')
         .split(' ')
         .where((w) => w.length >= 2)
         .toList();

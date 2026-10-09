@@ -1,21 +1,37 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../l10n/app_localizations.dart';
 import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
+import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
-import '../widgets/server_profile_card.dart';
+import '../widgets/luobo/capsule_button.dart';
+import '../widgets/luobo/empty_state.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/pill_actions.dart';
+import '../widgets/luobo/sheet_shell.dart';
+import '../widgets/server_profile_card.dart' show ServerFamilyInfo;
 import '../widgets/server_qr_dialog.dart';
 import '../widgets/settings_sub_page.dart';
+import 'qr_scanner_screen.dart';
+import 'server_detail_page.dart';
 import 'server_form_screen.dart';
 
-/// 设置内「已保存配置」独立二级页。
+/// 「已连接的服务器」（设计稿 A1）—— 根页组 1 的入口。
 ///
-/// 与登录网关页共用 [ServerProfileCard]；本页卡片额外提供 二维码 / 编辑 /
-/// 删除 三个操作（删除带二次确认）。编辑/添加成功后 pop 回本页并刷新列表。
+/// 结构：右上**胶囊双钮**（扫码 / 新增）＋ **单卡多行**（徽标 + 名称/类型 + `⋮`）
+/// ＋ 行下灰字说明。点击行 = 切换当前服务器；点 `⋮` = 打开**服务器操作面板**
+/// （设计稿 B1）。
+///
+/// ⚠️ **不再复用 `ServerProfileCard`** —— 那张卡是「一服务器一卡」，与设计稿的
+/// 「单卡多行」不符；而它同时被**登录网关页**（`server_gateway_screen.dart`）使用，
+/// 不能就地改。所以本页自带行组件 [ServerRow]，`ServerProfileCard` 原样保留给网关页。
+/// 家族徽标逻辑仍共用 [ServerFamilyInfo]（单一来源）。
 class SavedProfilesScreen extends StatefulWidget {
   const SavedProfilesScreen({super.key});
 
@@ -23,11 +39,12 @@ class SavedProfilesScreen extends StatefulWidget {
   State<SavedProfilesScreen> createState() => _SavedProfilesScreenState();
 }
 
+/// `⋮` 面板的五个出口。
+enum _ProfileAction { edit, detail, rescan, share, remove }
+
 class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
   Future<List<ServerConfig>>? _profilesFuture;
   bool _loaded = false;
-
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   @override
   void didChangeDependencies() {
@@ -45,14 +62,31 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     ).getSavedProfiles();
   }
 
-  String _label(ServerConfig profile) {
-    if (profile.name?.isNotEmpty == true) return profile.name!;
-    return '${profile.username}@'
-        '${Uri.tryParse(profile.serverUrl)?.host ?? profile.serverUrl}';
-  }
+  bool _isActive(AuthProvider auth, ServerConfig profile) =>
+      auth.config?.serverUrl == profile.serverUrl &&
+      auth.config?.username == profile.username;
 
   Future<void> _openAddServer() async {
     await NavigationHelper.push(context, const ServerFormScreen());
+    if (mounted) setState(_reload);
+  }
+
+  /// 扫码添加：把扫到的配置交给**添加流程**的表单预填（而不是丢掉），
+  /// 用户可以核对地址与账号后再连接。
+  Future<void> _openScanner() async {
+    final config = await NavigationHelper.push<ServerConfig>(
+      context,
+      const QrScannerScreen(),
+    );
+    if (!mounted) return;
+    if (config == null) {
+      setState(_reload);
+      return;
+    }
+    await NavigationHelper.push(
+      context,
+      ServerFormScreen(prefillConfig: config),
+    );
     if (mounted) setState(_reload);
   }
 
@@ -65,13 +99,43 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     if (changed == true && mounted) setState(_reload);
   }
 
+  Future<void> _openDetail(ServerConfig profile, bool isActive) async {
+    await NavigationHelper.push(
+      context,
+      ServerDetailPage(profile: profile, isActive: isActive),
+    );
+  }
+
+  Future<void> _shareQr(ServerConfig profile) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ServerQrDialog(config: profile),
+    );
+  }
+
+  /// 「重新扫描曲库」—— 走既有的 `LibraryProvider.refresh()`，不新写扫描逻辑。
+  Future<void> _rescanLibrary() async {
+    final l10n = AppLocalizations.of(context)!;
+    final libraryProvider =
+        Provider.of<LibraryProvider>(context, listen: false);
+    final result = await libraryProvider.refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content:
+            Text(result.success ? l10n.libraryRefreshed : l10n.refreshFailed),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _deleteProfile(ServerConfig profile) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.deleteProfileTitle),
-        content: Text(l10n.deleteProfileConfirm(_label(profile))),
+        content: Text(l10n.deleteProfileConfirm(profile.displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -94,12 +158,100 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     if (mounted) setState(_reload);
   }
 
+  /// 服务器操作面板（设计稿 B1）。
+  Future<void> _showProfileActions(ServerConfig profile, bool isActive) async {
+    final action = await showLuoboSheet<_ProfileAction>(
+      context: context,
+      builder: (ctx) => _buildActionsSheet(ctx, profile, isActive),
+    );
+    if (action == null || !mounted) return;
+
+    switch (action) {
+      case _ProfileAction.edit:
+        await _openEdit(profile);
+      case _ProfileAction.detail:
+        await _openDetail(profile, isActive);
+      case _ProfileAction.rescan:
+        await _rescanLibrary();
+      case _ProfileAction.share:
+        await _shareQr(profile);
+      case _ProfileAction.remove:
+        await _deleteProfile(profile);
+    }
+  }
+
+  Widget _buildActionsSheet(
+    BuildContext ctx,
+    ServerConfig profile,
+    bool isActive,
+  ) {
+    final l10n = AppLocalizations.of(ctx)!;
+    final c = LuoboColors.of(ctx);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 头部：服务器名 + ✕
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                profile.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: LuoboType.navTitle.copyWith(color: c.fg),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Icon(AppIcons.close, size: 18, color: c.fg2),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        LuoboSheetRow(
+          title: l10n.editServer,
+          onTap: () => Navigator.pop(ctx, _ProfileAction.edit),
+        ),
+        LuoboSheetRow(
+          title: l10n.serverStatus,
+          onTap: () => Navigator.pop(ctx, _ProfileAction.detail),
+        ),
+        // 「重新扫描」只对**当前服务器**有意义（refresh 拉的是当前登录的曲库）。
+        if (isActive)
+          LuoboSheetRow(
+            title: l10n.rescanLibrary,
+            onTap: () => Navigator.pop(ctx, _ProfileAction.rescan),
+          ),
+        LuoboSheetRow(
+          title: l10n.shareQrCode,
+          onTap: () => Navigator.pop(ctx, _ProfileAction.share),
+        ),
+        const SizedBox(height: 4),
+        // 危险操作**单独一张卡**（§9.7 独立操作卡）。
+        LuoboSheetRow(
+          title: l10n.removeConnection,
+          danger: true,
+          onTap: () => Navigator.pop(ctx, _ProfileAction.remove),
+        ),
+        const SizedBox(height: 12),
+        LuoboCapsuleButton(
+          label: l10n.cancel,
+          style: LuoboCapsuleStyle.primary,
+          onPressed: () => Navigator.pop(ctx),
+        ),
+      ],
+    );
+  }
+
   Future<void> _onProfileTap(ServerConfig profile) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final isActive = authProvider.config?.serverUrl == profile.serverUrl &&
-        authProvider.config?.username == profile.username;
-
-    if (isActive) {
+    if (_isActive(authProvider, profile)) {
       await _openEdit(profile);
       return;
     }
@@ -109,7 +261,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.switchProfile),
-        content: Text(l10n.switchProfileConfirmation(_label(profile))),
+        content: Text(l10n.switchProfileConfirmation(profile.displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -136,7 +288,8 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
       },
     );
     try {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
       await playerProvider.stop();
       await authProvider.switchProfile(profile);
     } catch (e) {
@@ -168,8 +321,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
 
     // 切换失败时 switchProfile 已回滚旧配置：比对目标是否生效，未生效则
     // 提示并停留在当前页（成功时根路由已换成 MainScreen）。
-    final applied = authProvider.config?.serverUrl == profile.serverUrl &&
-        authProvider.config?.username == profile.username;
+    final applied = _isActive(authProvider, profile);
     if (!applied) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -191,32 +343,36 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+
     return SettingsSubPage(
-      title: l10n.sectionSavedProfiles,
+      title: l10n.connectedServers,
+      actions: [
+        LuoboPillActions(
+          actions: [
+            LuoboPillAction(
+              icon: AppIcons.scan,
+              onPressed: _openScanner,
+            ),
+            LuoboPillAction(
+              icon: AppIcons.plus,
+              onPressed: _openAddServer,
+              tooltip: l10n.addServer,
+            ),
+          ],
+        ),
+      ],
       body: FutureBuilder<List<ServerConfig>>(
         future: _profilesFuture,
         builder: (context, snap) {
           // 读盘异常：展示错误 + 重试，避免永久 spinner。
           if (snap.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.failedToLoadProfiles,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: _isDark
-                          ? AppTheme.darkSecondaryText
-                          : AppTheme.lightSecondaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => setState(_reload),
-                    child: Text(l10n.retry),
-                  ),
-                ],
+            return LuoboEmptyState(
+              icon: AppIcons.offline,
+              message: l10n.failedToLoadProfiles,
+              action: LuoboCapsuleButton(
+                label: l10n.retry,
+                expand: false,
+                onPressed: () => setState(_reload),
               ),
             );
           }
@@ -226,54 +382,15 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
           }
           final profiles = snap.data!;
           if (profiles.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.cloud,
-                      size: 56,
-                      color: _isDark
-                          ? AppTheme.darkSecondaryText
-                          : AppTheme.lightSecondaryText,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l10n.noSavedProfiles,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _isDark
-                            ? AppTheme.darkSecondaryText
-                            : AppTheme.lightSecondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: 200,
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: _openAddServer,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(23),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          l10n.addServer,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+            return LuoboEmptyState(
+              icon: AppIcons.server,
+              message: l10n.noSavedProfiles,
+              action: SizedBox(
+                width: 200,
+                child: LuoboCapsuleButton(
+                  label: l10n.addServer,
+                  style: LuoboCapsuleStyle.primary,
+                  onPressed: _openAddServer,
                 ),
               ),
             );
@@ -281,29 +398,168 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
 
           final authProvider = Provider.of<AuthProvider>(context);
           return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.fromLTRB(
+              LuoboSpacing.pageX,
+              LuoboSpacing.pageY,
+              LuoboSpacing.pageX,
+              LuoboSpacing.pageBottom,
+            ),
             children: [
-              for (final profile in profiles) ...[
-                ServerProfileCard(
-                  profile: profile,
-                  isActive: authProvider.config?.serverUrl ==
-                          profile.serverUrl &&
-                      authProvider.config?.username == profile.username,
-                  onTap: () => _onProfileTap(profile),
-                  onQr: () => showDialog(
-                    context: context,
-                    builder: (_) => ServerQrDialog(config: profile),
-                  ),
-                  onEdit: () => _openEdit(profile),
-                  onDelete: () => _deleteProfile(profile),
-                ),
-                const SizedBox(height: 12),
-              ],
-              AddServerCard(onTap: _openAddServer),
-              const SizedBox(height: 24),
+              LuoboCard(
+                children: [
+                  for (var i = 0; i < profiles.length; i++) ...[
+                    if (i > 0) const LuoboDivider(indent: LuoboSpacing.rowX),
+                    ServerRow(
+                      profile: profiles[i],
+                      isActive: _isActive(authProvider, profiles[i]),
+                      onTap: () => _onProfileTap(profiles[i]),
+                      onMore: () => _showProfileActions(
+                        profiles[i],
+                        _isActive(authProvider, profiles[i]),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              LuoboHint(l10n.serversHint),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// 服务器行（设计稿 A1）：徽标 + 名称（当前服务器带「已连接」徽标）+ 类型 + `⋮`。
+class ServerRow extends StatelessWidget {
+  const ServerRow({
+    super.key,
+    required this.profile,
+    required this.isActive,
+    this.onTap,
+    this.onMore,
+  });
+
+  final ServerConfig profile;
+  final bool isActive;
+  final VoidCallback? onTap;
+  final VoidCallback? onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final info = ServerFamilyInfo.of(profile);
+
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: LuoboSpacing.rowHeightTwoLine,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: LuoboSpacing.rowX,
+          vertical: LuoboSpacing.rowY,
+        ),
+        child: Row(
+          children: [
+            // 实心品牌色 + 白图标：与参考物（箭头音乐「已连接的平台」）一致 ——
+            // 服务器徽标在这里是「一眼区分是哪个服务器」的**标识**，
+            // 15% 淡底 + 彩色图标对比度太低，两块看着都是灰的。
+            // 尺寸取参考实测 96px @3x = 32dp。
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: info.color,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(info.icon, color: LuoboAccent.onAccent, size: 17),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          profile.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: LuoboType.body.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: isActive ? LuoboAccent.accent : c.fg,
+                          ),
+                        ),
+                      ),
+                      if (isActive) ...[
+                        const SizedBox(width: 6),
+                        _ActiveBadge(label: l10n.connected),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    info.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: LuoboType.caption.copyWith(color: c.fg2),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            // 行内「更多」用**纵向 ⋮**（§2.3）。
+            GestureDetector(
+              onTap: onMore,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(AppIcons.moreV, size: 18, color: c.fg2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (onTap == null) return content;
+    return InkWell(onTap: onTap, child: content);
+  }
+}
+
+class _ActiveBadge extends StatelessWidget {
+  const _ActiveBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: LuoboAccent.ok.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(LuoboRadius.badge),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: const BoxDecoration(
+              color: LuoboAccent.ok,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: LuoboType.badge.copyWith(color: LuoboAccent.ok),
+          ),
+        ],
       ),
     );
   }

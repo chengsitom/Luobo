@@ -58,7 +58,8 @@ void main() {
       expect(ts.getCurrentFormat(), isNull);
     });
 
-    test('non-LAN enabled with Original bitrate but a format: format-only '
+    test(
+        'non-LAN enabled with Original bitrate but a format: format-only '
         'transcode signal (drives _willTranscode routing)', () async {
       ts.setLanStateSource(() => false);
       await ts.setEnabled(true);

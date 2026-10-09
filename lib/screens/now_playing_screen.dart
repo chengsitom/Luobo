@@ -32,7 +32,6 @@ import 'album_screen.dart';
 import 'car_mode_screen.dart';
 import '../widgets/multi_artist_widget.dart';
 import '../widgets/album_artwork.dart' show isLocalFilePath;
-import '../widgets/themed_now_playing_elements.dart';
 
 const _kCarouselGap = 40.0;
 
@@ -1401,71 +1400,46 @@ class _DynamicBackgroundState extends State<_DynamicBackground> {
 
   @override
   Widget build(BuildContext context) {
-    return ThemeAwareBuilder(
-      builder: (ctx, theme, isCustom) {
-        if (isCustom) {
-          final bgType = theme.background.type;
-          if (bgType == 'solid') {
-            return ColoredBox(color: theme.background.getColor(0));
-          } else if (bgType == 'gradient') {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    theme.background.getColor(0),
-                    theme.background.getColor(1),
-                  ],
+    return RepaintBoundary(
+      child: TweenAnimationBuilder<List<Color>>(
+        tween: _ColorListTween(begin: _prevColors, end: _meshColors),
+        duration: const Duration(milliseconds: 900),
+        builder: (context, colors, _) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(color: colors[3]),
+              _GradientBlob(
+                color: colors[0],
+                alignment: const Alignment(-0.8, -0.8),
+                radius: 0.9,
+              ),
+              _GradientBlob(
+                color: colors[1],
+                alignment: const Alignment(0.8, -0.6),
+                radius: 0.8,
+              ),
+              _GradientBlob(
+                color: colors[2],
+                alignment: const Alignment(0.0, 0.9),
+                radius: 0.85,
+              ),
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.fromRGBO(0, 0, 0, 0.42),
+                      Color.fromRGBO(0, 0, 0, 0.70),
+                    ],
+                  ),
                 ),
               ),
-            );
-          }
-          // bgType == 'dynamic' falls through to default mesh below
-        }
-
-        return RepaintBoundary(
-          child: TweenAnimationBuilder<List<Color>>(
-            tween: _ColorListTween(begin: _prevColors, end: _meshColors),
-            duration: const Duration(milliseconds: 900),
-            builder: (context, colors, _) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(color: colors[3]),
-                  _GradientBlob(
-                    color: colors[0],
-                    alignment: const Alignment(-0.8, -0.8),
-                    radius: 0.9,
-                  ),
-                  _GradientBlob(
-                    color: colors[1],
-                    alignment: const Alignment(0.8, -0.6),
-                    radius: 0.8,
-                  ),
-                  _GradientBlob(
-                    color: colors[2],
-                    alignment: const Alignment(0.0, 0.9),
-                    radius: 0.85,
-                  ),
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color.fromRGBO(0, 0, 0, 0.42),
-                          Color.fromRGBO(0, 0, 0, 0.70),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -2111,28 +2085,10 @@ class _AlbumArtworkSection extends StatefulWidget {
   State<_AlbumArtworkSection> createState() => _AlbumArtworkSectionState();
 }
 
-class _AlbumArtworkSectionState extends State<_AlbumArtworkSection>
-    with TickerProviderStateMixin {
-  late AnimationController _rotationController;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  double _currentRotationSpeed = 12.0;
-
+class _AlbumArtworkSectionState extends State<_AlbumArtworkSection> {
   @override
   void initState() {
     super.initState();
-    _rotationController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: (_currentRotationSpeed * 1000).round()),
-    );
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
     DiagnosticsService.instance.record(
       EventType.animActive,
       LogLevel.info,
@@ -2140,135 +2096,78 @@ class _AlbumArtworkSectionState extends State<_AlbumArtworkSection>
     );
   }
 
-  void _updateRotation(bool coverRotation, double speed, bool isPlaying) {
-    if (!coverRotation) {
-      _rotationController.stop();
-      return;
-    }
-    // Update speed if changed
-    if (speed != _currentRotationSpeed) {
-      _currentRotationSpeed = speed;
-      final progress = _rotationController.value;
-      _rotationController.duration =
-          Duration(milliseconds: (speed * 1000).round());
-      if (isPlaying) {
-        _rotationController.repeat();
-        _rotationController.value = progress;
-      }
-    }
-    // Pause/resume based on playback state
-    if (isPlaying && !_rotationController.isAnimating) {
-      _rotationController.repeat();
-    } else if (!isPlaying && _rotationController.isAnimating) {
-      _rotationController.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _rotationController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isPlaying = context.select<PlayerProvider, bool>((p) => p.isPlaying);
-    return ThemeAwareBuilder(
-      builder: (ctx, theme, isCustom) {
-        if (isCustom && theme.animations.coverRotation) {
-          _updateRotation(true, theme.animations.rotationSpeed, isPlaying);
-        } else {
-          _updateRotation(false, _currentRotationSpeed, isPlaying);
-        }
+    final borderRadius = BorderRadius.circular(12);
+    final boxShadow = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.4),
+        blurRadius: 40,
+        offset: const Offset(0, 20),
+      ),
+    ];
 
-        final borderRadius = isCustom
-            ? theme.getArtworkBorderRadius()
-            : BorderRadius.circular(12);
-        final boxShadow = isCustom
-            ? theme.getArtworkShadow()
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20),
-                ),
-              ];
-
-        Widget artworkWidget = Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: SizedBox(
-            width: widget.size,
-            height: widget.size,
-            child: RepaintBoundary(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: borderRadius,
-                  boxShadow: boxShadow,
-                ),
-                child: ClipRRect(
-                  borderRadius: borderRadius,
-                  child: widget.imageUrl.isNotEmpty
-                      ? isLocalFilePath(widget.imageUrl)
-                          ? Image.file(
-                              File(widget.imageUrl),
-                              key: ValueKey(widget.imageUrl),
-                              fit: BoxFit.contain,
-                              cacheWidth: 1200,
-                              errorBuilder: (ctx, e, _) =>
-                                  _buildNoArtPlaceholder(ctx),
-                            )
-                          : CachedNetworkImage(
-                              key: ValueKey(widget.imageUrl),
-                              cacheManager: coverCacheManager,
-                              imageUrl: widget.imageUrl,
-                              cacheKey: coverArtCacheKeyFromUrl(widget.imageUrl),
-                              fit: BoxFit.contain,
-                              memCacheWidth: 1200,
-                              maxWidthDiskCache: 1200,
-                              maxHeightDiskCache: 1200,
-                              useOldImageOnUrlChange: true,
-                              fadeInDuration: Duration.zero,
-                              fadeOutDuration: Duration.zero,
-                              placeholder: (ctx, url) =>
-                                  widget.thumbnailUrl != null &&
-                                          widget.thumbnailUrl!.isNotEmpty
-                                      ? CachedNetworkImage(
-                                          cacheManager: coverCacheManager,
-                                          imageUrl: widget.thumbnailUrl!,
-                                          cacheKey: coverArtCacheKeyFromUrl(widget.thumbnailUrl!),
-                                          fit: BoxFit.contain,
-                                          memCacheWidth: 200,
-                                          fadeInDuration: Duration.zero,
-                                          errorWidget: (ctx, err, stack) =>
-                                              _buildLoadingPlaceholder(),
-                                        )
-                                      : _buildLoadingPlaceholder(),
-                              errorWidget: (ctx, e, _) =>
-                                  _buildNoArtPlaceholder(ctx),
-                            )
-                      : _buildNoArtPlaceholder(context),
-                ),
-              ),
+    final artworkWidget = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: RepaintBoundary(
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              boxShadow: boxShadow,
+            ),
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: widget.imageUrl.isNotEmpty
+                  ? isLocalFilePath(widget.imageUrl)
+                      ? Image.file(
+                          File(widget.imageUrl),
+                          key: ValueKey(widget.imageUrl),
+                          fit: BoxFit.contain,
+                          cacheWidth: 1200,
+                          errorBuilder: (ctx, e, _) =>
+                              _buildNoArtPlaceholder(ctx),
+                        )
+                      : CachedNetworkImage(
+                          key: ValueKey(widget.imageUrl),
+                          cacheManager: coverCacheManager,
+                          imageUrl: widget.imageUrl,
+                          cacheKey: coverArtCacheKeyFromUrl(widget.imageUrl),
+                          fit: BoxFit.contain,
+                          memCacheWidth: 1200,
+                          maxWidthDiskCache: 1200,
+                          maxHeightDiskCache: 1200,
+                          useOldImageOnUrlChange: true,
+                          fadeInDuration: Duration.zero,
+                          fadeOutDuration: Duration.zero,
+                          placeholder: (ctx, url) =>
+                              widget.thumbnailUrl != null &&
+                                      widget.thumbnailUrl!.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      cacheManager: coverCacheManager,
+                                      imageUrl: widget.thumbnailUrl!,
+                                      cacheKey: coverArtCacheKeyFromUrl(
+                                          widget.thumbnailUrl!),
+                                      fit: BoxFit.contain,
+                                      memCacheWidth: 200,
+                                      fadeInDuration: Duration.zero,
+                                      errorWidget: (ctx, err, stack) =>
+                                          _buildLoadingPlaceholder(),
+                                    )
+                                  : _buildLoadingPlaceholder(),
+                          errorWidget: (ctx, e, _) =>
+                              _buildNoArtPlaceholder(ctx),
+                        )
+                  : _buildNoArtPlaceholder(context),
             ),
           ),
-        );
-
-        if (isCustom && theme.animations.coverRotation) {
-          artworkWidget = RotationTransition(
-            turns: _rotationController,
-            child: artworkWidget,
-          );
-        } else if (isCustom && theme.animations.pulse) {
-          artworkWidget = ScaleTransition(
-            scale: _pulseAnimation,
-            child: artworkWidget,
-          );
-        }
-
-        return artworkWidget;
-      },
+        ),
+      ),
     );
+
+    return artworkWidget;
   }
 
   Widget _buildLoadingPlaceholder() {
@@ -2631,8 +2530,7 @@ class _SongInfoState extends State<_SongInfo> {
 
     // 有声书（B8）：章节 id 是 abe_，收藏/加歌单会把章节当歌曲打 Subsonic
     // 端点 → 无效请求 + 脏数据。隐藏这两颗按钮（歌曲专属操作）。
-    final isAudiobook =
-        Provider.of<PlayerProvider>(context).isPlayingAudiobook;
+    final isAudiobook = Provider.of<PlayerProvider>(context).isPlayingAudiobook;
 
     return Row(
       children: [
@@ -2640,36 +2538,28 @@ class _SongInfoState extends State<_SongInfo> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ThemeAwareBuilder(
-                builder: (ctx, theme, isCustom) => Text(
-                  widget.song!.title,
-                  style: isCustom
-                      ? theme.getTitleTextStyle()
-                      : TextStyle(
-                          color: Colors.white,
-                          fontSize: ScreenHelper.titleFontSize(context),
-                          fontWeight: FontWeight.bold,
-                        ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                widget.song!.title,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: ScreenHelper.titleFontSize(context),
+                  fontWeight: FontWeight.bold,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              ThemeAwareBuilder(
-                builder: (ctx, theme, isCustom) => MultiArtistWidget(
-                  artists: widget.song!.artistParticipants,
-                  artistFallback: widget.song!.artist,
-                  artistIdFallback: widget.song!.artistId,
-                  style: isCustom
-                      ? theme.getArtistTextStyle()
-                      : TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: ScreenHelper.subtitleFontSize(context),
-                        ),
-                  onBeforeNavigate: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                  },
+              MultiArtistWidget(
+                artists: widget.song!.artistParticipants,
+                artistFallback: widget.song!.artist,
+                artistIdFallback: widget.song!.artistId,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: ScreenHelper.subtitleFontSize(context),
                 ),
+                onBeforeNavigate: () {
+                  if (Navigator.canPop(context)) Navigator.pop(context);
+                },
               ),
               if (widget.song!.hasDolbyAtmos == true) ...[
                 const SizedBox(height: 6),
@@ -2880,7 +2770,8 @@ class _SongInfoState extends State<_SongInfo> {
                                 child: CachedNetworkImage(
                                   cacheManager: coverCacheManager,
                                   imageUrl: coverArtUrl,
-                                  cacheKey: coverArtCacheKeyFromUrl(coverArtUrl),
+                                  cacheKey:
+                                      coverArtCacheKeyFromUrl(coverArtUrl),
                                   width: 50,
                                   height: 50,
                                   fit: BoxFit.cover,
@@ -3216,66 +3107,42 @@ class _ProgressBarState extends State<_ProgressBar> {
                       alignment: Alignment.centerLeft,
                       children: [
                         // Background track
-                        ThemeAwareBuilder(
-                          builder: (ctx, theme, isCustom) {
-                            final height = isCustom
-                                ? theme.progressBar.height
-                                : (_isDragging ? 5.0 : 3.0);
-                            final color = isCustom
-                                ? theme.progressBar.getInactiveColor()
-                                : Colors.white.withValues(alpha: 0.25);
-                            final radius = isCustom
-                                ? theme.getProgressBarBorderRadius()
-                                : BorderRadius.circular(
-                                    _isDragging ? 2.5 : 1.5,
-                                  );
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              curve: Curves.easeOut,
-                              height: height,
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: radius,
-                              ),
-                            );
-                          },
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeOut,
+                          height: _isDragging ? 5.0 : 3.0,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(
+                              _isDragging ? 2.5 : 1.5,
+                            ),
+                          ),
                         ),
                         // Active track
-                        ThemeAwareBuilder(
-                          builder: (ctx, theme, isCustom) {
-                            final height = isCustom
-                                ? theme.progressBar.height
-                                : (_isDragging ? 5.0 : 3.0);
-                            final color = isCustom
-                                ? theme.progressBar.getActiveColor()
-                                : Colors.white;
-                            final radius = isCustom
-                                ? theme.getProgressBarBorderRadius()
-                                : BorderRadius.circular(
-                                    _isDragging ? 2.5 : 1.5,
-                                  );
-                            return FractionallySizedBox(
-                              widthFactor: displayProgress.clamp(0.0, 1.0),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOut,
-                                height: height,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  borderRadius: radius,
-                                  boxShadow: _isDragging
-                                      ? [
-                                          BoxShadow(
-                                            color: color.withValues(alpha: 0.4),
-                                            blurRadius: 8,
-                                            spreadRadius: 1,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
+                        FractionallySizedBox(
+                          widthFactor: displayProgress.clamp(0.0, 1.0),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            curve: Curves.easeOut,
+                            height: _isDragging ? 5.0 : 3.0,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(
+                                _isDragging ? 2.5 : 1.5,
                               ),
-                            );
-                          },
+                              boxShadow: _isDragging
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
                         ),
                         // Thumb
                         Positioned(
@@ -3360,8 +3227,8 @@ class _PlaybackControls extends StatelessWidget {
         p.isPlayingAudiobook,
       ),
       builder: (context, data, _) {
-        final (isPlaying, shuffleEnabled, hasNext, repeatMode, _,
-            isAudiobook) = data;
+        final (isPlaying, shuffleEnabled, hasNext, repeatMode, _, isAudiobook) =
+            data;
         final provider = context.read<PlayerProvider>();
 
         return Row(
@@ -3387,44 +3254,23 @@ class _PlaybackControls extends StatelessWidget {
                 size: ScreenHelper.skipButtonIconSize(context),
               ),
             ),
-            ThemeAwareBuilder(
-              builder: (ctx, theme, isCustom) {
-                final size = isCustom
-                    ? theme.controls.size
-                    : ScreenHelper.playButtonContainerSize(context);
-                final bgColor =
-                    isCustom ? theme.controls.getColor() : Colors.white;
-                final iconColor = isCustom
-                    ? theme.controls.getPlayButtonColor()
-                    : Colors.black;
-                final shape = isCustom && theme.controls.playShape != 'circle'
-                    ? BoxShape.rectangle
-                    : BoxShape.circle;
-                final borderRadius = shape == BoxShape.rectangle
-                    ? BorderRadius.circular(8)
-                    : null;
-                return Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    shape: shape,
-                    borderRadius: borderRadius,
-                  ),
-                  child: IconButton(
-                    onPressed: provider.togglePlayPause,
-                    icon: Icon(
-                      isPlaying
-                          ? CupertinoIcons.pause_fill
-                          : CupertinoIcons.play_fill,
-                      color: iconColor,
-                      size: isCustom
-                          ? size * 0.5
-                          : ScreenHelper.playButtonIconSize(context),
-                    ),
-                  ),
-                );
-              },
+            Container(
+              width: ScreenHelper.playButtonContainerSize(context),
+              height: ScreenHelper.playButtonContainerSize(context),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                onPressed: provider.togglePlayPause,
+                icon: Icon(
+                  isPlaying
+                      ? CupertinoIcons.pause_fill
+                      : CupertinoIcons.play_fill,
+                  color: Colors.black,
+                  size: ScreenHelper.playButtonIconSize(context),
+                ),
+              ),
             ),
             IconButton(
               onPressed: hasNext ? provider.skipNext : null,

@@ -56,13 +56,12 @@ class AlbumArtwork extends StatelessWidget {
                 return ValueListenableBuilder<String>(
                   valueListenable: svc.artworkShadowColorNotifier,
                   builder: (context, shadowColor, _) {
-                    final resolvedRadius =
-                        borderRadius ??
+                    final resolvedRadius = borderRadius ??
                         (shape == 'circle'
                             ? 9999.0
                             : shape == 'square'
-                            ? 0.0
-                            : globalRadius);
+                                ? 0.0
+                                : globalRadius);
                     return _buildContent(
                       context,
                       resolvedRadius,
@@ -158,10 +157,8 @@ class AlbumArtwork extends StatelessWidget {
       height: validSize,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(resolvedRadius),
-
-        boxShadow: resolvedShadow != null && validSize > 60
-            ? [resolvedShadow]
-            : null,
+        boxShadow:
+            resolvedShadow != null && validSize > 60 ? [resolvedShadow] : null,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(resolvedRadius),

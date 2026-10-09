@@ -1,399 +1,342 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../providers/player_provider.dart';
+import '../services/offline_service.dart';
+import '../services/transcoding_service.dart';
 import '../services/update_service.dart';
-import '../services/diagnostics/diagnostics.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
+import '../utils/byte_format.dart';
+import '../utils/connection_status.dart';
 import '../utils/navigation_helper.dart';
+import '../widgets/luobo/glass_circle_button.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/settings_sub_page.dart';
-import 'settings_playback_tab.dart';
-import 'settings_streaming_tab.dart';
-import 'settings_storage_tab.dart';
-import 'settings_server_tab.dart';
-import 'settings_display_tab.dart';
+import 'settings_about_page.dart';
 import 'settings_ai_playlist_tab.dart';
-import 'settings_mechanism_screen.dart';
-import 'changelog_screen.dart';
+import 'settings_app_page.dart';
+import 'settings_display_tab.dart';
+import 'settings_playback_tab.dart';
+import 'settings_server_tab.dart';
+import 'settings_storage_tab.dart';
+import 'settings_streaming_tab.dart';
 
-/// 设置根页：单列表分组（对标 Apple Music / 网易云 / QQ 音乐设置页），
-/// 替代旧 8 Tab 横滑骨架（旧 `SettingsScreen` 保留未删）。
+/// 设置根页（C2 改造后）—— **4 组**：
+/// 账号与服务器 / 播放与音质 / AI 智能 / 关于 Luobo。
 ///
-/// 分组：账号与服务器 / 播放与音质 / 下载与存储 / 显示与外观 / AI 智能 / 关于
-/// 退出登录已在服务器二级页中，根页不重复。
+/// 设计稿：`~/Downloads/fnosmusic/设计稿/02-设置根页.png`
+/// 结构说明：`docs/设置页重构技术方案.md` §9.2。
+///
+/// 与旧版的差异：
+/// - 删除底部独立的 `Luobo vX.Y.Z` footer —— 版本号移到「关于 Luobo」行右侧
+/// - 账号卡副标题由「已连接」改为**连接状态**（`服务器类型 · 网络 · 短转码状态`，§9.2.1）
+/// - **不设**「用户管理」（道理鱼无此概念）、**不设**独立「音乐库管理」（并入服务器管理）
+/// - **不设**「播放页主题」「封面样式」（随自定义主题功能整体删除）
+/// - 右上角新增悬浮圆钮 → App 设置（外观 / 语言 / 缓存 / 匿名分析 / 导出日志 / 退出登录）
 class SettingsRootScreen extends StatelessWidget {
   const SettingsRootScreen({super.key});
-
-  bool _isDark(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isDark = _isDark(context);
+    final c = LuoboColors.of(context);
+
     return Scaffold(
-      backgroundColor:
-          isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      appBar: AppBar(
-        title: Text(l10n.settingsTitle),
-        centerTitle: false,
-        backgroundColor:
-            isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          _section(
-            context,
-            title: l10n.settingsGroupServer,
-            children: [_serverCard(context)],
-          ),
-          const SizedBox(height: 24),
-          _section(
-            context,
-            title: l10n.settingsGroupPlayback,
-            children: [
-              _navTile(
-                context,
-                icon: CupertinoIcons.play_circle,
-                title: l10n.settingsPlaybackSettings,
-                onTap: () => _openSubPage(
-                  context,
-                  l10n.settingsPlaybackSettings,
-                  const SettingsPlaybackTab(),
-                ),
+      backgroundColor: c.bg,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            // ── 大标题 + 右上圆钮 ──────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                LuoboSpacing.pageX,
+                4,
+                LuoboSpacing.pageX,
+                12,
               ),
-              _divider(context),
-              _navTile(
-                context,
-                icon: CupertinoIcons.waveform,
-                title: l10n.settingsStreamingEntry,
-                onTap: () => _openSubPage(
-                  context,
-                  l10n.settingsStreamingEntry,
-                  const SettingsStreamingTab(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _section(
-            context,
-            title: l10n.settingsGroupStorage,
-            children: [
-              _navTile(
-                context,
-                icon: CupertinoIcons.folder,
-                title: l10n.settingsStorageEntry,
-                onTap: () => _openSubPage(
-                  context,
-                  l10n.settingsStorageEntry,
-                  const SettingsStorageTab(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _section(
-            context,
-            title: l10n.settingsGroupDisplay,
-            children: [
-              _navTile(
-                context,
-                icon: CupertinoIcons.paintbrush,
-                title: l10n.settingsDisplayEntry,
-                onTap: () => _openSubPage(
-                  context,
-                  l10n.settingsDisplayEntry,
-                  const SettingsDisplayTab(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _section(
-            context,
-            title: l10n.settingsGroupAi,
-            children: [
-              _navTile(
-                context,
-                icon: Icons.auto_awesome,
-                title: l10n.settingsAiEntry,
-                onTap: () => _openSubPage(
-                  context,
-                  l10n.settingsAiEntry,
-                  const SettingsAiPlaylistTab(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildAboutSection(context),
-          const SizedBox(height: 24),
-          // 底部 footer：版本号
-          Center(
-            child: Text(
-              'Luobo v${UpdateService.currentVersion}',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? AppTheme.darkSecondaryText
-                    : AppTheme.lightSecondaryText,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  // ── 账号与服务器 ──────────────────────────────────────────────────────
-
-  Widget _serverCard(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final config = Provider.of<AuthProvider>(context).config;
-
-    final serverType = config?.serverType;
-    final serverVersion = config?.serverVersion;
-    String serverSubtitle = 'Subsonic API';
-    if (serverType != null && serverType.isNotEmpty) {
-      serverSubtitle = serverType;
-      if (serverVersion != null && serverVersion.isNotEmpty) {
-        serverSubtitle += ' $serverVersion';
-      }
-    }
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: _leadingIcon(context, CupertinoIcons.cloud),
-      title: Text(
-        config == null ? l10n.notConnected : serverSubtitle,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: config == null
-          ? null
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if ((config.serverUrl).isNotEmpty)
-                  Text(
-                    config.serverUrl,
-                    style: _subtitleStyle(context),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.settingsTitle,
+                      style: LuoboType.display.copyWith(color: c.fg),
+                    ),
                   ),
-                if ((config.username).isNotEmpty)
-                  Text(config.username, style: _subtitleStyle(context)),
-              ],
-            ),
-      trailing: _chevron(context),
-      onTap: () => _openSubPage(
-        context,
-        l10n.serverManagement,
-        const SettingsServerTab(),
-      ),
-    );
-  }
-
-  // ── 关于 ─────────────────────────────────────────────────────────────
-
-  Widget _buildAboutSection(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return _section(
-      context,
-      title: l10n.tabAbout,
-      children: [
-        _valueTile(
-          context,
-          icon: CupertinoIcons.info,
-          title: l10n.aboutVersion,
-          value: UpdateService.currentVersion,
-        ),
-        _divider(context),
-        _valueTile(
-          context,
-          icon: CupertinoIcons.device_phone_portrait,
-          title: l10n.aboutPlatform,
-          value: Theme.of(context).platform.name.toUpperCase(),
-        ),
-        _divider(context),
-        _navTile(
-          context,
-          icon: CupertinoIcons.doc_text,
-          title: l10n.aboutLinkGitHub,
-          onTap: () =>
-              _openUrl('https://github.com/chengsitom/Luobo'),
-        ),
-        _divider(context),
-        _navTile(
-          context,
-          icon: CupertinoIcons.arrow_up_circle,
-          title: l10n.aboutLinkChangelog,
-          onTap: () => NavigationHelper.push(
-              context, const ChangelogScreen()),
-        ),
-        _divider(context),
-        _navTile(
-          context,
-          icon: CupertinoIcons.lightbulb,
-          title: l10n.settingsMechanicsEntry,
-          onTap: () => NavigationHelper.push(
-              context, const SettingsMechanismScreen()),
-        ),
-        _divider(context),
-        _navTile(
-          context,
-          icon: Icons.monitor_heart_outlined,
-          title: l10n.tabDiagnostics,
-          onTap: () =>
-              NavigationHelper.push(context, const DiagnosticsPage()),
-        ),
-      ],
-    );
-  }
-
-  // ── 通用行组件（方案 B：主色淡底 + 单色图标，Apple Music 风格） ───────
-
-  Widget _section(
-    BuildContext context, {
-    String? title,
-    required List<Widget> children,
-  }) {
-    final isDark = _isDark(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: isDark
-                    ? AppTheme.darkSecondaryText
-                    : AppTheme.lightSecondaryText,
-                letterSpacing: 0.2,
+                  GlassCircleButton(
+                    icon: AppIcons.settings,
+                    tooltip: l10n.settingsTitle,
+                    onPressed: () => NavigationHelper.push(
+                      context,
+                      const SettingsAppPage(),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
+
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: LuoboSpacing.pageX),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── 组 1：账号与服务器 ────────────────────────────────────
+                  LuoboGroup(
+                    title: l10n.settingsGroupServer,
+                    rows: [
+                      const _AccountCard(),
+                      LuoboRow(
+                        icon: AppIcons.server,
+                        title: l10n.serverManagement,
+                        onTap: () => _openSubPage(
+                          context,
+                          l10n.serverManagement,
+                          const SettingsServerTab(),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // ── 组 2：播放与音质 ──────────────────────────────────────
+                  LuoboGroup(
+                    title: l10n.settingsGroupPlayback,
+                    rows: [
+                      LuoboRow(
+                        icon: AppIcons.playback,
+                        title: l10n.settingsPlaybackSettings,
+                        onTap: () => _openSubPage(
+                          context,
+                          l10n.settingsPlaybackSettings,
+                          const SettingsPlaybackTab(),
+                        ),
+                      ),
+                      LuoboRow(
+                        icon: AppIcons.streaming,
+                        title: l10n.settingsStreamingEntry,
+                        onTap: () => _openSubPage(
+                          context,
+                          l10n.settingsStreamingEntry,
+                          const SettingsStreamingTab(),
+                        ),
+                      ),
+                      LuoboRow(
+                        icon: AppIcons.playerUi,
+                        title: l10n.settingsDisplayEntry,
+                        onTap: () => _openSubPage(
+                          context,
+                          l10n.settingsDisplayEntry,
+                          const SettingsDisplayTab(),
+                        ),
+                      ),
+                      const _StorageEntryRow(),
+                    ],
+                  ),
+
+                  // ── 组 3：AI 智能 ────────────────────────────────────────
+                  LuoboGroup(
+                    title: l10n.settingsGroupAi,
+                    rows: [
+                      LuoboRow(
+                        icon: AppIcons.ai,
+                        title: l10n.settingsAiEntry,
+                        onTap: () => _openSubPage(
+                          context,
+                          l10n.settingsAiEntry,
+                          const SettingsAiPlaylistTab(),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // ── 组 4：关于 Luobo ─────────────────────────────────────
+                  LuoboGroup(
+                    title: l10n.settingsGroupAbout,
+                    rows: [
+                      LuoboRow(
+                        icon: AppIcons.info,
+                        title: l10n.settingsGroupAbout,
+                        value: 'v${UpdateService.currentVersion}',
+                        onTap: () => NavigationHelper.push(
+                          context,
+                          const SettingsAboutPage(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
-    );
-  }
-
-  Widget _divider(BuildContext context) {
-    final isDark = _isDark(context);
-    return Padding(
-      padding: const EdgeInsets.only(left: 56),
-      child: Container(
-        height: 0.5,
-        color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
       ),
     );
   }
-
-  Widget _leadingIcon(BuildContext context, IconData icon, {Color? color}) {
-    final accent = color ?? Theme.of(context).colorScheme.primary;
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(icon, color: accent, size: 18),
-    );
-  }
-
-  TextStyle _subtitleStyle(BuildContext context) => TextStyle(
-        fontSize: 12,
-        color: _isDark(context)
-            ? AppTheme.darkSecondaryText
-            : AppTheme.lightSecondaryText,
-      );
-
-  Widget _chevron(BuildContext context) {
-    return Icon(
-      CupertinoIcons.chevron_right,
-      size: 16,
-      color: _isDark(context)
-          ? AppTheme.darkSecondaryText
-          : AppTheme.lightSecondaryText,
-    );
-  }
-
-  Widget _navTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: _leadingIcon(context, icon),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: subtitle != null
-          ? Text(subtitle, style: const TextStyle(fontSize: 13))
-          : null,
-      trailing: _chevron(context),
-      onTap: onTap,
-    );
-  }
-
-  Widget _valueTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: _leadingIcon(context, icon),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
-      trailing: Text(
-        value,
-        style: TextStyle(
-          fontSize: 16,
-          color: _isDark(context)
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-    );
-  }
-
-  // ── 动作 ─────────────────────────────────────────────────────────────
 
   void _openSubPage(BuildContext context, String title, Widget body) {
     NavigationHelper.push(context, SettingsSubPage(title: title, body: body));
   }
+}
 
-  Future<void> _openUrl(String url) async {
+/// 「下载与存储」入口行 —— **状态值外显**（§9.2 根页图）。
+///
+/// 取**离线下载占用**而不是封面缓存：后者已在 App 设置页的「清除 App 缓存」
+/// 外显，不重复。值为 0 时不显示，避免「0 B」噪音；读不到也不阻塞根页。
+class _StorageEntryRow extends StatefulWidget {
+  const _StorageEntryRow();
+
+  @override
+  State<_StorageEntryRow> createState() => _StorageEntryRowState();
+}
+
+class _StorageEntryRowState extends State<_StorageEntryRow> {
+  final _offline = OfflineService();
+  String? _sizeLabel;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
     try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      debugPrint('Error opening URL: $e');
+      await _offline.initialize();
+      final bytes = await _offline.getDownloadedSize();
+      if (!mounted) return;
+      setState(() => _sizeLabel = bytes > 0 ? formatBytes(bytes) : null);
+    } catch (_) {
+      // 读不到就不显示值。
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return LuoboRow(
+      icon: AppIcons.storage,
+      title: l10n.settingsStorageEntry,
+      value: _sizeLabel,
+      onTap: () => NavigationHelper.push(
+        context,
+        SettingsSubPage(
+          title: l10n.settingsStorageEntry,
+          body: const SettingsStorageTab(),
+        ),
+      ),
+    );
+  }
+}
+
+/// 账号卡：头像 + 用户名 + **连接状态**（服务器类型 · 网络 · 短转码状态）。
+class _AccountCard extends StatelessWidget {
+  const _AccountCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final c = LuoboColors.of(context);
+    final config = context.watch<AuthProvider>().config;
+
+    // ⚠️ 只 `select` 真正用到的两个子状态，不要 `watch` 整个 provider：
+    // `PlayerProvider` 在播放期间每 ~250ms 通知一次（进度更新），而设置根页在
+    // `IndexedStack` 里**常驻**（切走仍挂载）→ 整个账号卡会被白白重建 4 次/秒。
+    final (connectionType, isTranscodingNow) =
+        context.select<TranscodingService, (ConnectionType, bool)>(
+      (t) => (t.currentConnectionType, t.getCurrentBitrate() != null),
+    );
+    final isActiveStreamTranscoded = context.select<PlayerProvider, bool>(
+      (p) => p.isActiveStreamTranscoded,
+    );
+    final info = ConnectionStatus.fromValues(
+      l10n: l10n,
+      isWifi: connectionType == ConnectionType.wifi,
+      isActiveStreamTranscoded: isActiveStreamTranscoded,
+      isTranscodingNow: isTranscodingNow,
+      isDark: c.isDark,
+    );
+
+    final username = config?.username ?? '';
+    final initial = username.isNotEmpty ? username.characters.first : '?';
+
+    final subtitle = config == null
+        ? l10n.notConnected
+        : ConnectionStatus.accountSubtitle(context, info: info);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: LuoboSpacing.rowX,
+        vertical: LuoboSpacing.cardPadY,
+      ),
+      child: Row(
+        children: [
+          Container(
+            // 飞牛实测 131px @3x ≈ 44dp（原来写死 50，偏大 6dp）。
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: LuoboAccent.avatarGradient,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initial,
+              style: LuoboType.avatarInitial.copyWith(
+                color: LuoboAccent.onAccent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  config == null ? l10n.notConnected : username,
+                  style: LuoboType.accountName.copyWith(color: c.fg),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (config != null) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: info.networkColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        style: LuoboType.caption.copyWith(color: c.fg2),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

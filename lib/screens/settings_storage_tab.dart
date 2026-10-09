@@ -1,18 +1,18 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:path_provider/path_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/byte_format.dart';
 import '../utils/image_cache.dart';
 import '../providers/library_provider.dart';
-import '../services/subsonic_service.dart';
 import '../services/bpm_analyzer_service.dart';
 import '../services/cache_settings_service.dart';
 import '../services/local_music_service.dart';
 import '../services/offline_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
 
 class SettingsStorageTab extends StatefulWidget {
   const SettingsStorageTab({super.key});
@@ -79,32 +79,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   }
 
   Future<void> _loadCacheSizes() async {
-    final diskBytes = await _coverCacheSize();
+    final diskBytes = await coverCacheDirSize();
     if (!mounted) return;
     setState(() {
-      _imageCacheSize = _offlineService.formatSize(diskBytes);
+      _imageCacheSize = formatBytes(diskBytes);
     });
-  }
-
-  /// Sums the byte length of every cached cover file under
-  /// `<tempDir>/coverCache` (the cacheKey used by coverCacheManager —
-  /// flutter_cache_manager's default IOFileSystem lives in the temp dir, not
-  /// the app-cache dir).
-  Future<int> _coverCacheSize() async {
-    try {
-      final base = await getTemporaryDirectory();
-      final dir = Directory('${base.path}/coverCache');
-      if (!await dir.exists()) return 0;
-      var total = 0;
-      await for (final entity in dir.list(recursive: true)) {
-        if (entity is File) {
-          total += await entity.length();
-        }
-      }
-      return total;
-    } catch (_) {
-      return 0;
-    }
   }
 
   Future<void> _loadOfflineInfo() async {
@@ -113,7 +92,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     if (mounted) {
       setState(() {
         _downloadedCount = count;
-        _downloadedSize = _offlineService.formatSize(size);
+        _downloadedSize = formatBytes(size);
       });
     }
   }
@@ -128,24 +107,21 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
           children: [
             _buildCacheToggle(
               icon: CupertinoIcons.photo,
-              iconGradient: const [Color(0xFFFF3B30), Color(0xFFFF453A)],
               title: AppLocalizations.of(context)!.imageCacheTitle,
-              subtitle: Text(AppLocalizations.of(context)!.imageCacheSubtitle),
+              subtitle: AppLocalizations.of(context)!.imageCacheSubtitle,
               value: _imageCacheEnabled,
               onChanged: _toggleImageCache,
             ),
             _buildDivider(),
             _buildCacheToggle(
               icon: CupertinoIcons.music_note,
-              iconGradient: const [Color(0xFF34C759), Color(0xFF30D158)],
               title: AppLocalizations.of(context)!.musicCacheTitle,
-              subtitle: Text(AppLocalizations.of(context)!.musicCacheSubtitle),
+              subtitle: AppLocalizations.of(context)!.musicCacheSubtitle,
               value: _musicCacheEnabled,
               onChanged: _toggleMusicCache,
             ),
           ],
         ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.sectionCacheCleanup,
           children: [
@@ -158,7 +134,6 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
             _buildClearAllCacheButton(),
           ],
         ),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.sectionOfflineDownloads,
           children: [
@@ -171,9 +146,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
             _buildDeleteDownloadsButton(),
           ],
         ),
-        const SizedBox(height: 24),
         _buildLocalMusicSection(),
-        const SizedBox(height: 24),
         _buildSection(
           title: AppLocalizations.of(context)!.sectionBpmAnalysis,
           children: [
@@ -193,81 +166,30 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     required List<Widget> children,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: _isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: _isDark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: children),
-          ),
-        ),
+        LuoboSectionHeader(title),
+        LuoboCard(children: children),
       ],
     );
   }
 
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 56),
-      child: Container(
-        height: 0.5,
-        color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-      ),
-    );
-  }
+  Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
 
   Widget _buildCacheToggle({
     required IconData icon,
-    required List<Color> iconGradient,
     required String title,
-    required Widget subtitle,
+    required String subtitle,
     required bool value,
     required Function(bool) onChanged,
   }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: iconGradient),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: Colors.white, size: 18),
-      ),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: DefaultTextStyle(
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-        child: subtitle,
-      ),
-      trailing: CupertinoSwitch(
-        value: value,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: onChanged,
-      ),
+    return LuoboRow(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(value: value, onChanged: onChanged),
     );
   }
 
@@ -292,163 +214,71 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
           title: l10n.localMusicLibrary,
           children: [
             // Merge toggle
-            SwitchListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              secondary: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(CupertinoIcons.music_albums,
-                    color: Colors.white, size: 18),
+            LuoboRow(
+              icon: CupertinoIcons.music_albums,
+              title: l10n.mergeLocalLibrary,
+              subtitle: l10n.mergeLocalLibrarySubtitle,
+              showChevron: false,
+              trailing: LuoboSwitch(
+                value: context.watch<LibraryProvider>().mergeLocalLibrary,
+                onChanged: (value) {
+                  final libraryProvider = context.read<LibraryProvider>();
+                  if (value) {
+                    // Enable merge mode
+                    libraryProvider.setLocalMusicService(localMusic,
+                        mergeWithServer: true);
+                  } else {
+                    // Disable merge mode
+                    libraryProvider.setMergeLocalLibrary(false);
+                  }
+                },
               ),
-              title: Text(l10n.mergeLocalLibrary,
-                  style: const TextStyle(fontSize: 16)),
-              subtitle: Text(
-                l10n.mergeLocalLibrarySubtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: _isDark
-                      ? AppTheme.darkSecondaryText
-                      : AppTheme.lightSecondaryText,
-                ),
-              ),
-              value: context.watch<LibraryProvider>().mergeLocalLibrary,
-              onChanged: (value) {
-                final libraryProvider = context.read<LibraryProvider>();
-                if (value) {
-                  // Enable merge mode
-                  libraryProvider.setLocalMusicService(localMusic,
-                      mergeWithServer: true);
-                } else {
-                  // Disable merge mode
-                  libraryProvider.setMergeLocalLibrary(false);
-                }
-              },
             ),
             _buildDivider(),
             // Local music stats
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF34C759), Color(0xFF30D158)],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(CupertinoIcons.music_note,
-                    color: Colors.white, size: 18),
-              ),
-              title: Text(l10n.localMusicStats,
-                  style: const TextStyle(fontSize: 16)),
-              trailing: Text(
-                '${localMusic.songCount} ${l10n.songs.toLowerCase()}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: _isDark
-                      ? AppTheme.darkSecondaryText
-                      : AppTheme.lightSecondaryText,
-                ),
-              ),
-              subtitle: localMusic.isScanning
-                  ? Text(localMusic.scanStatus,
-                      style: const TextStyle(fontSize: 12))
-                  : null,
+            LuoboRow(
+              icon: CupertinoIcons.music_note,
+              title: l10n.localMusicStats,
+              subtitle: localMusic.isScanning ? localMusic.scanStatus : null,
+              value: '${localMusic.songCount} ${l10n.songs.toLowerCase()}',
+              showChevron: false,
             ),
             _buildDivider(),
             // Add folder button
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF007AFF), Color(0xFF5AC8FA)],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(CupertinoIcons.plus,
-                    color: Colors.white, size: 18),
-              ),
-              title: Text(l10n.addMusicFolder,
-                  style: const TextStyle(fontSize: 16)),
+            LuoboRow(
+              icon: CupertinoIcons.plus,
+              title: l10n.addMusicFolder,
               onTap: () => _addMusicFolder(context, localMusic),
             ),
             // Show custom paths
             if (customPaths.isNotEmpty) ...[
               _buildDivider(),
-              ...customPaths.map((path) => ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF9500), Color(0xFFFFB340)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(CupertinoIcons.folder_fill,
-                          color: Colors.white, size: 18),
+              ...customPaths.map(
+                (path) => LuoboRow(
+                  icon: CupertinoIcons.folder_fill,
+                  title: path.split('/').last,
+                  subtitle: path,
+                  showChevron: false,
+                  trailing: IconButton(
+                    icon: const Icon(
+                      CupertinoIcons.delete,
+                      color: LuoboAccent.accent,
+                      size: 20,
                     ),
-                    title: Text(
-                      path.split('/').last,
-                      style: const TextStyle(fontSize: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      path,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _isDark
-                            ? AppTheme.darkSecondaryText
-                            : AppTheme.lightSecondaryText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(CupertinoIcons.delete,
-                          color: Colors.red, size: 20),
-                      onPressed: () =>
-                          _removeMusicFolder(context, localMusic, path),
-                    ),
-                  )),
+                    onPressed: () =>
+                        _removeMusicFolder(context, localMusic, path),
+                  ),
+                ),
+              ),
             ],
             _buildDivider(),
             // Rescan button
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF5856D6), Color(0xFF7B68EE)],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(CupertinoIcons.refresh,
-                    color: Colors.white, size: 18),
-              ),
-              title: Text(l10n.rescanLocalMusic,
-                  style: const TextStyle(fontSize: 16)),
-              enabled: !localMusic.isScanning,
-              onTap: () => _rescanLocalMusic(context, localMusic),
+            LuoboRow(
+              icon: CupertinoIcons.refresh,
+              title: l10n.rescanLocalMusic,
+              onTap: localMusic.isScanning
+                  ? null
+                  : () => _rescanLocalMusic(context, localMusic),
             ),
           ],
         );
@@ -502,34 +332,13 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
 
   Widget _buildKeepScreenOnTile() {
     final l10n = AppLocalizations.of(context)!;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF9500), Color(0xFFFFCC00)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child:
-            const Icon(CupertinoIcons.bolt_fill, color: Colors.white, size: 18),
-      ),
-      title: Text(l10n.keepScreenOnDuringDownload,
-          style: const TextStyle(fontSize: 16)),
-      subtitle: Text(
-        l10n.keepScreenOnDuringDownloadSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
+    return LuoboRow(
+      icon: CupertinoIcons.bolt_fill,
+      title: l10n.keepScreenOnDuringDownload,
+      subtitle: l10n.keepScreenOnDuringDownloadSubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
         value: _keepScreenOn,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
         onChanged: (value) async {
           setState(() => _keepScreenOn = value);
           await _offlineService.setKeepScreenOn(value);
@@ -540,51 +349,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
 
   Widget _buildParallelDownloadsTile() {
     final l10n = AppLocalizations.of(context)!;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF007AFF), Color(0xFF5AC8FA)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(CupertinoIcons.arrow_down_to_line,
-            color: Colors.white, size: 18),
-      ),
-      title: Text(l10n.parallelDownloads, style: const TextStyle(fontSize: 16)),
-      subtitle: Text(
-        l10n.parallelDownloadsSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$_parallelDownloads',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            CupertinoIcons.chevron_right,
-            size: 16,
-            color: _isDark
-                ? AppTheme.darkSecondaryText
-                : AppTheme.lightSecondaryText,
-          ),
-        ],
-      ),
+    return LuoboRow(
+      icon: CupertinoIcons.arrow_down_to_line,
+      title: l10n.parallelDownloads,
+      subtitle: l10n.parallelDownloadsSubtitle,
+      value: '$_parallelDownloads',
       onTap: _showParallelDownloadsDialog,
     );
   }
@@ -660,29 +429,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     required String title,
     required String value,
   }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF5AC8FA), Color(0xFF007AFF)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: Colors.white, size: 16),
-      ),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
-      trailing: Text(
-        value,
-        style: TextStyle(
-          fontSize: 16,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
+    return LuoboRow(
+      icon: icon,
+      title: title,
+      value: value,
+      showChevron: false,
     );
   }
 
@@ -710,27 +461,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   }
 
   Widget _buildClearAllCacheButton() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF3B30), Color(0xFFFF453A)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.trash_fill,
-          color: Colors.white,
-          size: 16,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.clearAllCache,
-        style: const TextStyle(fontSize: 16, color: Color(0xFFFF3B30)),
-      ),
+    return LuoboRow(
+      icon: CupertinoIcons.trash_fill,
+      title: AppLocalizations.of(context)!.clearAllCache,
+      danger: true,
       onTap: _clearAllCache,
     );
   }
@@ -755,64 +489,22 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   }
 
   Widget _buildOfflineInfo() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF007AFF), Color(0xFF5AC8FA)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.arrow_down_circle,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.downloadedSongs,
-        style: const TextStyle(fontSize: 16),
-      ),
-      trailing: Text(
-        AppLocalizations.of(
-          context,
-        )!
-            .downloadedStats(_downloadedCount, _downloadedSize),
-        style: TextStyle(
-          fontSize: 14,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
+    return LuoboRow(
+      icon: CupertinoIcons.arrow_down_circle,
+      title: AppLocalizations.of(context)!.downloadedSongs,
+      value: AppLocalizations.of(
+        context,
+      )!
+          .downloadedStats(_downloadedCount, _downloadedSize),
+      showChevron: false,
     );
   }
 
   Widget _buildDeleteDownloadsButton() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF3B30), Color(0xFFFF453A)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.trash_fill,
-          color: Colors.white,
-          size: 16,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.deleteDownloads,
-        style: const TextStyle(fontSize: 16, color: Color(0xFFFF3B30)),
-      ),
+    return LuoboRow(
+      icon: CupertinoIcons.trash_fill,
+      title: AppLocalizations.of(context)!.deleteDownloads,
+      danger: true,
       onTap: () async {
         await _offlineService.deleteAllDownloads();
         await _loadOfflineInfo();
@@ -829,36 +521,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
 
   Widget _buildBPMCacheInfo() {
     final cachedCount = _bpmAnalyzer.getCachedCount();
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF5856D6), Color(0xFF7B68EE)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.speedometer,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.cachedBpms,
-        style: const TextStyle(fontSize: 16),
-      ),
-      trailing: Text(
-        '$cachedCount',
-        style: TextStyle(
-          fontSize: 16,
-          color: _isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
+    return LuoboRow(
+      icon: CupertinoIcons.speedometer,
+      title: AppLocalizations.of(context)!.cachedBpms,
+      value: '$cachedCount',
+      showChevron: false,
     );
   }
 
@@ -880,22 +547,9 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     return Column(
       children: [
         _buildDivider(),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          enabled: !_isCaching,
-          title: Text(
-            AppLocalizations.of(context)!.cacheAllBpms,
-            style: TextStyle(
-              fontSize: 16,
-              color: _isCaching ? Colors.grey : null,
-            ),
-          ),
-          trailing: _isCaching
-              ? const CupertinoActivityIndicator()
-              : const Icon(CupertinoIcons.chevron_right, size: 16),
+        LuoboRow(
+          title: AppLocalizations.of(context)!.cacheAllBpms,
+          trailing: _isCaching ? const CupertinoActivityIndicator() : null,
           onTap: _isCaching ? null : () {},
         ),
       ],
@@ -906,15 +560,9 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     return Column(
       children: [
         _buildDivider(),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.clearBpmCache,
-            style: const TextStyle(fontSize: 16, color: Color(0xFFFF3B30)),
-          ),
+        LuoboRow(
+          title: AppLocalizations.of(context)!.clearBpmCache,
+          danger: true,
           onTap: () async {
             final l10n = AppLocalizations.of(context)!;
             final confirmed = await _confirmClear(

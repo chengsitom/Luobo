@@ -258,8 +258,8 @@ class DiagFileStore {
   Future<void> _touchLock() async {
     final lock = _lockFile;
     if (lock == null) return;
-    await lock.writeAsString(
-        '${DateTime.now().millisecondsSinceEpoch} $_lockToken');
+    await lock
+        .writeAsString('${DateTime.now().millisecondsSinceEpoch} $_lockToken');
     _lockRefreshedAt = DateTime.now();
   }
 

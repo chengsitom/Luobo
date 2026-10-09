@@ -38,8 +38,7 @@ class RecentlyPlayedCollection {
         coverArts:
             (json['coverArts'] as List?)?.map((e) => e as String).toList() ??
                 const [],
-        playedAt:
-            DateTime.fromMillisecondsSinceEpoch(json['playedAt'] as int),
+        playedAt: DateTime.fromMillisecondsSinceEpoch(json['playedAt'] as int),
       );
 }
 
@@ -65,8 +64,8 @@ class PlaybackContextTracker extends ChangeNotifier {
       _items
         ..clear()
         ..addAll(
-          decoded
-              .map((e) => RecentlyPlayedCollection.fromJson(e as Map<String, dynamic>)),
+          decoded.map((e) =>
+              RecentlyPlayedCollection.fromJson(e as Map<String, dynamic>)),
         );
     } catch (_) {
       // 数据损坏时忽略，从空列表开始。

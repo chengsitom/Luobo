@@ -36,88 +36,90 @@ class _SpotifyLikeCardState extends State<SpotifyLikeCard> {
     final isDark = theme.brightness == Brightness.dark;
 
     return PressableScale(
-        child: MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: widget.size,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AnimatedScale(
-                scale: _isHovered ? 1.04 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                child: AnimatedContainer(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            width: widget.size,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedScale(
+                  scale: _isHovered ? 1.04 : 1.0,
                   duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(widget.isRound ? 999 : 4),
-                    boxShadow: _isHovered
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(widget.isRound ? 999 : 4),
-                        child: AlbumArtwork(
-                          coverArt: widget.coverArt,
-                          size: widget.size - 32,
-                          borderRadius: widget.isRound ? 999 : 4,
-                        ),
-                      ),
-                      if (_isHovered && widget.onPlayPressed != null)
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: _PlayButton(
-                            onPressed: widget.onPlayPressed!,
+                  curve: Curves.easeOut,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      borderRadius:
+                          BorderRadius.circular(widget.isRound ? 999 : 4),
+                      boxShadow: _isHovered
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(widget.isRound ? 999 : 4),
+                          child: AlbumArtwork(
+                            coverArt: widget.coverArt,
+                            size: widget.size - 32,
+                            borderRadius: widget.isRound ? 999 : 4,
                           ),
                         ),
-                    ],
+                        if (_isHovered && widget.onPlayPressed != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: _PlayButton(
+                              onPressed: widget.onPlayPressed!,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (widget.subtitle != null) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 Text(
-                  widget.subtitle!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: isDark
-                        ? AppTheme.darkSecondaryText
-                        : AppTheme.lightSecondaryText,
+                  widget.title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (widget.subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.subtitle!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isDark
+                          ? AppTheme.darkSecondaryText
+                          : AppTheme.lightSecondaryText,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }

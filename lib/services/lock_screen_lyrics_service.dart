@@ -51,8 +51,10 @@ class LockScreenLyricsService {
     debugPrint('[Lyrics] Initializing lock screen lyrics service...');
     debugPrint('[Lyrics] Platform: ${Platform.operatingSystem}');
     debugPrint('[Lyrics] Live Activities supported: $supportsLiveActivities');
-    debugPrint('[Lyrics] Android notification supported: $supportsAndroidNotification');
-    debugPrint('[Lyrics] Windows notification supported: $supportsWindowsNotification');
+    debugPrint(
+        '[Lyrics] Android notification supported: $supportsAndroidNotification');
+    debugPrint(
+        '[Lyrics] Windows notification supported: $supportsWindowsNotification');
 
     // Live Activities initialization removed for iOS 15 compatibility
     // if (supportsLiveActivities) {
@@ -147,7 +149,7 @@ class LockScreenLyricsService {
       debugPrint('[Lyrics] No lyrics to sync');
       return;
     }
-    
+
     debugPrint('[Lyrics] Lyrics loaded: ${_currentLyrics!.lineCount} lines');
 
     // Use a timer-based approach for more control over update frequency
@@ -157,15 +159,15 @@ class LockScreenLyricsService {
     _positionSubscription = positionStream.listen(
       (position) {
         final now = DateTime.now();
-        
+
         // Throttle updates
-        if (lastUpdate != null && 
+        if (lastUpdate != null &&
             now.difference(lastUpdate!) < _updateInterval) {
           return;
         }
 
         final currentLine = _currentLyrics!.getCurrentLine(position);
-        
+
         // Only send if line changed
         if (currentLine != lastLine && currentLine != null) {
           lastUpdate = now;
@@ -286,10 +288,10 @@ class LockScreenLyricsService {
     if (_currentLyrics == null || !_currentLyrics!.hasLyrics) {
       return const Stream.empty();
     }
-    
+
     return positionStream
-      .asyncMap((position) async => _currentLyrics!.getCurrentLine(position))
-      .distinct();
+        .asyncMap((position) async => _currentLyrics!.getCurrentLine(position))
+        .distinct();
   }
 
   /// Dispose the service

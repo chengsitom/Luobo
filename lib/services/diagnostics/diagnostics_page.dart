@@ -66,8 +66,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       if (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.android ||
               defaultTargetPlatform == TargetPlatform.iOS)) {
-        final content =
-            await DiagnosticsService.instance.exportReadableText();
+        final content = await DiagnosticsService.instance.exportReadableText();
         final bytes = Uint8List.fromList(utf8.encode(content));
         final fileName =
             'luobo_diagnostics_${DateTime.now().millisecondsSinceEpoch}.txt';

@@ -4,20 +4,13 @@ import 'package:provider/provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../models/models.dart';
+import '../utils/song_sort.dart';
 import '../widgets/widgets.dart';
+import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_surface.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/anchored_menu.dart';
 import '../l10n/app_localizations.dart';
-
-enum SongSortOption {
-  titleAsc,
-  titleDesc,
-  artistAsc,
-  artistDesc,
-  albumAsc,
-  albumDesc,
-  recentlyAdded,
-}
 
 class AllSongsScreen extends StatefulWidget {
   const AllSongsScreen({super.key});
@@ -31,7 +24,13 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   List<Song> _sortedSongs = [];
   bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
-  SongSortOption _currentSort = SongSortOption.titleAsc;
+  SongSortField _sortField = SongSortField.title;
+  bool _sortAscending = true;
+
+  /// 锚定菜单的锚点：AppBar 的排序钮 / 头部那行「排序」各一个
+  /// （点哪个就锚在哪个上）。
+  final _sortAnchorAppBar = GlobalKey();
+  final _sortAnchorHeader = GlobalKey();
   LibraryProvider? _libraryProvider;
 
   @override
@@ -86,132 +85,59 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   }
 
   void _sortSongs() {
-    _sortedSongs = List.from(_songs);
-    switch (_currentSort) {
-      case SongSortOption.titleAsc:
-        _sortedSongs.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
-        break;
-      case SongSortOption.titleDesc:
-        _sortedSongs.sort(
-          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-        );
-        break;
-      case SongSortOption.artistAsc:
-        _sortedSongs.sort(
-          (a, b) => (a.artist ?? '').toLowerCase().compareTo(
-                (b.artist ?? '').toLowerCase(),
-              ),
-        );
-        break;
-      case SongSortOption.artistDesc:
-        _sortedSongs.sort(
-          (a, b) => (b.artist ?? '').toLowerCase().compareTo(
-                (a.artist ?? '').toLowerCase(),
-              ),
-        );
-        break;
-      case SongSortOption.albumAsc:
-        _sortedSongs.sort(
-          (a, b) => (a.album ?? '').toLowerCase().compareTo(
-                (b.album ?? '').toLowerCase(),
-              ),
-        );
-        break;
-      case SongSortOption.albumDesc:
-        _sortedSongs.sort(
-          (a, b) => (b.album ?? '').toLowerCase().compareTo(
-                (a.album ?? '').toLowerCase(),
-              ),
-        );
-        break;
-      case SongSortOption.recentlyAdded:
-        _sortedSongs.sort((a, b) {
-          final aCreated = a.created;
-          final bCreated = b.created;
-          if (aCreated == null && bCreated == null) return 0;
-          if (aCreated == null) return 1;
-          if (bCreated == null) return -1;
-          return bCreated.compareTo(aCreated);
-        });
-        break;
+    _sortedSongs = sortSongs(_songs, _sortField, ascending: _sortAscending);
+  }
+
+  bool _showsDirection(SongSortField field) => songSortShowsDirection(field);
+
+  String _fieldLabel(AppLocalizations l10n, SongSortField field) {
+    switch (field) {
+      case SongSortField.title:
+        return l10n.sortFieldTitle;
+      case SongSortField.artist:
+        return l10n.artists;
+      case SongSortField.album:
+        return l10n.albums;
+      case SongSortField.recentlyAdded:
+        return l10n.recentlyAdded;
     }
   }
 
-  void _showSortOptions() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  /// 锚定毛玻璃菜单（设计稿 §2.3 范式①；实测规格见
+  /// `docs/锚定浮层与列表页排序技术方案.md` §2）。
+  ///
+  /// 交互：点**已选中**字段 = 翻转方向；点**其它**字段 = 切换字段（保持方向）。
+  Future<void> _showSortOptions(GlobalKey anchor) async {
     final l10n = AppLocalizations.of(context)!;
-
-    showGlassBottomSheet(
+    final picked = await showLuoboAnchoredMenu<SongSortField>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              l10n.sortBy,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildSortOption(l10n.sortTitleAz, SongSortOption.titleAsc, isDark),
-            _buildSortOption(
-                l10n.sortTitleZa, SongSortOption.titleDesc, isDark),
-            _buildSortOption(
-                l10n.sortArtistAz, SongSortOption.artistAsc, isDark),
-            _buildSortOption(
-                l10n.sortArtistZa, SongSortOption.artistDesc, isDark),
-            _buildSortOption(l10n.sortAlbumAz, SongSortOption.albumAsc, isDark),
-            _buildSortOption(
-                l10n.sortAlbumZa, SongSortOption.albumDesc, isDark),
-            _buildSortOption(
-              l10n.recentlyAdded,
-              SongSortOption.recentlyAdded,
-              isDark,
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+      anchorKey: anchor,
+      selected: _sortField,
+      items: [
+        for (final field in SongSortField.values)
+          LuoboAnchoredMenuItem(
+            value: field,
+            label: _fieldLabel(l10n, field),
+            // 方向箭头**只在选中项**上出现（未选中项什么都不带）。
+            trailing: (field == _sortField && _showsDirection(field))
+                ? Icon(
+                    _sortAscending ? AppIcons.arrowUp : AppIcons.arrowDown,
+                    size: 15,
+                    color: LuoboAccent.accent,
+                  )
+                : null,
+          ),
+      ],
     );
-  }
-
-  Widget _buildSortOption(String title, SongSortOption option, bool isDark) {
-    final isSelected = _currentSort == option;
-    return ListTile(
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isSelected
-              ? AppTheme.appleMusicRed
-              : (isDark ? Colors.white : Colors.black),
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
-      trailing:
-          isSelected ? Icon(Icons.check, color: AppTheme.appleMusicRed) : null,
-      onTap: () {
-        Navigator.pop(context);
-        setState(() {
-          _currentSort = option;
-          _sortSongs();
-        });
-      },
-    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (picked == _sortField) {
+        if (_showsDirection(picked)) _sortAscending = !_sortAscending;
+      } else {
+        _sortField = picked;
+      }
+    });
+    _sortSongs();
   }
 
   void _playAll({bool shuffle = false}) {
@@ -227,25 +153,8 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     playerProvider.playSong(playlist.first, playlist: playlist, startIndex: 0);
   }
 
-  String _getSortLabel() {
-    final l10n = AppLocalizations.of(context)!;
-    switch (_currentSort) {
-      case SongSortOption.titleAsc:
-        return l10n.sortTitleAz;
-      case SongSortOption.titleDesc:
-        return l10n.sortTitleZa;
-      case SongSortOption.artistAsc:
-        return l10n.sortArtistAz;
-      case SongSortOption.artistDesc:
-        return l10n.sortArtistZa;
-      case SongSortOption.albumAsc:
-        return l10n.sortAlbumAz;
-      case SongSortOption.albumDesc:
-        return l10n.sortAlbumZa;
-      case SongSortOption.recentlyAdded:
-        return l10n.recentlyAdded;
-    }
-  }
+  String _getSortLabel() =>
+      _fieldLabel(AppLocalizations.of(context)!, _sortField);
 
   @override
   Widget build(BuildContext context) {
@@ -258,8 +167,9 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
         actions: [
           if (_sortedSongs.isNotEmpty)
             IconButton(
+              key: _sortAnchorAppBar,
               icon: const Icon(Icons.sort_rounded),
-              onPressed: _showSortOptions,
+              onPressed: () => _showSortOptions(_sortAnchorAppBar),
               tooltip: l10n.sortBy,
             ),
         ],
@@ -305,10 +215,12 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 GestureDetector(
-                                  onTap: _showSortOptions,
+                                  key: _sortAnchorHeader,
+                                  onTap: () =>
+                                      _showSortOptions(_sortAnchorHeader),
                                   child: Row(
                                     children: [
-                                      Icon(
+                                      const Icon(
                                         Icons.sort_rounded,
                                         size: 14,
                                         color: AppTheme.appleMusicRed,
@@ -316,13 +228,24 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                                       const SizedBox(width: 4),
                                       Text(
                                         _getSortLabel(),
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 12,
                                           color: AppTheme.appleMusicRed,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                      // 方向外显（原先被写进了文案，如「标题（A-Z）」）
+                                      if (_showsDirection(_sortField)) ...[
+                                        const SizedBox(width: 3),
+                                        Icon(
+                                          _sortAscending
+                                              ? AppIcons.arrowUp
+                                              : AppIcons.arrowDown,
+                                          size: 13,
+                                          color: AppTheme.appleMusicRed,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

@@ -433,10 +433,10 @@ void main() {
 
     test('去重上限跨熟悉/探索两路共享：同歌手≤2、同专辑≤1', () async {
       // 歌手 X 同时有听过的和未听过的歌 → 若两路各自计数，X 会超过 2 首。
-      final heard = List.generate(
-          4, (i) => _song('h$i', artist: 'X', albumId: 'hal$i'));
-      final unheard = List.generate(
-          6, (i) => _song('u$i', artist: 'X', albumId: 'ubl$i'));
+      final heard =
+          List.generate(4, (i) => _song('h$i', artist: 'X', albumId: 'hal$i'));
+      final unheard =
+          List.generate(6, (i) => _song('u$i', artist: 'X', albumId: 'ubl$i'));
       final others = List.generate(
           20, (i) => _song('o$i', artist: 'O$i', albumId: 'ol$i'));
       for (final s in [...heard, ...others]) {

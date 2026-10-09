@@ -203,7 +203,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       );
       if (!mounted) return;
 
-      final chapters = result.chapters..sort((a, b) => a.order.compareTo(b.order));
+      final chapters = result.chapters
+        ..sort((a, b) => a.order.compareTo(b.order));
       // 写入缓存并顺手清理过期条目（防无限增长）。
       _chapterCache.removeWhere(
         (_, e) => DateTime.now().difference(e.at) > _chapterCacheTtl,
@@ -212,8 +213,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       if (_chapterCache.length >= _chapterCacheMaxEntries) {
         final oldest = _chapterCache.entries.toList()
           ..sort((a, b) => a.value.at.compareTo(b.value.at));
-        for (final e
-            in oldest.take(_chapterCache.length - _chapterCacheMaxEntries + 1)) {
+        for (final e in oldest
+            .take(_chapterCache.length - _chapterCacheMaxEntries + 1)) {
           _chapterCache.remove(e.key);
         }
       }
@@ -225,7 +226,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
         _chapters = chapters;
         _isLoading = false;
         // 类型判断（§7.4）：编号型→章节直跳，合集型→书内搜索。
-        _contentType = classifyAudiobookType(book: widget.book, chapters: chapters);
+        _contentType =
+            classifyAudiobookType(book: widget.book, chapters: chapters);
       });
 
       if (savedOrder != null) {
@@ -309,23 +311,22 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       {AudiobookProgress? progress}) async {
     final index = _chapters.indexWhere((c) => c.id == chapter.id);
     if (index < 0) return;
-    final playerProvider =
-        Provider.of<PlayerProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     // C006 修复：全量章节拉取失败时 playAudiobookChapter 返回 false，
     // 弹 snackbar 提示（不清当前播放状态）。
     final ok = await playerProvider.playAudiobookChapter(
       widget.book,
       _chapters,
       index,
-      resumePositionMs:
-          (progress != null && !progress.completed) ? progress.positionMs : null,
+      resumePositionMs: (progress != null && !progress.completed)
+          ? progress.positionMs
+          : null,
       chaptersComplete: true, // _chapters 是 take:10000 的全量列表
     );
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(AppLocalizations.of(context)!.failedToLoadChapters),
+          content: Text(AppLocalizations.of(context)!.failedToLoadChapters),
         ),
       );
     }
@@ -466,8 +467,7 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
 
   /// 点击「继续收听」按钮：直接按保存章节续播（全量列表在手，无需翻页）。
   Future<void> _resumePlayback(AudiobookProgress progress) async {
-    final index =
-        _chapters.indexWhere((c) => c.order == progress.chapterOrder);
+    final index = _chapters.indexWhere((c) => c.order == progress.chapterOrder);
     if (index >= 0) {
       await _playChapter(_chapters[index], progress: progress);
     }
@@ -623,22 +623,18 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
 
     // Apple §5.2：当前播放项用较亮/半粗标题低调标识，不用红色/等化器/波形
     // 图标制造噪声；序号列保持一致，仅当前项着色+加粗。
-    final titleColor = isCurrent
-        ? accentColor
-        : (isDark ? Colors.white : Colors.black);
-    final orderColor = isCurrent
-        ? accentColor
-        : (isDark ? Colors.white54 : Colors.black45);
+    final titleColor =
+        isCurrent ? accentColor : (isDark ? Colors.white : Colors.black);
+    final orderColor =
+        isCurrent ? accentColor : (isDark ? Colors.white54 : Colors.black45);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       // 仅当目标 order 唯一时挂定位 key（P3 修复：重复 order 会 Duplicate GlobalKey）。
-      key: _targetUnique && chapter.order == _targetOrder
-          ? _targetRowKey
-          : null,
-      color: highlight
-          ? accentColor.withValues(alpha: 0.12)
-          : Colors.transparent,
+      key:
+          _targetUnique && chapter.order == _targetOrder ? _targetRowKey : null,
+      color:
+          highlight ? accentColor.withValues(alpha: 0.12) : Colors.transparent,
       child: ListTile(
         leading: SizedBox(
           width: 32,
@@ -797,11 +793,10 @@ class _FastScrollBarState extends State<_FastScrollBar> {
         final hover = _hoverIndex;
 
         // 拇指高度 = 视口占比示意（最小 40dp）；位置 = 悬停章节比例。
-        final thumbH =
-            (height * (height / (total * widget.itemExtent))).clamp(40.0, height);
-        final thumbTop = hover == null
-            ? 0.0
-            : (height - thumbH) * (hover / (total - 1));
+        final thumbH = (height * (height / (total * widget.itemExtent)))
+            .clamp(40.0, height);
+        final thumbTop =
+            hover == null ? 0.0 : (height - thumbH) * (hover / (total - 1));
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,

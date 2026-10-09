@@ -13,6 +13,7 @@ import '../services/offline_service.dart';
 import '../services/transcoding_service.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import 'album_artwork.dart';
 import 'animated_equalizer.dart';
 import 'dolby_atmos_badge.dart';
@@ -76,8 +77,7 @@ class SongTile extends StatelessWidget {
                 color: isCurrentSong
                     ? Theme.of(context).colorScheme.primary
                     : null,
-                fontWeight:
-                    isCurrentSong ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isCurrentSong ? FontWeight.w600 : FontWeight.normal,
               ),
               maxLines: titleMaxLines,
               overflow: TextOverflow.ellipsis,
@@ -130,18 +130,17 @@ class SongTile extends StatelessWidget {
               final resolvedRadius = shape == 'circle'
                   ? 9999.0
                   : shape == 'square'
-                  ? 0.0
-                  : radius;
+                      ? 0.0
+                      : radius;
               return Stack(
                 children: [
                   AlbumArtwork(
                     // Song covers are the album cover; normalize so all songs
                     // of an album share the same cache key.
                     coverArt: Provider.of<LibraryProvider>(
-                          context,
-                          listen: false,
-                        )
-                        .effectiveCoverArt(song),
+                      context,
+                      listen: false,
+                    ).effectiveCoverArt(song),
                     size: 50,
                     preserveAspectRatio: true,
                   ),
@@ -185,15 +184,14 @@ class SongTile extends StatelessWidget {
         // doesn't fit instead of hard-splitting the width between the two.
         final artistLabel = _artistLabel();
         final fullText = '$artistLabel \u2022 ${song.album}';
-        final baseStyle = theme.textTheme.bodySmall ??
-            const TextStyle(fontSize: 12);
+        final baseStyle =
+            theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12);
         final baseSize = baseStyle.fontSize ?? 12;
         return LayoutBuilder(
           builder: (context, constraints) {
             // Cache the computed font size per (text, width) so scrolling
             // lists don't re-measure the same subtitle on every frame.
-            final cacheKey =
-                '$fullText|${constraints.maxWidth.round()}';
+            final cacheKey = '$fullText|${constraints.maxWidth.round()}';
             final cached = _adaptiveSizeCache[cacheKey];
             final double size;
             if (cached != null) {
@@ -201,8 +199,7 @@ class SongTile extends StatelessWidget {
             } else {
               var s = baseSize;
               while (s > 10 &&
-                  _textWidth(fullText, baseStyle, s) >
-                      constraints.maxWidth) {
+                  _textWidth(fullText, baseStyle, s) > constraints.maxWidth) {
                 s -= 1;
               }
               if (_adaptiveSizeCache.length > 1000) {
@@ -323,16 +320,15 @@ class SongTile extends StatelessWidget {
         final badgeColor = effectiveTranscoded
             ? const Color(0xFFE65100)
             : isHiRes
-            ? const Color(0xFFC9A227)
-            : Colors.black;
+                ? const Color(0xFFC9A227)
+                : Colors.black;
 
         final l10n = AppLocalizations.of(context)!;
-        final network =
-            Provider.of<TranscodingService>(context, listen: false)
-                .currentConnectionType ==
-            ConnectionType.wifi
-                ? l10n.networkWifi
-                : l10n.networkMobile;
+        final network = Provider.of<TranscodingService>(context, listen: false)
+                    .currentConnectionType ==
+                ConnectionType.wifi
+            ? l10n.networkWifi
+            : l10n.networkMobile;
         final tooltip = effectiveTranscoded
             ? l10n.transcodedTo(
                 TranscodeFormat.getLabel(transcodeFormat ?? ''),
@@ -507,9 +503,9 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
               child: Row(
                 children: [
                   AlbumArtwork(
-                    coverArt: Provider.of<LibraryProvider>(context,
-                            listen: false)
-                        .effectiveCoverArt(widget.song),
+                    coverArt:
+                        Provider.of<LibraryProvider>(context, listen: false)
+                            .effectiveCoverArt(widget.song),
                     size: 60,
                   ),
                   const SizedBox(width: 12),
@@ -772,9 +768,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     final l10n = AppLocalizations.of(context)!;
     return _OptionTile(
       icon: Icons.star_rounded,
-      title: rating > 0
-          ? l10n.rateSongWithRating(rating)
-          : l10n.rateSong,
+      title: rating > 0 ? l10n.rateSongWithRating(rating) : l10n.rateSong,
       iconColor: rating > 0 ? Colors.amber : null,
       onTap: () => _showRatingDialog(context),
     );
@@ -855,9 +849,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              rating > 0
-                  ? l10n.songRated(rating)
-                  : l10n.ratingRemoved,
+              rating > 0 ? l10n.songRated(rating) : l10n.ratingRemoved,
             ),
             duration: const Duration(seconds: 2),
           ),
@@ -1129,13 +1121,17 @@ class _QualityInfo extends StatelessWidget {
 
     // Transcode status — actual for the current stream, settings-implied
     // otherwise.
+    //
+    // ⚠️ 与 `utils/connection_status.dart`（账号卡短形态）**故意不合并**：
+    // 这里要区分「这首歌就是当前曲目」（已转码）与「不是当前曲目，但按当前
+    // 网络设置会被转码」两种情况，而短形态没有「非当前曲目」这个维度。
+    // 三处共享的橙色深浅档已收敛到 `LuoboAccent.warnFor`。
     final player = Provider.of<PlayerProvider>(context, listen: false);
     final isCurrent =
         player.currentSong?.id == song.id && !player.isPlayingRadio;
-    final network =
-        transcoding.currentConnectionType == ConnectionType.wifi
-            ? l10n.networkWifi
-            : l10n.networkMobile;
+    final network = transcoding.currentConnectionType == ConnectionType.wifi
+        ? l10n.networkWifi
+        : l10n.networkMobile;
     String statusLabel;
     Color? statusColor;
     IconData statusIcon;
@@ -1145,7 +1141,7 @@ class _QualityInfo extends StatelessWidget {
         player.activeStreamBitrate ?? 0,
         network,
       );
-      statusColor = isDark ? const Color(0xFFFFB74D) : const Color(0xFFE65100);
+      statusColor = LuoboAccent.warnFor(isDark);
       statusIcon = Icons.speed_rounded;
     } else if (!isCurrent && transcoding.getCurrentBitrate() != null) {
       statusLabel = l10n.streamWillTranscodeTo(
@@ -1175,8 +1171,7 @@ class _QualityInfo extends StatelessWidget {
             Text(
               [sampleInfo, depthInfo].where((s) => s.isNotEmpty).join(' · '),
               style: theme.textTheme.bodySmall?.copyWith(
-                color:
-                    theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

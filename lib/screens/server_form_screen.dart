@@ -5,9 +5,20 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
+import '../models/music_folder.dart';
 import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
+import '../services/subsonic_service.dart';
+import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../utils/local_library_launcher.dart';
+import '../widgets/luobo/capsule_button.dart';
+import '../widgets/luobo/glass_circle_button.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/sheet_shell.dart';
+import 'qr_scanner_screen.dart';
 
 enum _LoginErrorType {
   ssl,
@@ -32,7 +43,11 @@ enum _LoginErrorType {
 class ServerFormScreen extends StatefulWidget {
   final ServerConfig? initialConfig;
 
-  const ServerFormScreen({super.key, this.initialConfig});
+  /// 「扫码添加」带回来的配置：走**添加流程**的预填
+  /// （不进编辑态、跳过类型网格，用户可先核对地址与账号再连接）。
+  final ServerConfig? prefillConfig;
+
+  const ServerFormScreen({super.key, this.initialConfig, this.prefillConfig});
 
   @override
   State<ServerFormScreen> createState() => _ServerFormScreenState();
@@ -59,6 +74,11 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
   /// 兼容历史 profile，UI 上不可选）。
   String _serverFamily = 'auto';
 
+  /// 添加流程（B3）：是否已选定服务器类型。
+  /// 未选定时先显示**类型网格**，选定后才进入表单（设计稿 B3 的提示原文：
+  /// 「选定类型后进入表单填写地址与账号」）。编辑流程直接进表单。
+  bool _typeChosen = false;
+
   String? _customCertificatePath;
   String? _customCertificateName;
   String? _clientCertificatePath;
@@ -68,9 +88,120 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
 
   String? _loginError;
 
+  // ── 音乐库范围（§9.6：并入本页，并从多选改为**单选**） ──────────────────
+  /// 「全部」哨兵值（对应 `selectedMusicFolderIds` 为空）。
+  static const String _allFoldersId = '__all__';
+  List<MusicFolder>? _folders;
+  List<String> _selectedFolderIds = const [];
+  bool _foldersRequested = false;
+
   bool get _isEdit => widget.initialConfig != null;
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  /// 只有**正在编辑当前已连接的服务器**时才显示「音乐库范围」：
+  /// `getMusicFolders()` 走当前登录态，对别的服务器会取到错的文件夹列表。
+  bool get _canPickMusicFolder {
+    final initial = widget.initialConfig;
+    if (initial == null) return false;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    return auth.config?.serverUrl == initial.serverUrl &&
+        auth.config?.username == initial.username;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_foldersRequested || !_canPickMusicFolder) return;
+    _foldersRequested = true;
+    _selectedFolderIds =
+        widget.initialConfig?.selectedMusicFolderIds ?? const [];
+    _loadMusicFolders();
+  }
+
+  Future<void> _loadMusicFolders() async {
+    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final folders = await subsonic.getMusicFolders();
+    if (!mounted) return;
+    setState(() => _folders = folders);
+  }
+
+  /// 「音乐库范围」行 —— 单值（Subsonic 的 `musicFolderId` 本就是单值参数）。
+  ///
+  /// ⚠️ 存着的 id 若已不在服务端返回的列表里（服务端删了该文件夹），
+  /// **显示原 id 而不是「全部」** —— 静默回落会让人以为范围已经是全部。
+  Widget _musicFolderTile() {
+    final l10n = AppLocalizations.of(context)!;
+    final folders = _folders;
+    final id =
+        _selectedFolderIds.isEmpty ? _allFoldersId : _selectedFolderIds.first;
+
+    String value;
+    if (id == _allFoldersId) {
+      value = l10n.filterAll;
+    } else {
+      value = id;
+      for (final folder in folders ?? const <MusicFolder>[]) {
+        if (folder.id == id) {
+          value = folder.name;
+          break;
+        }
+      }
+    }
+
+    return LuoboRow(
+      icon: AppIcons.folder,
+      title: l10n.musicFoldersDialogTitle,
+      value: folders == null ? null : value,
+      showChevron: folders != null,
+      onTap: folders == null ? null : _showMusicFolderSheet,
+    );
+  }
+
+  /// 单选 Sheet（设计稿 D1 范式）。
+  Future<void> _showMusicFolderSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    final folders = _folders;
+    if (folders == null) return;
+
+    final currentId =
+        _selectedFolderIds.isEmpty ? _allFoldersId : _selectedFolderIds.first;
+
+    final selected = await showLuoboPickerSheet<String>(
+      context: context,
+      title: l10n.musicFoldersDialogTitle,
+      selected: currentId,
+      options: [
+        (value: _allFoldersId, label: l10n.filterAll),
+        for (final folder in folders) (value: folder.id, label: folder.name),
+      ],
+    );
+    if (selected == null || !mounted) return;
+
+    final ids = selected == _allFoldersId ? <String>[] : <String>[selected];
+    try {
+      await Provider.of<AuthProvider>(context, listen: false)
+          .updateSelectedMusicFolderIds(ids);
+    } catch (e) {
+      debugPrint('[ServerForm] save music folder failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.operationFailed),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _selectedFolderIds = ids);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.musicFoldersSaved),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -80,7 +211,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     _usernameController.addListener(_clearError);
     _passwordController.addListener(_clearError);
     _profileNameController.addListener(_clearError);
-    _prefillFromConfig(widget.initialConfig);
+    _prefillFromConfig(widget.initialConfig ?? widget.prefillConfig);
+    if (widget.prefillConfig != null) _typeChosen = true;
   }
 
   @override
@@ -142,6 +274,207 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     }
   }
 
+  // ── 服务器类型网格（设计稿 B3「添加服务器」第一步） ────────────────────
+
+  bool get _showTypePicker => !_isEdit && !_typeChosen;
+
+  Widget _buildTypePicker(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final c = LuoboColors.of(context);
+
+    Widget tile({
+      required String family,
+      required String label,
+      required IconData icon,
+      required Color color,
+    }) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() {
+            _serverFamily = family;
+            // 道理鱼只认明文 p=，选中即强制 legacy 认证。
+            _useLegacyAuth = family == 'daoliyu';
+            _typeChosen = true;
+          }),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(LuoboRadius.tile),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration:
+                      BoxDecoration(color: color, shape: BoxShape.circle),
+                  child: Icon(icon, color: LuoboAccent.onAccent, size: 17),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: LuoboType.caption.copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: c.fg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      backgroundColor: c.bg,
+      appBar: AppBar(
+        // 与设计体系二级页对齐：玻璃圆返回 + 15px 居中标题。
+        // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
+        //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
+        leading: const GlassBackButton(),
+        title: Text(
+          l10n.addServer,
+          style: LuoboType.navTitle.copyWith(color: c.fg),
+        ),
+        centerTitle: true,
+        backgroundColor: c.bg,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: LuoboSpacing.pageX),
+            child: GlassCircleButton(
+              icon: AppIcons.scan,
+              tooltip: l10n.scanQrCode,
+              onPressed: _scanToPrefill,
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          LuoboSpacing.pageX,
+          LuoboSpacing.pageY,
+          LuoboSpacing.pageX,
+          LuoboSpacing.pageBottom,
+        ),
+        children: [
+          LuoboSectionHeader(l10n.serverType),
+          LuoboCard(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: LuoboSpacing.rowX,
+                  vertical: LuoboSpacing.rowY,
+                ),
+                child: Row(
+                  children: [
+                    tile(
+                      family: 'auto',
+                      label: l10n.serverTypeAuto,
+                      icon: AppIcons.ai,
+                      color: LuoboAccent.accent,
+                    ),
+                    const SizedBox(width: 9),
+                    tile(
+                      family: 'subsonic',
+                      label: l10n.serverTypeSubsonic,
+                      icon: AppIcons.music,
+                      color: LuoboAccent.familySubsonic,
+                    ),
+                    const SizedBox(width: 9),
+                    tile(
+                      family: 'jellyfin',
+                      label: l10n.serverTypeJellyfin,
+                      icon: AppIcons.radio,
+                      color: LuoboAccent.familyJellyfin,
+                    ),
+                    const SizedBox(width: 9),
+                    tile(
+                      family: 'daoliyu',
+                      label: l10n.serverTypeDaoliyu,
+                      icon: AppIcons.playlist,
+                      color: LuoboAccent.familyDaoliyu,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          LuoboHint(l10n.serverTypeGridHint),
+          LuoboSectionHeader(l10n.otherWays),
+          LuoboCard(
+            children: [
+              LuoboRow(
+                icon: AppIcons.scan,
+                title: l10n.scanQrCode,
+                onTap: _scanToPrefill,
+              ),
+              const LuoboDivider(indent: LuoboDivider.withIcon),
+              LuoboRow(
+                icon: AppIcons.folder,
+                title: l10n.useLocalFiles,
+                onTap: _useLocalLibrary,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 「其他方式 → 使用本地音乐文件」。
+  ///
+  /// ⚠️ 该流程会 `setLocalOnlyMode(true)`，即**断开当前服务器**改用本地曲库
+  /// （从「已连接的服务器」页进来时这属于破坏性操作），所以先弹确认框。
+  Future<void> _useLocalLibrary() async {
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.useLocalFilesConfirmTitle),
+        content: Text(l10n.useLocalFilesConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.ok),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    // 与登录网关页共用同一份实现（utils/local_library_launcher.dart）。
+    final switched = await launchLocalLibrary(context);
+    if (!mounted || !switched) return;
+    // 已切到本地模式：路由栈上这些「服务器」页面已无意义，回到根。
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  /// 扫码后**预填表单**（而不是直接登录）——添加流程里用户应先确认地址与账号。
+  Future<void> _scanToPrefill() async {
+    final config = await Navigator.push<ServerConfig>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+    if (config == null || !mounted) return;
+    setState(() {
+      _prefillFromConfig(config);
+      _typeChosen = true;
+    });
+  }
+
   // ── 登录 ────────────────────────────────────────────────────────────
 
   Future<void> _login() async {
@@ -157,10 +490,9 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
 
     setState(() => _loginError = null);
 
-    var serverUrl =
-        effectiveFamily == 'youtube'
-            ? 'https://music.youtube.com'
-            : _serverController.text.trim();
+    var serverUrl = effectiveFamily == 'youtube'
+        ? 'https://music.youtube.com'
+        : _serverController.text.trim();
     final localUrl = _localServerController.text.trim();
 
     // 两字段皆空已由服务器地址字段 validator（pleaseEnterServerUrl）拦截，
@@ -180,7 +512,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         !serverUrl.startsWith('http://') &&
         !serverUrl.startsWith('https://')) {
       setState(
-        () => _loginError = AppLocalizations.of(context)!.serverUrlMustStartWith,
+        () =>
+            _loginError = AppLocalizations.of(context)!.serverUrlMustStartWith,
       );
       return;
     }
@@ -328,85 +661,60 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         label: l10n.serverTypeAuto,
         subtitle: l10n.serverTypeAutoSubtitle,
         icon: CupertinoIcons.sparkles,
-        color: Theme.of(context).colorScheme.primary,
+        color: LuoboAccent.accent,
       ),
       (
         family: 'subsonic',
         label: l10n.serverTypeSubsonic,
         subtitle: null,
         icon: CupertinoIcons.music_note,
-        color: const Color(0xFF6366F1),
+        color: LuoboAccent.familySubsonic,
       ),
       (
         family: 'jellyfin',
         label: l10n.serverTypeJellyfin,
         subtitle: null,
         icon: CupertinoIcons.tv,
-        color: const Color(0xFFA970FF),
+        color: LuoboAccent.familyJellyfin,
       ),
       (
         family: 'daoliyu',
         label: l10n.serverTypeDaoliyu,
         subtitle: null,
         icon: CupertinoIcons.music_note_list,
-        color: const Color(0xFF34C759),
+        color: LuoboAccent.familyDaoliyu,
       ),
     ];
 
-    final selected = await showModalBottomSheet<String>(
+    // 单选 Sheet（设计稿 D1 范式）：居中标题 + 每项一张独立白卡 + 玫红勾。
+    // ⚠️ 未选中项**什么都不带**（不带 chevron）——带 chevron 会让人以为
+    // 「点进去还有一层」（§2.3 铁律）。
+    final selected = await showLuoboSheet<String>(
       context: context,
-      builder: (sheetContext) {
-        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                child: Text(
-                  l10n.selectServerType,
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+      title: l10n.selectServerType,
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final opt in options)
+            LuoboSheetRow(
+              leading: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: opt.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(LuoboRadius.avatar),
                 ),
+                child: Icon(opt.icon, color: opt.color, size: 17),
               ),
-              for (final opt in options)
-                ListTile(
-                  leading: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: opt.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(opt.icon, color: opt.color, size: 18),
-                  ),
-                  title: Text(opt.label, style: const TextStyle(fontSize: 16)),
-                  subtitle: opt.subtitle != null
-                      ? Text(
-                          opt.subtitle!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? AppTheme.darkSecondaryText
-                                : AppTheme.lightSecondaryText,
-                          ),
-                        )
-                      : null,
-                  trailing: _serverFamily == opt.family
-                      ? Icon(
-                          CupertinoIcons.checkmark_circle_fill,
-                          color: Theme.of(sheetContext).colorScheme.primary,
-                        )
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(opt.family),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
+              title: opt.label,
+              subtitle: opt.subtitle,
+              selected: _serverFamily == opt.family,
+              showChevron: false,
+              onTap: () => Navigator.of(sheetContext).pop(opt.family),
+            ),
+        ],
+      ),
     );
 
     if (selected != null && mounted) {
@@ -427,15 +735,24 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     final isLoading =
         Provider.of<AuthProvider>(context).state == AuthState.authenticating;
 
+    // 添加流程第一步：先选服务器类型（设计稿 B3）。
+    if (_showTypePicker) return _buildTypePicker(context);
+
     return Scaffold(
       // 与搜索页一致：窗口不随键盘缩放（resize 在此设备上会留下「键盘上方
       // 空白带 + 内容被顶起」）。底部字段可见性改由滚动区键盘高度留白 +
       // 输入框 scrollPadding 保证。
       resizeToAvoidBottomInset: false,
-      backgroundColor: _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
+      backgroundColor:
+          _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
       appBar: AppBar(
-        title: Text(_isEdit ? l10n.editServer : l10n.addServer),
-        centerTitle: false,
+        // 与设计体系二级页对齐（同路由的类型网格步骤用的是同一套页头）。
+        leading: const GlassBackButton(),
+        title: Text(
+          _isEdit ? l10n.editServer : l10n.addServer,
+          style: LuoboType.navTitle.copyWith(color: LuoboColors.of(context).fg),
+        ),
+        centerTitle: true,
         backgroundColor:
             _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
         surfaceTintColor: Colors.transparent,
@@ -472,9 +789,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    _groupTitle(l10n.formSectionConnection),
-                    const SizedBox(height: 8),
-                    _groupCard([
+                      // 无分组标题、无白卡外壳：参考物（飞牛「新建歌单」表单）就是
+                      // 「标签在上 + 一摞独立白块」，块间 20dp。
                       _urlField(
                         controller: _serverController,
                         focusNode: _serverFocusNode,
@@ -491,13 +807,15 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                               _localServerController.text.trim().isEmpty) {
                             return l10n.pleaseEnterServerUrl;
                           }
-                          if (url.isNotEmpty && !url.startsWith('http://') &&
+                          if (url.isNotEmpty &&
+                              !url.startsWith('http://') &&
                               !url.startsWith('https://')) {
                             return l10n.invalidUrlFormat;
                           }
                           return null;
                         },
                       ),
+                      const SizedBox(height: _fieldGap),
                       _urlField(
                         controller: _localServerController,
                         focusNode: _localServerFocusNode,
@@ -520,16 +838,21 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: _fieldGap),
                       _serverTypeTile(),
-                    ]),
-                    const SizedBox(height: 24),
-                    _groupTitle(l10n.formSectionAccount),
-                    const SizedBox(height: 8),
-                    _groupCard([
+                      // 「音乐库范围」并入本页（§9.6 拍板）：语义上是**服务器属性**，
+                      // 不是内容管理。仅当编辑的正是**当前连接**时才有数据来源
+                      // —— getMusicFolders() 走的是当前登录态，对别的服务器会取错。
+                      if (_canPickMusicFolder) ...[
+                        const SizedBox(height: _fieldGap),
+                        _groupCard([_musicFolderTile()]),
+                      ],
+                      const SizedBox(height: _fieldGap),
                       _urlField(
                         controller: _usernameController,
                         focusNode: _usernameFocusNode,
                         label: l10n.username,
+                        hint: l10n.usernameHint,
                         icon: CupertinoIcons.person,
                         autocorrect: false,
                         textInputAction: TextInputAction.next,
@@ -542,236 +865,217 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                           return null;
                         },
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        child: TextFormField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocusNode,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) {
-                            if (!isLoading) _login();
-                          },
-                          scrollPadding: EdgeInsets.only(
-                            bottom: MediaQuery.viewInsetsOf(context).bottom +
-                                16,
-                          ),
-                        decoration: _filledDecoration(
-                          label: l10n.password,
-                          icon: CupertinoIcons.lock,
-                          suffix: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? CupertinoIcons.eye
-                                  : CupertinoIcons.eye_slash,
+                      const SizedBox(height: _fieldGap),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _fieldLabel(l10n.password),
+                          TextFormField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocusNode,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) {
+                              if (!isLoading) _login();
+                            },
+                            scrollPadding: EdgeInsets.only(
+                              bottom:
+                                  MediaQuery.viewInsetsOf(context).bottom + 16,
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
+                            decoration: _filledDecoration(
+                              hint: l10n.passwordHint,
+                              icon: CupertinoIcons.lock,
+                              suffix: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? CupertinoIcons.eye
+                                      : CupertinoIcons.eye_slash,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return l10n.pleaseEnterPassword;
+                              }
+                              return null;
                             },
                           ),
-                        ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return l10n.pleaseEnterPassword;
-                            }
-                            return null;
-                          },
-                        ),
+                        ],
                       ),
-                    ]),
-                    const SizedBox(height: 16),
-                    _advancedExpander(theme),
-                    if (_showAdvancedOptions) ...[
                       const SizedBox(height: 16),
-                      _groupCard(_advancedChildren(theme, l10n)),
-                    ],
-                    const SizedBox(height: 24),
-                    _buildErrorCard(theme),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.appleMusicRed,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          elevation: 0,
+                      _advancedExpander(theme),
+                      if (_showAdvancedOptions) ...[
+                        const SizedBox(height: 16),
+                        _groupCard(_advancedChildren(theme, l10n)),
+                      ],
+                      // ⚠️ 这两处间距不能省：`_buildErrorCard` 在无错误时返回
+                      // `SizedBox.shrink()`，没有间距的话「高级选项」行会**紧贴**
+                      // 主按钮（真机实测只剩 3.7dp）。
+                      const SizedBox(height: 16),
+                      _buildErrorCard(theme),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: LuoboCapsuleButton(
+                          label: l10n.connect,
+                          style: LuoboCapsuleStyle.primary,
+                          onPressed: isLoading ? null : _login,
                         ),
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            : Text(
-                                l10n.connect,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                      if (isLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          l10n.formLocalOnlyNote,
+                          textAlign: TextAlign.center,
+                          style: LuoboType.caption.copyWith(
+                            color: LuoboColors.of(context).fg2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-      ),
     );
   }
 
   // ── 分组卡片 / 字段 ────────────────────────────────────────────────
 
-  Widget _groupTitle(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w400,
-        color: _isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
-        letterSpacing: 0.2,
-      ),
-    );
-  }
-
-  /// iOS inset-grouped 风格分组卡：白 / darkSurface、圆角 16、无阴影。
-  /// 用 Material 而非 Container 作卡体，保证内部 ListTile 的 ink 水波
-  /// 有 Material 祖先可绘制（Container+ClipRRect 会导致水波被 DecoratedBox
-  /// 遮住并触发框架断言）。
+  /// 分组卡 —— 设计体系 `LuoboCard`（白 / `#1C1C1E`、圆角 16、无阴影）。
   Widget _groupCard(List<Widget> children) {
     return SizedBox(
       width: double.infinity,
-      child: Material(
-        color: _isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: Column(children: children),
-      ),
+      child: LuoboCard(children: children),
     );
   }
 
   /// 高级选项区行间分隔线：通栏无缩进（该区为纯文本行/区块，无左对齐图标）。
-  Widget _advancedDivider() {
-    return Container(
-      height: 0.5,
-      color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-    );
-  }
+  Widget _advancedDivider() => const LuoboDivider();
 
-  /// 填充式无边框输入框（Apple Music 风），圆角 12、底色浅灰/深灰。
+  /// 填充式输入块 —— 飞牛「新建歌单」表单实测复刻。
+  ///
+  /// 飞牛实测（1080px @3x，`06-歌曲菜单与信息/新建歌单-模态表单.jpg`）：
+  /// - 块体**白底**（`#FFFFFF`，与卡片同色），不是灰底 —— 飞牛全站没有
+  ///   「灰底内嵌输入框」这种元素，页面上一切面都是卡片色。
+  /// - 块高 **52dp**；圆角与卡片同档（约 13–14dp，`LuoboRadius.field`）。
+  /// - **标签在块外、块的上一行**（近黑 14dp，距块 8dp），块内只有
+  ///   灰色占位符 —— 不是 Material 的浮动 label。
+  ///
+  /// ⚠️ 飞牛的页面左右边距是 20dp，本页沿用设计体系的 `LuoboSpacing.pageX`
+  /// （16dp）—— 全站统一优先，不为一页破例。
+  ///
+  /// ⚠️ **图标槽压到 40、上下内边距 14**：默认 `prefixIconConstraints` 是
+  /// 48×48、`contentPadding` 上下各 16，实测块高 56dp（比飞牛高 4dp）；
+  /// 压到 40/14 后块高 52dp，与飞牛一致。
+  /// （图标槽最小高度必须给 0，否则 48 的最小高会把整行重新撑回 56。）
   InputDecoration _filledDecoration({
-    required String label,
+    required String hint,
     required IconData icon,
     Widget? suffix,
-    String? hint,
+    Color? fill,
   }) {
+    final c = LuoboColors.of(context);
     return InputDecoration(
-      labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 20),
+      // 飞牛实测占位符是 `#7E7E7E`（≈ fg2），不是更浅的 fg3 ——
+      // 标签已经搬到块外，块内这行灰字就是字段的全部说明，不能太淡。
+      hintStyle: LuoboType.body.copyWith(color: c.fg2),
+      prefixIcon: Icon(icon, size: 18, color: c.fg2),
+      prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 0),
       suffixIcon: suffix,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       filled: true,
-      fillColor: _isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+      // 页面级字段 = 白块；卡**内**的字段（高级选项）仍用灰底，
+      // 否则白底叠白卡会整个消失。
+      fillColor: fill ?? c.card,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(LuoboRadius.field),
         borderSide: BorderSide.none,
       ),
     );
   }
 
+  /// 字段标签 —— 在输入块**上方**（飞牛形态），近黑 14dp / w500，
+  /// 与块左对齐（块外再让 4dp，和飞牛的 24.7dp vs 20dp 同构）。
+  Widget _fieldLabel(String text) {
+    final c = LuoboColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(text, style: LuoboType.body.copyWith(color: c.fg)),
+    );
+  }
+
+  /// 输入块之间的竖向间隙 —— 飞牛「新建歌单」实测块高 52dp、节距 72dp，
+  /// 箭头音乐「编辑服务器」实测块间距 19.7dp，取整 20。
+  static const double _fieldGap = 20;
+
+  /// 单个输入块 —— **标签在上 + 独立白块**（不包在白卡里）。
   Widget _urlField({
     required TextEditingController controller,
     required FocusNode focusNode,
     required String label,
+    required String hint,
     required IconData icon,
-    String? hint,
     bool autocorrect = false,
     TextInputType? keyboardType,
     TextInputAction? textInputAction,
     ValueChanged<String>? onFieldSubmitted,
     FormFieldValidator<String>? validator,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextFormField(
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: keyboardType,
-        autocorrect: autocorrect,
-        textInputAction: textInputAction,
-        onFieldSubmitted: onFieldSubmitted,
-        // resize:false 下键盘不挤压窗口：聚焦时把字段滚到键盘上方，
-        // 默认 scrollPadding(20) 只会滚到屏幕底、被键盘盖住。
-        scrollPadding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _fieldLabel(label),
+        TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: keyboardType,
+          autocorrect: autocorrect,
+          textInputAction: textInputAction,
+          onFieldSubmitted: onFieldSubmitted,
+          // resize:false 下键盘不挤压窗口：聚焦时把字段滚到键盘上方，
+          // 默认 scrollPadding(20) 只会滚到屏幕底、被键盘盖住。
+          scrollPadding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+          ),
+          decoration: _filledDecoration(hint: hint, icon: icon),
+          validator: validator,
         ),
-        decoration: _filledDecoration(label: label, hint: hint, icon: icon),
-        validator: validator,
-      ),
+      ],
     );
   }
 
   Widget _serverTypeTile() {
     final l10n = AppLocalizations.of(context)!;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          Icons.dns_rounded,
-          color: Theme.of(context).colorScheme.primary,
-          size: 18,
-        ),
-      ),
-      title: Text(l10n.serverType, style: const TextStyle(fontSize: 16)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _serverFamilyLabel,
-            style: TextStyle(
-              fontSize: 13,
-              color:
-                  _isDark
-                      ? AppTheme.darkSecondaryText
-                      : AppTheme.lightSecondaryText,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            CupertinoIcons.chevron_right,
-            size: 16,
-            color:
-                _isDark
-                    ? AppTheme.darkSecondaryText
-                    : AppTheme.lightSecondaryText,
-          ),
-        ],
-      ),
+    return LuoboRow(
+      icon: AppIcons.server,
+      title: l10n.serverType,
+      value: _serverFamilyLabel,
+      // 有状态值也要显示 chevron（与「音质偏好」那类「值 ›」行一致）。
+      showChevron: true,
       onTap: _showServerTypeSheet,
     );
   }
@@ -811,7 +1115,9 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         title: l10n.legacyAuthentication,
         subtitle: l10n.legacyAuthSubtitle,
         value: _useLegacyAuth,
-        onChanged: _serverFamily == 'daoliyu' ? null : (v) => setState(() => _useLegacyAuth = v),
+        onChanged: _serverFamily == 'daoliyu'
+            ? null
+            : (v) => setState(() => _useLegacyAuth = v),
       ),
       _advancedDivider(),
       _switchRow(
@@ -845,9 +1151,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
             bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
           ),
           decoration: _filledDecoration(
-            label: l10n.profileNameLabel,
             hint: l10n.profileNameHint,
             icon: CupertinoIcons.tag,
+            // 这个字段在**白卡内部**，白底叠白卡会消失 —— 仍用灰底。
+            fill: LuoboColors.of(context).divider,
           ),
         ),
       ),
@@ -930,9 +1237,7 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                 color: _isDark ? const Color(0xFF3C3C3E) : Colors.white,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _isDark
-                      ? AppTheme.darkDivider
-                      : AppTheme.lightDivider,
+                  color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
                 ),
               ),
               child: Row(
@@ -1008,9 +1313,7 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                 color: _isDark ? const Color(0xFF3C3C3E) : Colors.white,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _isDark
-                      ? AppTheme.darkDivider
-                      : AppTheme.lightDivider,
+                  color: _isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
                 ),
               ),
               child: Row(
@@ -1063,15 +1366,13 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                     size: 20,
                   ),
                   onPressed: () => setState(() {
-                    _obscureClientCertPassword =
-                        !_obscureClientCertPassword;
+                    _obscureClientCertPassword = !_obscureClientCertPassword;
                   }),
                 ),
                 isDense: true,
                 filled: true,
-                fillColor: _isDark
-                    ? const Color(0xFF1C1C1E)
-                    : const Color(0xFFF2F2F7),
+                fillColor:
+                    _isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,

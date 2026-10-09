@@ -17,6 +17,7 @@ import '../providers/library_provider.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
 import '../services/lrclib_service.dart';
+import '../services/lyrics/lyrics_cache.dart';
 import '../services/netease_lyrics_service.dart';
 import '../services/storage_service.dart';
 import 'album_artwork.dart' show isLocalFilePath;
@@ -312,9 +313,32 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
         listen: false,
       );
       final offlineService = OfflineService();
+      final serverSource = subsonicService.isDaoliyu
+          ? LyricsCacheSource.daoliyu
+          : LyricsCacheSource.server;
       final cached = await offlineService.getLocalLyrics(_song.id);
-      final syncedData = cached?['lyricsList'] as Map<String, dynamic>? ??
-          await subsonicService.getLyricsBySongId(_song.id);
+      // 缓存来源可信（服务器来源）直接用；来源是兜底或旧缓存无标记时，本会话首次
+      // 复查一次服务器，命中则覆盖缓存 —— 解决「兜底永久占位」（§2.4 / §5.3）。
+      final outcome = await resolveLyricsCache(
+        songId: _song.id,
+        cached: cached,
+        serverSource: serverSource,
+        fetchServerLyrics: () => subsonicService.getLyricsBySongId(_song.id),
+        saveCache: (payload) => offlineService.saveLyrics(_song.id, payload),
+      );
+      Map<String, dynamic>? syncedData =
+          outcome.payload?['lyricsList'] as Map<String, dynamic>?;
+      if (syncedData == null) {
+        syncedData = await subsonicService.getLyricsBySongId(_song.id);
+        // 服务器命中 → 写缓存（§5.3）：现状是服务器结果不写缓存，导致离线看不到、
+        // 且每次播放都要重新请求。
+        if (syncedData != null) {
+          await offlineService.saveLyrics(
+            _song.id,
+            withLyricsCacheMeta({'lyricsList': syncedData}, serverSource),
+          );
+        }
+      }
 
       if (!mounted) return;
 
@@ -346,12 +370,22 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
         }
       }
 
-      final plainData = cached?['lyrics'] as Map<String, dynamic>? ??
-          await subsonicService.getLyrics(
-            artist: _song.artist,
-            title: _song.title,
-            id: _song.id,
+      Map<String, dynamic>? plainData =
+          outcome.payload?['lyrics'] as Map<String, dynamic>?;
+      if (plainData == null) {
+        plainData = await subsonicService.getLyrics(
+          artist: _song.artist,
+          title: _song.title,
+          id: _song.id,
+        );
+        // 服务器命中 → 写缓存（§5.3）
+        if (plainData != null) {
+          await offlineService.saveLyrics(
+            _song.id,
+            withLyricsCacheMeta({'lyrics': plainData}, serverSource),
           );
+        }
+      }
 
       if (plainData != null) {
         final value = plainData['value']?.toString();
@@ -383,7 +417,10 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
           } else {
             cacheMap['lyrics'] = fallbackLyrics;
           }
-          await offlineService.saveLyrics(_song.id, cacheMap);
+          await offlineService.saveLyrics(
+            _song.id,
+            withLyricsCacheMeta(cacheMap, LyricsCacheSource.lrclib),
+          );
 
           if (fallbackLyrics.containsKey('structuredLyrics')) {
             final structured = fallbackLyrics['structuredLyrics'];
@@ -441,7 +478,10 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
           } else {
             cacheMap['lyrics'] = neteaseLyrics;
           }
-          await offlineService.saveLyrics(_song.id, cacheMap);
+          await offlineService.saveLyrics(
+            _song.id,
+            withLyricsCacheMeta(cacheMap, LyricsCacheSource.netease),
+          );
 
           if (neteaseLyrics.containsKey('structuredLyrics')) {
             final structured = neteaseLyrics['structuredLyrics'];
@@ -670,9 +710,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
                                     Container(color: Colors.grey[900]),
                               )
                             : CachedNetworkImage(
-                              cacheManager: coverCacheManager,
-                              imageUrl: imageUrl,
-                              cacheKey: coverArtCacheKeyFromUrl(imageUrl),
+                                cacheManager: coverCacheManager,
+                                imageUrl: imageUrl,
+                                cacheKey: coverArtCacheKeyFromUrl(imageUrl),
                                 fit: BoxFit.cover,
                                 memCacheWidth: 1200,
                                 memCacheHeight: 1200,
@@ -883,9 +923,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
                     Container(color: Colors.black),
               )
             : CachedNetworkImage(
-                              cacheManager: coverCacheManager,
-                              imageUrl: imageUrl,
-                              cacheKey: coverArtCacheKeyFromUrl(imageUrl),
+                cacheManager: coverCacheManager,
+                imageUrl: imageUrl,
+                cacheKey: coverArtCacheKeyFromUrl(imageUrl),
                 fit: BoxFit.cover,
                 memCacheWidth: 1200,
                 memCacheHeight: 1200,
