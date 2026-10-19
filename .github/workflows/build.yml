@@ -140,31 +140,55 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # release 包必须用正式 keystore 签名。secret 缺失时**直接失败**，
+      # 不再回退 debug keystore（debug 签名无法覆盖安装正式包）。
       - name: Decode Android Keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "::error::缺少 ANDROID_KEYSTORE_BASE64 secret，无法用正式密钥签名。"
+            echo "请在仓库 Settings → Secrets and variables → Actions 中补齐四项："
+            echo "  ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD / ANDROID_KEY_ALIAS"
+            exit 1
+          fi
+
           echo "Decoding keystore from base64..."
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/musly-release.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/luobo-release.jks
 
           cat > android/key.properties <<EOF
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=musly-release.keystore
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          storeFile=luobo-release.jks
           EOF
 
-          echo "✅ Keystore configured for signing"
+          echo "✅ Keystore configured for release signing"
 
       # 注意：不要把 stdout 管道到 grep，否则构建失败会被 `|| true` 吞掉
       # 导致「构建成功但没产物」。GitHub 会自动 mask secrets，不需要手动过滤。
-      - name: Build APKs
+      - name: Build universal APK
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
           flutter build apk --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
+            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
+      # 按 ABI 拆分：每个包只带一份 native 库，体积约为通用包的一半
+      - name: Build split APKs (per ABI)
+        env:
+          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
+          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
+        run: |
+          flutter build apk --release --split-per-abi \
             --build-name="${{ needs.prepare.outputs.version }}" \
             --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
@@ -180,6 +204,19 @@ jobs:
             --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
             --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
+      - name: Verify release signing
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+          echo "$CERTS"
+          if echo "$CERTS" | grep -q "CN=Android Debug"; then
+            echo "::error::APK 仍是 debug 签名，发布中止"
+            exit 1
+          fi
+          echo "✅ Release APK 使用正式签名"
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -488,7 +525,11 @@ jobs:
           print()
           print("### 📦 下载")
           print()
-          print("- **Android**：`app-release.apk`（通用 APK，所有设备都能装）")
+          print("- **Android**：")
+          print("  - `app-arm64-v8a-release.apk` — 绝大多数手机（推荐）")
+          print("  - `app-armeabi-v7a-release.apk` — 老款 32 位手机")
+          print("  - `app-x86_64-release.apk` — 模拟器 / ChromeOS")
+          print("  - `app-release.apk` — 通用包，不确定机型时用（体积最大）")
           print("- **iOS**：`luobo-ios.ipa`（未签名，用 AltStore / Sideloadly 侧载）")
           print("- **Windows**：`musly-setup.exe`（如构建成功）")
           print("- **macOS**：`luobo-macos.dmg`（如构建成功，未公证）")

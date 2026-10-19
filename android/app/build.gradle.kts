@@ -37,7 +37,8 @@ android {
         versionName = flutter.versionName
     }
 
-    // Configure signing with custom keystore or debug fallback
+    // 正式签名：必须提供 key.properties，缺失时直接构建失败，
+    // 绝不回退 debug keystore（debug 签名的包无法覆盖安装到正式包上）
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
@@ -51,18 +52,16 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (!keystorePropertiesFile.exists()) {
+                throw GradleException(
+                    "缺少 android/key.properties，release 包必须用正式 keystore 签名。" +
+                        "本地构建请参照 README 配置，CI 由 ANDROID_KEYSTORE_BASE64 secret 注入。"
+                )
             }
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
