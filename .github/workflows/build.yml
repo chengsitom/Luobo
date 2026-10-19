@@ -1,21 +1,39 @@
 name: Build & Release
 
+# 两种触发方式：
+#   1) push 一个 v*.*.* tag（例如 v1.1.20）—— 最省事，打完 tag 自动出包
+#   2) 手动 Run workflow 并填版本号
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number (e.g., 1.0.8)'
+        description: 'Version number (e.g., 1.1.20)'
         required: true
         type: string
 
+# 同一版本不重复跑；不同版本互不影响
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
-  FLUTTER_VERSION: '3.41.7'
+  # 必须与 pubspec.lock 的 sdks 约束对齐：lock 里 sqflite / volume_controller /
+  # image_picker_android 等已要求 flutter >=3.44.0，用旧版会触发重新解析甚至构建失败
+  FLUTTER_VERSION: '3.44.6'
 
 jobs:
-  # Validate secrets exist
-  check-secrets:
+  # 解析版本号 + 校验四处版本一致 + 检查 secrets
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Check required secrets
         run: |
           if [ -z "${{ secrets.COUNTLY_SERVER_URL }}" ]; then
@@ -23,7 +41,7 @@ jobs:
           else
             echo "✅ COUNTLY_SERVER_URL secret is configured"
           fi
-          
+
           if [ -z "${{ secrets.COUNTLY_APP_KEY }}" ]; then
             echo "⚠️ Warning: COUNTLY_APP_KEY secret not set. Analytics will be disabled."
           else
@@ -35,31 +53,90 @@ jobs:
           else
             echo "✅ ANDROID_KEYSTORE_BASE64 secret is configured"
           fi
-        continue-on-error: true
+
+      - name: Resolve and verify version
+        id: version
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          # pubspec.yaml / README.md 是 CRLF 换行，sed 抓出来的值会带尾部 \r
+          # （肉眼不可见，但会让 --build-number="15\r" 直接构建失败），统一剥掉
+          trim() { printf '%s' "$1" | tr -d '\r\n' | sed 's/[[:space:]]*$//'; }
+
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="$(trim "${{ inputs.version }}")"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          VERSION="$(trim "${VERSION#v}")"
+
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "❌ 版本号格式不对：'${VERSION}'，应为 x.y.z"
+            exit 1
+          fi
+
+          # build number 沿用 pubspec 的 +N，避免每次发版都要人工改
+          PUBSPEC_VERSION="$(trim "$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1)")"
+          if [[ "$PUBSPEC_VERSION" == *+* ]]; then
+            BUILD_NUMBER="$(trim "${PUBSPEC_VERSION##*+}")"
+          else
+            BUILD_NUMBER="${{ github.run_number }}"
+          fi
+
+          # 版本号散落四处（pubspec / update_service / main.dart / README），
+          # 少改一处就会导致更新检查或更新日志对不上，这里直接卡住发布。
+          STATIC_VERSION="$(trim "$(sed -n "s/.*currentVersion = '\([^']*\)'.*/\1/p" lib/services/update_service.dart | head -1)")"
+          APP_VERSION="$(trim "$(sed -n "s/.*kAppVersion = '\([^']*\)'.*/\1/p" lib/main.dart | head -1)")"
+          APP_VERSION="$(trim "${APP_VERSION%%+*}")"
+          README_VERSION="$(trim "$(grep -Eo '当前版本：v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | sed 's/.*v//')")"
+
+          MISMATCH=0
+          if [ "${PUBSPEC_VERSION%%+*}" != "$VERSION" ]; then
+            echo "❌ pubspec.yaml: ${PUBSPEC_VERSION%%+*} ≠ $VERSION"
+            MISMATCH=1
+          fi
+          if [ "$STATIC_VERSION" != "$VERSION" ]; then
+            echo "❌ lib/services/update_service.dart: ${STATIC_VERSION:-<空>} ≠ $VERSION"
+            MISMATCH=1
+          fi
+          if [ "$APP_VERSION" != "$VERSION" ]; then
+            echo "❌ lib/main.dart kAppVersion: ${APP_VERSION:-<空>} ≠ $VERSION"
+            MISMATCH=1
+          fi
+          if [ "$README_VERSION" != "$VERSION" ]; then
+            echo "❌ README.md 当前版本: ${README_VERSION:-<空>} ≠ $VERSION"
+            MISMATCH=1
+          fi
+
+          if [ "$MISMATCH" -ne 0 ]; then
+            echo ""
+            echo "发版前请把这四处版本号一起改成 ${VERSION}（build 号 = ${BUILD_NUMBER}）："
+            echo "  pubspec.yaml                              version: ${VERSION}+${BUILD_NUMBER}"
+            echo "  lib/services/update_service.dart          currentVersion = '${VERSION}'"
+            echo "  lib/main.dart                             kAppVersion = '${VERSION}+${BUILD_NUMBER}'"
+            echo "  README.md                                 > **当前版本：v${VERSION}**"
+            exit 1
+          fi
+
+          echo "✅ Version $VERSION (build $BUILD_NUMBER) 四处一致"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
   # Android Build
   build-android:
     runs-on: ubuntu-latest
-    needs: check-secrets
+    needs: prepare
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -70,388 +147,369 @@ jobs:
         run: |
           echo "Decoding keystore from base64..."
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/musly-release.keystore
-          
-          # Create key.properties
+
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=musly-release.keystore
           EOF
-          
+
           echo "✅ Keystore configured for signing"
-      
-      - name: Build APKs (with encrypted analytics)
+
+      # 注意：不要把 stdout 管道到 grep，否则构建失败会被 `|| true` 吞掉
+      # 导致「构建成功但没产物」。GitHub 会自动 mask secrets，不需要手动过滤。
+      - name: Build APKs
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          # Mask secrets in logs (GitHub does this automatically, but we double-check)
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          echo "Building with analytics configured..."
           flutter build apk --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
-      - name: Build AppBundle (with encrypted analytics)
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
+      - name: Build AppBundle
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
           flutter build appbundle --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
 
   # iOS Build (macOS required)
   build-ios:
     runs-on: macos-latest
-    needs: check-secrets
+    needs: prepare
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
-      - name: Build iOS (no codesign for testing)
+
+      - name: Build iOS (no codesign)
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
           flutter build ios --release --no-codesign \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
       - name: Create IPA
         run: |
-          ls -la build/ios/
-          cd build/ios/Release-iphoneos
+          set -e
+          APP=$(find build/ios -maxdepth 3 -type d -name '*.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "Error: no .app found under build/ios"
+            find build/ios -maxdepth 3 -type d | head -30
+            exit 1
+          fi
+          echo "Packing $APP"
+          rm -rf Payload luobo-ios.ipa
           mkdir -p Payload
-          cp -r *.app Payload/
-          zip -r ../../../musly-ios.ipa Payload
-          cd ../../..
-      
+          cp -r "$APP" Payload/
+          zip -qry luobo-ios.ipa Payload
+          ls -lh luobo-ios.ipa
+
       - name: Upload iOS Build
         uses: actions/upload-artifact@v4
         with:
           name: ios-build
-          path: musly-ios.ipa
+          path: luobo-ios.ipa
+          if-no-files-found: error
 
   # Windows Build
   build-windows:
     runs-on: windows-latest
-    needs: check-secrets
+    needs: prepare
+    timeout-minutes: 60
+    # Windows 构建历史上失败过（CI 没跑通），桌面端不作为发版硬门槛，
+    # 失败不会连坐 release；修好后可以把这行删掉。
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        shell: pwsh
-        run: |
-          $DART_VERSION = (dart --version 2>&1 | Select-String -Pattern 'Dart SDK version: ([0-9]+\.[0-9]+\.[0-9]+)').Matches.Groups[1].Value
-          Write-Host "✅ Dart SDK version: $DART_VERSION"
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Build Windows
+        shell: pwsh
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
+          # 上游 Musly 用来压掉 coroutine 弃用警告触发的 C 编译器报错
+          CL: "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"
+          _CL_: "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"
         run: |
-          $key = $env:COUNTLY_APP_KEY
-          Write-Host "::add-mask::$key"
           flutter build windows --release `
+            --build-name="${{ needs.prepare.outputs.version }}" `
+            --build-number="${{ needs.prepare.outputs.build_number }}" `
             --dart-define=COUNTLY_SERVER_URL="$env:COUNTLY_SERVER_URL" `
-            --dart-define=COUNTLY_APP_KEY="$key" 2>&1 | Select-String -Pattern $key -NotMatch
-      
+            --dart-define=COUNTLY_APP_KEY="$env:COUNTLY_APP_KEY"
+          if ($LASTEXITCODE -ne 0) {
+            throw "flutter build windows failed with exit code $LASTEXITCODE"
+          }
+
       - name: Install NSIS
-        run: choco install nsis -y
+        shell: pwsh
+        run: choco install nsis -y --no-progress
 
       - name: Build NSIS Installer
+        shell: pwsh
         run: |
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /DMUSLY_VERSION="${{ needs.prepare.outputs.version }}" installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS compilation failed" }
+          if (-not (Test-Path "musly-setup.exe")) { throw "musly-setup.exe was not created" }
 
-      - name: Prepare Windows Package
-        run: |
-          New-Item -ItemType Directory -Force -Path windows_package
-          Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "windows_package\" -Recurse -Force
-          Copy-Item -Path "musly-setup.exe" -Destination "windows_package\" -Force
-
-      - name: Upload Windows Build
+      - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: windows_package/
+          path: musly-setup.exe
+          if-no-files-found: error
 
   # Linux Build
   build-linux:
     runs-on: ubuntu-latest
-    needs: check-secrets
+    needs: prepare
+    timeout-minutes: 60
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libasound2-dev libnotify-dev
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Build Linux
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
           flutter build linux --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: build/linux/x64/release/bundle/
+          if-no-files-found: error
 
   # macOS Build
   build-macos:
     runs-on: macos-latest
-    needs: check-secrets
+    needs: prepare
+    timeout-minutes: 60
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Build macOS
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
           flutter build macos --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.build_number }}" \
             --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+
       - name: Create DMG
         run: |
           set -e
           APP_PATH="build/macos/Build/Products/Release/musly.app"
-          DMG_NAME="musly-macos"
-
-          echo "Verifying app exists at $APP_PATH..."
           if [ ! -d "$APP_PATH" ]; then
             echo "Error: App not found at $APP_PATH"
             ls -la build/macos/Build/Products/Release/
             exit 1
           fi
 
-          echo "Creating temporary directory for DMG contents..."
           TEMP_DIR=$(mktemp -d)
           cp -r "$APP_PATH" "$TEMP_DIR/"
           ln -s /Applications "$TEMP_DIR/Applications"
 
-          echo "Creating DMG with hdiutil..."
-          hdiutil create -srcfolder "$TEMP_DIR" -volname "Musly" -fs HFS+ -format UDRW -size 200M "${DMG_NAME}_temp.dmg"
+          hdiutil create -srcfolder "$TEMP_DIR" -volname "Luobo" -fs HFS+ -format UDRW -size 300M luobo-macos_temp.dmg
+          hdiutil convert luobo-macos_temp.dmg -format UDZO -o luobo-macos.dmg
+          rm -rf "$TEMP_DIR" luobo-macos_temp.dmg
 
-          echo "Converting to compressed DMG..."
-          hdiutil convert "${DMG_NAME}_temp.dmg" -format UDZO -o "${DMG_NAME}.dmg"
-
-          echo "Cleaning up..."
-          rm -rf "$TEMP_DIR" "${DMG_NAME}_temp.dmg"
-
-          echo "Verifying DMG was created..."
-          if [ ! -f "${DMG_NAME}.dmg" ]; then
-            echo "Error: DMG was not created!"
-            exit 1
-          fi
-
-          ls -lh "${DMG_NAME}.dmg"
-          echo "DMG created successfully!"
+          ls -lh luobo-macos.dmg
 
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: musly-macos.dmg
-
-      - name: Upload macOS Build
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: build/macos/Build/Products/Release/
+          path: luobo-macos.dmg
+          if-no-files-found: error
 
   # Create Release with all artifacts
   release:
     runs-on: ubuntu-latest
-    needs: [build-android, build-ios, build-windows, build-linux, build-macos]
+    needs: [prepare, build-android, build-ios, build-windows, build-linux, build-macos]
+    # 桌面端允许失败，但 Android/iOS 失败时仍然不产出 Release
+    if: ${{ !cancelled() && needs.build-android.result == 'success' && needs.build-ios.result == 'success' }}
     permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create Tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
-          git push origin "v${{ github.event.inputs.version }}"
 
+      # Android 是硬门槛：下载失败（= 构建失败）直接终止，绝不发空包
       - name: Download Android Artifacts
         uses: actions/download-artifact@v4
         with:
           name: android-apk
           path: artifacts/android/
+
       - name: Download iOS Artifacts
         uses: actions/download-artifact@v4
         with:
           name: ios-build
           path: artifacts/ios/
+        continue-on-error: true
 
       - name: Download Windows Artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-build
           path: artifacts/windows/
+        continue-on-error: true
 
       - name: Download Linux Artifacts
         uses: actions/download-artifact@v4
         with:
           name: linux-build
           path: artifacts/linux/
-
-      - name: Download macOS Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-build
-          path: artifacts/macos/
+        continue-on-error: true
 
       - name: Download macOS DMG
         uses: actions/download-artifact@v4
         with:
           name: macos-dmg
           path: artifacts/macos-dmg/
+        continue-on-error: true
 
-      - name: Package Windows
+      - name: Package optional desktop artifacts
         run: |
-          cd artifacts/windows
-          zip -r ../../musly-windows.zip .
-          cd ../..
+          set -uo pipefail
+          if [ -d artifacts/linux ]; then
+            (cd artifacts/linux && tar -czf ../../luobo-linux-x64.tar.gz .)
+          fi
+          if compgen -G "artifacts/macos-dmg/*.dmg" > /dev/null; then
+            cp artifacts/macos-dmg/*.dmg luobo-macos.dmg
+          fi
+          ls -lh *.tar.gz *.dmg 2>/dev/null || true
 
-      - name: Package Linux
+      # Release 文案取 README「版本历史」里对应版本块——与 App 内更新日志同源，
+      # 避免「网页 Release 手写一份、App 里又解析 README 另一份」两处漂移。
+      - name: Compose release notes
         run: |
-          cd artifacts/linux
-          tar -czf ../../musly-linux-x64.tar.gz .
-          cd ../..
+          python3 - "${{ needs.prepare.outputs.version }}" > release-notes.md <<'PY'
+          import re
+          import sys
 
-      - name: Package macOS
-        run: |
-          cp artifacts/macos-dmg/*.dmg musly-macos.dmg
+          version = sys.argv[1]
+          lines = open('README.md', encoding='utf-8').read().splitlines()
+
+          start = None
+          for i, line in enumerate(lines):
+              if re.match(r'^\*\*v' + re.escape(version) + r'(（当前）|）|\b)', line.strip()):
+                  start = i
+                  break
+
+          block = []
+          if start is not None:
+              for line in lines[start + 1:]:
+                  stripped = line.strip()
+                  # 版本块结束：下一个版本标题 / 分隔线 / 下一个二级标题
+                  if re.match(r'^\*\*v\d', stripped) or stripped == '---' or stripped.startswith('## '):
+                      break
+                  block.append(line)
+
+          notes = '\n'.join(block).strip()
+          # README 里每行开头是 "- ✅ xxx"，Release 正文里保留即可
+
+          print(f"## 🎉 Luobo v{version}")
+          print()
+          if notes:
+              print(notes)
+          else:
+              print("本次更新内容见 README 版本历史。")
+          print()
+          print("### 📦 下载")
+          print()
+          print("- **Android**：`app-release.apk`（通用 APK，所有设备都能装）")
+          print("- **iOS**：`luobo-ios.ipa`（未签名，用 AltStore / Sideloadly 侧载）")
+          print("- **Windows**：`musly-setup.exe`（如构建成功）")
+          print("- **macOS**：`luobo-macos.dmg`（如构建成功，未公证）")
+          print("- **Linux**：`luobo-linux-x64.tar.gz`（如构建成功）")
+          PY
+
+          echo "----- release notes -----"
+          cat release-notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Luobo v${{ github.event.inputs.version }}
-          body: |
-            ## 🎉 Luobo v${{ github.event.inputs.version }}
-
-            ### 📦 Downloads
-
-            **Android:**
-            - `app-release.apk` (universal APK for all devices)
-
-            **iOS:**
-            - `musly-ios.ipa` (sideload with AltStore, Sideloadly, or similar — not signed)
-
-            **Windows:**
-            - `musly-setup.exe` (setup installer, run to install Musly)
-            - `musly-windows.zip` (portable version, extract and run)
-
-            **macOS:**
-            - `musly-macos.dmg` (drag Musly.app to Applications — not notarized)
-
-            **Linux:**
-            - `musly-linux-x64.tar.gz` (extract and run musly)
-
-            ### 📝 Changelog
-            See [CHANGELOG.md](https://github.com/chengsitom/Luobo/blob/master/CHANGELOG.md)
-
-            ### 🌍 Translations
-            Contribute translations via PRs at [github.com/chengsitom/Luobo](https://github.com/chengsitom/Luobo)
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: Luobo v${{ needs.prepare.outputs.version }}
+          body_path: release-notes.md
+          # 缺哪个平台就跳过哪个，不因为桌面端缺失导致整个发布失败
+          fail_on_unmatched_files: false
+          overwrite_files: true
           files: |
             artifacts/android/*.apk
             artifacts/ios/*.ipa
-            artifacts/windows/musly-setup.exe
-            musly-windows.zip
-            musly-linux-x64.tar.gz
-            musly-macos.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            artifacts/windows/*.exe
+            luobo-linux-x64.tar.gz
+            luobo-macos.dmg

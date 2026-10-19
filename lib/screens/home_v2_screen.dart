@@ -12,13 +12,12 @@ import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/auto_dj_service.dart';
 import '../services/home_recommendation_service.dart';
-import '../services/playback_context_tracker.dart';
 import '../services/recommendation_service.dart';
 import '../theme/app_icons.dart';
 import '../theme/roaming_palettes.dart';
 import '../utils/navigation_helper.dart';
 import '../utils/refresh_feedback.dart';
-import '../widgets/fluid_card_overlay.dart';
+import '../widgets/home_hero_card.dart';
 import '../widgets/luobo/glass_circle_button.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/sheet_shell.dart';
@@ -28,7 +27,6 @@ import 'album_screen.dart';
 import 'favorites_screen.dart';
 import 'history_screen.dart';
 import 'playlist_screen.dart';
-import 'playlists_screen.dart';
 import 'search_screen.dart';
 import 'settings_root_screen.dart';
 import 'song_list_screen.dart';
@@ -58,7 +56,7 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   double _roamingSeed = 0;
 
   // ── 取色用的「随机一首歌的封面」（2026-10-08 用户要求）──
-  // 「收藏 / 歌单 / 你的歌单」的流体颜色**不再固定取第一首**，而是每次回到首页
+  // 「收藏大卡 / 你的歌单」的流体颜色**不再固定取第一首**，而是每次回到首页
   // 从池子里随机挑一首歌的封面。只放内存、不持久化。
   //
   // ⚠️ 为什么用「签名 + 懒重抽」而不是在 `didChangeDependencies` 里抽一次：
@@ -69,7 +67,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   int _coverEpoch = 0;
   String _coverSig = '';
   String? _favoriteCover;
-  String? _recentPlaylistCover;
   Map<String, String> _playlistCovers = const {};
 
   bool get _isDesktop {
@@ -125,23 +122,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     return pool[_coverRandom.nextInt(pool.length)];
   }
 
-  /// 「最近播放的歌单」：`tracker.items` 最新在前（`record()` 里 `insert(0)`），
-  /// 第一条 `kind == 'playlist'` 就是它。
-  RecentlyPlayedCollection? _recentPlaylist(PlaybackContextTracker tracker) {
-    for (final item in tracker.items) {
-      if (item.kind == 'playlist') return item;
-    }
-    return null;
-  }
-
-  Playlist? _playlistById(List<Playlist> playlists, String? id) {
-    if (id == null) return null;
-    for (final p in playlists) {
-      if (p.id == id) return p;
-    }
-    return null;
-  }
-
   /// 曲库池 —— 歌单的「自己的歌」本地没有缓存（`Playlist.songs` 只有用户**打开过**
   /// 那个歌单时才有），所以缺池子时回落到全曲库随机，保证卡面一定有颜色。
   Iterable<String?> _libraryCovers(LibraryProvider p) =>
@@ -154,14 +134,13 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   void _rollCoversIfNeeded({
     required LibraryProvider library,
     required List<Song> favorites,
-    required Playlist? recentPlaylistModel,
     required List<Playlist> playlists,
   }) {
     // ⚠️ 签名只用 **O(1) 标量**：早先拼了 `playlists.id.join()` 与
     // `cachedAllSongs.length`（后者在 mergeLocal 开启时**每次访问都会重建合并列表**），
     // 而这段代码在 build 期跑 —— 等于每帧做一次 O(N)。改成标量后仍能覆盖
     // 「数据加载完 / 收藏数变化 / 歌单列表变化 / 回到首页」四种该重抽的时机。
-    final sig = '$_coverEpoch|${favorites.length}|${recentPlaylistModel?.id}|'
+    final sig = '$_coverEpoch|${favorites.length}|'
         '${playlists.length}|${library.isInitialized}';
     if (sig == _coverSig) return;
     _coverSig = sig;
@@ -170,11 +149,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     final libraryPool = _coverPool(_libraryCovers(library));
     _favoriteCover = _pickCover(favorites.map(library.effectiveCoverArt)) ??
         _pickCover(libraryPool);
-    _recentPlaylistCover =
-        _pickCover((recentPlaylistModel?.songs ?? const []).map(
-              library.effectiveCoverArt,
-            )) ??
-            _pickCover(libraryPool);
     _playlistCovers = {
       for (final p in playlists)
         p.id:
@@ -274,10 +248,10 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
             ],
           ),
           SliverToBoxAdapter(
-            child: Consumer4<LibraryProvider, RecommendationService,
-                HomeRecommendationService, PlaybackContextTracker>(
+            child: Consumer3<LibraryProvider, RecommendationService,
+                HomeRecommendationService>(
               builder: (context, libraryProvider, recommendationService,
-                  homeRecommendation, playbackTracker, _) {
+                  homeRecommendation, _) {
                 // 未初始化（含首帧与 initialize 进行中）一律转圈，
                 // 避免首帧（isLoading 仍为 false）落进下方空态分支整页闪「暂无内容」。
                 if (!libraryProvider.isInitialized) {
@@ -318,15 +292,10 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                   return _buildEmptyState(hPad, isDark);
                 }
 
-                // 取色：在构建各小节**之前**重抽
-                // （「快速开始」与「你的歌单」都读结果）。
+                // 取色：在构建各小节**之前**重抽（「收藏大卡」与「你的歌单」都读结果）。
                 _rollCoversIfNeeded(
                   library: libraryProvider,
                   favorites: libraryProvider.starred?.songs ?? const <Song>[],
-                  recentPlaylistModel: _playlistById(
-                    libraryProvider.playlists,
-                    _recentPlaylist(playbackTracker)?.id,
-                  ),
                   playlists: libraryProvider.playlists.take(10).toList(),
                 );
 
@@ -334,18 +303,14 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
+                    // 顶部大卡：漫游 / 收藏（2026-10-09 起取代「今日推荐」的位置）。
+                    _buildHeroEntries(context, libraryProvider, hPad),
+                    // 「今日推荐」暂时下线 —— 见 `_showDailyRecommendation`。
                     _buildDailyCard(context, daily, libraryProvider, hPad),
                     _buildContinueListening(
                       context,
                       recommendationService,
                       allSongs,
-                      libraryProvider,
-                      hPad,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildQuickEntries(
-                      context,
-                      playbackTracker,
                       libraryProvider,
                       hPad,
                     ),
@@ -376,12 +341,151 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   // 模块构建
   // ──────────────────────────────────────────────────────────────────────────
 
+  /// 「今日推荐」大卡开关。
+  ///
+  /// 2026-10-09 用户要求**暂时**去掉（位置让给「漫游 / 收藏」大卡）。实现整体保留，
+  /// 改回 `true` 即恢复；`generateFeed` 的 `daily` 仍在算，只是不再渲染。
+  static const bool _showDailyRecommendation = false;
+
+  /// 大卡高度 —— 飞牛首页实测 184dp；**两行共用**（顶部大卡与「你的歌单」）。
+  static const double _heroCardHeight = 184;
+
+  /// 大卡固定宽度 —— 只给**要横滑**的那一行用（「你的歌单」6 张，飞牛实测 151dp）。
+  ///
+  /// 顶部「漫游 / 收藏」只有 2 张、要求**铺满整行**，宽度由 `_heroRow` 现算（见该方法的
+  /// `fillWidth`），不走这个常量。
+  static const double _heroCardWidth = 151;
+
+  /// 大卡之间的间距。
+  static const double _heroCardGap = 12;
+
+  /// 首页顶部「漫游 / 收藏」大卡（对标飞牛首页）—— 取代原「今日推荐」通栏横幅的
+  /// 位置与「快速开始」小节（2026-10-09 用户要求）。
+  ///
+  /// **铺满整行**（右侧不留空白）、卡高 184dp；图标为卡面主体、文字退到左下角。
+  Widget _buildHeroEntries(
+    BuildContext context,
+    LibraryProvider libraryProvider,
+    double hPad,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final favorites = libraryProvider.starred?.songs ?? const <Song>[];
+
+    return _heroRow(
+      hPad: hPad,
+      // 只有 2 张 → 铺满整行，右侧不留空白（2026-10-09 用户反馈）。
+      fillWidth: true,
+      cards: [
+        // 顺序（用户指定）：漫游 → 收藏。
+        HomeHeroCard(
+          icon: AppIcons.roam,
+          title: l10n.roaming,
+          subtitle: l10n.roamingSubtitle,
+          // 漫游没有封面 → 配色由 `RoamingPalettes` 随机给（每次回到首页换一组）。
+          colors: _roamingPalette,
+          seed: _roamingSeed,
+          onTap: () async {
+            final started = await playerProvider.startRoaming();
+            // 曲库还没同步好时给个明确反馈——静默无反应看起来像坏了。
+            if (!started && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(l10n.noSongsFound)),
+              );
+            }
+          },
+          onLongPress: () => _pickRoamingMode(context, playerProvider),
+        ),
+        HomeHeroCard(
+          icon: AppIcons.heartFilled,
+          title: l10n.favorites,
+          // 数字在标题下一行（`songCount` = 「N 首」）。
+          subtitle: l10n.songCount(favorites.length),
+          // 每次回到首页随机抽一首收藏的歌当取色源
+          // （`_rollCoversIfNeeded`）；没有收藏时回落全曲库。
+          imageUrl: _coverUrl(libraryProvider, _favoriteCover),
+          seed: FluidBackground.seedForIndex(1),
+          onTap: () => NavigationHelper.push(context, const FavoritesScreen()),
+        ),
+      ],
+    );
+  }
+
+  /// 大卡横滑行 —— 顶部「漫游 / 收藏」与「你的歌单」**共用同一套排版**
+  /// （2026-10-09 用户要求「你的歌单也同步改」）。
+  ///
+  /// [fillWidth] = true 时把本行**铺满**：N 张卡按可用宽度均分，右侧不留空白
+  /// （2026-10-09 用户反馈「漫游 / 收藏不够大，右边还留白」）。「你的歌单」有 6 张、
+  /// 必须横滑，所以走固定宽 `_heroCardWidth`。
+  ///
+  /// ⚠️ 外层 `SizedBox` 的高度**必须等于**卡高：横滑 `ListView` 的交叉轴是**紧约束**，
+  /// 子项会被拉满容器高度。旧「你的歌单」走 `HorizontalScrollSection(cardSize: 150)`
+  /// （容器高 = `cardSize + 60` = 210），于是卡实际是 **150×210**，不是它注释里写的正方形。
+  Widget _heroRow({
+    required List<Widget> cards,
+    required double hPad,
+    String? title,
+    bool fillWidth = false,
+  }) {
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    Widget buildRow(double cardWidth) => SizedBox(
+          height: _heroCardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            itemCount: cards.length,
+            separatorBuilder: (_, __) => const SizedBox(width: _heroCardGap),
+            itemBuilder: (context, index) => SizedBox(
+              width: cardWidth,
+              height: _heroCardHeight,
+              child: cards[index],
+            ),
+          ),
+        );
+
+    return FluidBackgroundScope(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              child: SectionHeader(title: title),
+            ),
+          if (fillWidth)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // N 张 + (N−1) 个间距 + 左右各 hPad == 可用宽度，右侧不留空白。
+                final n = cards.length;
+                final usable =
+                    constraints.maxWidth - 2 * hPad - _heroCardGap * (n - 1);
+                return buildRow(usable / n);
+              },
+            )
+          else
+            buildRow(_heroCardWidth),
+        ],
+      ),
+    );
+  }
+
+  /// 歌单名 → 卡面首字字母牌（取第一个**完整字符**，避免把 emoji 的代理对劈开）。
+  ///
+  /// 用首字而不是封面：一个歌单里有很多首歌，**单张封面代表不了它**（用户 2026-10-09）。
+  String? _monogramOf(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    return String.fromCharCode(trimmed.runes.first).toUpperCase();
+  }
+
   Widget _buildDailyCard(
     BuildContext context,
     List<Song> daily,
     LibraryProvider libraryProvider,
     double hPad,
   ) {
+    if (!_showDailyRecommendation) return const SizedBox.shrink();
     if (daily.isEmpty) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
     // 每次进入首页从 30 首里随机抽一张有封面的歌展示（封面定期换）。
@@ -484,90 +588,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
               );
             },
           ),
-        ),
-      ],
-    );
-  }
-
-  /// 「快速开始」小节：漫游 / 歌单 / 收藏（横滑 150dp 流体卡，取代原「为你制作」）。
-  ///
-  /// - 「漫游」卡 = 一键全曲库随机起播 + 无限续播；长按选续播方式。
-  /// - 「歌单」卡 = **最近播放的那个歌单**（承接原「最近播放」混合区里的歌单卡，
-  ///   方案 §4.5）；没有记录时回落为「歌单 / 全部歌单」→ 进歌单列表页。
-  /// - 「收藏」卡 = 固定入口（不随最近播放变化）。
-  ///
-  /// 歌单 / 收藏的**数字在标题上一行**（2026-10-08 用户要求），取色走
-  /// `_rollCoversIfNeeded` 抽出来的「随机一首歌的封面」。
-  Widget _buildQuickEntries(
-    BuildContext context,
-    PlaybackContextTracker tracker,
-    LibraryProvider libraryProvider,
-    double hPad,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-
-    final recentPlaylist = _recentPlaylist(tracker);
-    final recentPlaylistModel =
-        _playlistById(libraryProvider.playlists, recentPlaylist?.id);
-    final favorites = libraryProvider.starred?.songs ?? const <Song>[];
-    final songCount = recentPlaylistModel?.songCount;
-    // 「有可用的最近歌单」= tracker 有记录 **且** 曲库里还能查到它。
-    final hasRecentPlaylist =
-        recentPlaylist != null && recentPlaylistModel != null;
-
-    return MixGridSection(
-      hPad: hPad,
-      title: l10n.quickStart,
-      // 横滑一行、每张 150dp 正方形卡，文字叠在流体内（2026-10-08 第二轮，方案 §12.3）。
-      // 传 `cardWidth` 即切横滑模式，`columns` / `childAspectRatio` 不再参与。
-      cardWidth: 150,
-      cards: [
-        // 顺序（用户指定）：漫游 → 歌单 → 收藏
-        MixCardData(
-          title: l10n.roaming,
-          subtitle: l10n.roamingSubtitle,
-          // 漫游没有封面 → 配色由 `RoamingPalettes` 随机给（每次回到首页换一组）。
-          fluidColors: _roamingPalette,
-          seed: _roamingSeed,
-          useFluidGradient: true,
-          onTap: () async {
-            final started = await playerProvider.startRoaming();
-            // 曲库还没同步好时给个明确反馈——静默无反应看起来像坏了。
-            if (!started && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.noSongsFound)),
-              );
-            }
-          },
-          onLongPress: () => _pickRoamingMode(context, playerProvider),
-        ),
-        MixCardData(
-          title: recentPlaylist?.name ?? l10n.playlist,
-          // 有最近记录 → 数字占标题上一行；无记录 → 标题下说明去哪。
-          count: hasRecentPlaylist && songCount != null ? '$songCount' : null,
-          subtitle: hasRecentPlaylist ? null : l10n.yourPlaylists,
-          imageUrl: _coverUrl(libraryProvider, _recentPlaylistCover),
-          useFluidGradient: true,
-          // ⚠️ 回落条件必须含「模型查不到」：tracker 的记录不会随曲库歌单被删而清理，
-          // 只判 `recentPlaylist == null` 会带着失效 id 进歌单详情页。
-          onTap: () => NavigationHelper.push(
-            context,
-            hasRecentPlaylist
-                ? PlaylistScreen(
-                    playlistId: recentPlaylist.id,
-                    playlistName: recentPlaylist.name,
-                  )
-                : const PlaylistsScreen(),
-          ),
-        ),
-        MixCardData(
-          title: l10n.favorites,
-          // 数字占标题上一行（2026-10-08 用户要求）。
-          count: '${favorites.length}',
-          imageUrl: _coverUrl(libraryProvider, _favoriteCover),
-          useFluidGradient: true,
-          onTap: () => NavigationHelper.push(context, const FavoritesScreen()),
         ),
       ],
     );
@@ -686,56 +706,52 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     );
   }
 
+  /// 「你的歌单」小节 —— 与顶部大卡同一套排版（2026-10-09 用户要求「同步改」）。
+  ///
+  /// 卡面主体是**歌单名首字字母牌**而不是封面：一个歌单里有很多首歌，单张封面代表不了它
+  /// （用户明确否掉封面）；用法对标 Apple Music「Made For You」Mix 卡 —— 渐变 + 大号
+  /// 半透明图形 + 大号粗体标题，而不是单张封面。取色仍走 `_playlistCovers`
+  /// （每次回到首页随机抽该歌单里一首歌的封面**当取色源**，卡面不显示封面图）。
   Widget _buildPlaylists(
     BuildContext context,
     LibraryProvider libraryProvider,
     double hPad,
   ) {
     // ⚠️ 条数收在 6（方案 §8.6 的退路阶梯①）：每张卡都是一次独立的片段着色器
-    // 绘制，10 张叠加「快速开始」的 3 张会明显推高首页的 GPU 压力。要放回更多，
-    // 改这个常量即可，但请先在低端机上实测帧率。
+    // 绘制，10 张会明显推高首页的 GPU 压力。要放回更多，改这个常量即可，
+    // 但请先在低端机上实测帧率。
     final playlists = libraryProvider.playlists.take(_playlistsInRow).toList();
     if (playlists.isEmpty) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
-    // 与「快速开始」小节一样，整段共用一个流体时钟（一个 Ticker 而非 N 个）。
-    return FluidBackgroundScope(
-      child: HorizontalScrollSection(
-        title: l10n.yourPlaylists,
-        padding: EdgeInsets.symmetric(horizontal: hPad),
-        cardSize: _playlistCardSize,
-        children: [
-          for (var i = 0; i < playlists.length; i++)
-            SizedBox(
-              width: _playlistCardSize,
-              height: _playlistCardSize,
-              // 每次回到首页随机抽一首歌的封面（`_rollCoversIfNeeded`）。
-              child: FluidCard(
-                title: playlists[i].name,
-                // 首数也走数字行（与「快速开始」的歌单/收藏卡一致）。
-                count: playlists[i].songCount == null
-                    ? null
-                    : '${playlists[i].songCount}',
-                imageUrl: _coverUrl(
-                  libraryProvider,
-                  _playlistCovers[playlists[i].id],
-                ),
-                seed: FluidBackground.seedForIndex(i),
-                onTap: () => NavigationHelper.push(
-                  context,
-                  PlaylistScreen(
-                    playlistId: playlists[i].id,
-                    playlistName: playlists[i].name,
-                  ),
-                ),
+    return _heroRow(
+      hPad: hPad,
+      title: l10n.yourPlaylists,
+      cards: [
+        for (var i = 0; i < playlists.length; i++)
+          HomeHeroCard(
+            monogram: _monogramOf(playlists[i].name),
+            title: playlists[i].name,
+            // 歌单名可能较长 —— 允许两行（入口卡只有 1 行）。
+            titleMaxLines: 2,
+            subtitle: playlists[i].songCount == null
+                ? null
+                : l10n.songCount(playlists[i].songCount!),
+            imageUrl: _coverUrl(
+              libraryProvider,
+              _playlistCovers[playlists[i].id],
+            ),
+            seed: FluidBackground.seedForIndex(i),
+            onTap: () => NavigationHelper.push(
+              context,
+              PlaylistScreen(
+                playlistId: playlists[i].id,
+                playlistName: playlists[i].name,
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
-
-  /// 「你的歌单」横滑卡边长（与「快速开始」的 `cardWidth` 同值）。
-  static const double _playlistCardSize = 150;
 
   /// 「你的歌单」横滑最多展示几张 —— 受流体着色器绘制成本约束（方案 §8.6）。
   static const int _playlistsInRow = 6;

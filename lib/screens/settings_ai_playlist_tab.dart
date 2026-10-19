@@ -57,7 +57,7 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
       children: [
         _buildConnectionSection(),
         _buildKnowledgeSection(),

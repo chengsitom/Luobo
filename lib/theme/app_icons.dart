@@ -54,6 +54,9 @@ abstract final class AppIcons {
   static const IconData headphones = CupertinoIcons.headphones;
   static const IconData disc = CupertinoIcons.music_albums;
 
+  /// 首页「漫游」大卡 —— 罗盘，呼应「全曲库随机漫游」（对标飞牛首页大卡）。
+  static const IconData roam = CupertinoIcons.compass;
+
   /// 车载入口（**必须保持可见，不埋进「更多」**，§2.10）。
   static const IconData car = Icons.directions_car;
 

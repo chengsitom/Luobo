@@ -50,7 +50,11 @@ class SettingsRootScreen extends StatelessWidget {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
+          // 覆盖式（§6.1）：显式 padding 的 ListView 不会自动吃到
+          // `extendBody` 注入的条带净空，这里显式补上。
+          padding: EdgeInsets.only(
+            bottom: LuoboSpacing.pageBottomWithStrip(context),
+          ),
           children: [
             // ── 大标题 + 右上圆钮 ──────────────────────────────────────────
             Padding(

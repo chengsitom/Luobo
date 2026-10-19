@@ -57,10 +57,6 @@
   "@roamingSubtitle": {
     "description": "Subtitle under the Roaming card on the home screen"
   },
-  "quickStart": "快速开始",
-  "@quickStart": {
-    "description": "Home section title for the Roaming / Playlist / Favorites entry cards"
-  },
   "madeForYou": "为你制作",
   "@madeForYou": {
     "description": "Made for you section title"

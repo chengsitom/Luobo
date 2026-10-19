@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../theme/design_tokens.dart';
@@ -17,13 +19,17 @@ class GlassPillNavItem {
 /// 悬浮胶囊底栏 —— **仅一级页**（首页 / 音乐库 / 设置）使用。
 ///
 /// 设计稿：`~/Downloads/fnosmusic/设计稿/04-C1-地基组件总览.png` ③ 节。
+/// 实测对齐：`docs/视觉与交互对标飞牛音乐技术方案.md` §6.1。
 ///
 /// 布局：`[项][项][项][分隔线][专辑封面槽]`，**每一项都是 `flex: 1`**，
 /// 因此三项严格等宽等距，专辑封面占一个等宽槽位（不是贴右边缘的小图标）。
+/// 宽度由外层约束到 [LuoboGlass.navWidth]（256dp，居中浮动）。
 ///
 /// - 选中态：玫红实心圆（[LuoboGlass.navBubbleSize]）+ 白色图标
 /// - 未选中：42% 黑 / 白描边图标
-/// - 最右：当前专辑圆封面（点击进播放页）；无播放时传 `art: null` 即不渲染该槽
+/// - 最右：当前专辑圆封面（点击进播放页）；无播放时传 `art: null` 即不渲染该槽。
+///   进度环由调用方用 [LuoboNavArtRing] 包好再传进来 —— 这样进度每帧变化时
+///   **只有那个环重建**，不会把整条毛玻璃底栏拖进每帧重建（§5 性能红线）。
 class GlassPillNav extends StatelessWidget {
   const GlassPillNav({
     super.key,
@@ -39,7 +45,8 @@ class GlassPillNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  /// 当前专辑圆封面。为 null 时**不渲染**封面槽（分隔线也一并隐藏）。
+  /// 当前专辑圆封面（通常已由 [LuoboNavArtRing] 包好）。
+  /// 为 null 时**不渲染**封面槽（分隔线也一并隐藏）。
   final Widget? art;
   final VoidCallback? onArtTap;
 
@@ -77,24 +84,7 @@ class GlassPillNav extends StatelessWidget {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: onArtTap,
-                    child: SizedBox(
-                      width: LuoboGlass.navArtSize,
-                      height: LuoboGlass.navArtSize,
-                      child: ClipOval(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: LuoboAccent.onAccent.withValues(
-                                alpha: 0.55,
-                              ),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: art,
-                        ),
-                      ),
-                    ),
+                    child: art,
                   ),
                 ),
               ),
@@ -104,6 +94,99 @@ class GlassPillNav extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 底栏封面槽的**「静态灰轨道 + 进度填充」环**（§6.1）。
+///
+/// 飞牛实测：封面 **45dp**、环外径 **52dp**、笔画 **1.67dp**、环与封面之间留
+/// **1.8dp 间隙**（**不贴封面**）；轨道整圈常驻，进度在轨道内推进，起笔 12 点、顺时针。
+///
+/// **纯展示**：`progress` 由调用方订阅后传入 —— 这样进度每帧变化时**只有本组件重建**，
+/// 不会把整条毛玻璃底栏拖进每帧重建（§5 性能红线）。
+///
+/// **暂停时不做任何变化**（用户 2026-10-09 明确）：环与进度冻结在原位，
+/// 不变暗、不隐藏、不归零 —— 所以这里不需要「是否在播」这个入参。
+class LuoboNavArtRing extends StatelessWidget {
+  const LuoboNavArtRing({super.key, required this.art, this.progress});
+
+  /// 专辑封面（会被裁成圆形）。
+  final Widget art;
+
+  /// 播放进度 0~1。null / 0 = 只画灰轨道。
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return SizedBox(
+      width: LuoboGlass.navArtRingSize,
+      height: LuoboGlass.navArtRingSize,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _NavArtRingPainter(
+            progress: progress,
+            track: c.fg.withValues(alpha: LuoboGlass.ringTrackAlpha),
+            fill: c.fg.withValues(alpha: LuoboGlass.ringProgressAlpha),
+          ),
+          // 封面比环小一圈 → 两者之间自然留出「不贴封面」的间隙。
+          child: Center(
+            child: SizedBox(
+              width: LuoboGlass.navArtSize,
+              height: LuoboGlass.navArtSize,
+              child: ClipOval(child: art),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 封面槽外圈的「静态灰轨道 + 进度填充」。
+class _NavArtRingPainter extends CustomPainter {
+  const _NavArtRingPainter({
+    required this.progress,
+    required this.track,
+    required this.fill,
+  });
+
+  final double? progress;
+  final Color track;
+  final Color fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const w = LuoboGlass.navArtRingWidth;
+    final center = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - w / 2;
+
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w
+        ..color = track,
+    );
+
+    final p = (progress ?? 0).clamp(0.0, 1.0);
+    if (p <= 0) return;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: r),
+      -math.pi / 2, // 起笔 12 点
+      math.pi * 2 * p, // 顺时针
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w
+        ..strokeCap = StrokeCap.round
+        ..color = fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_NavArtRingPainter old) =>
+      old.progress != progress || old.track != track || old.fill != fill;
 }
 
 class _NavSlot extends StatelessWidget {
@@ -143,7 +226,7 @@ class _NavSlot extends StatelessWidget {
                 ),
               Icon(
                 item.icon,
-                size: 20,
+                size: LuoboGlass.navIconSize,
                 color: selected ? LuoboAccent.onAccent : unselectedColor,
               ),
             ],

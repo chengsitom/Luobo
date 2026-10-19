@@ -68,7 +68,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
       children: [
         _buildSection(
           title: AppLocalizations.of(context)!.playerInterface.toUpperCase(),

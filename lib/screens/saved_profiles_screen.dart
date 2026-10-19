@@ -398,11 +398,11 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
 
           final authProvider = Provider.of<AuthProvider>(context);
           return ListView(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               LuoboSpacing.pageX,
               LuoboSpacing.pageY,
               LuoboSpacing.pageX,
-              LuoboSpacing.pageBottom,
+              LuoboSpacing.pageBottomWithStrip(context),
             ),
             children: [
               LuoboCard(

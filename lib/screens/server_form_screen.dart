@@ -278,6 +278,30 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
 
   bool get _showTypePicker => !_isEdit && !_typeChosen;
 
+  /// 本页两个 `AppBar` 共用的左上返回钮。
+  ///
+  /// ⚠️ `AppBar.leading` 槽位是**紧约束**（`_kLeadingWidth` = `toolbarHeight` = 56，
+  /// 且 `NavigationToolbar` 给 leading 的 `minHeight == maxHeight == toolbarHeight`）——
+  /// 直接把 [GlassBackButton] 放进去，它内部的 `SizedBox(40)` 会被撑成 56×56
+  /// （圆钮大 40%，且左边缘落在 x=0、贴屏幕边）。本页是全仓**唯一**把返回钮放进
+  /// `AppBar.leading` 的地方（其余二级页走 `SettingsSubPage` 的 `Stack`/`Positioned`），
+  /// 所以只在这里包装：槽位留够宽度（见 [_appBarBackLeadingWidth]）让钮保持自身尺寸，
+  /// `Align(centerLeft)` + `Padding` 把它落在 `LuoboSpacing.pageX` —— 与
+  /// `SettingsSubPage`（`Positioned(left: pageX)`）逐像素一致。
+  Widget _appBarBackLeading() => const Padding(
+        padding: EdgeInsets.only(left: LuoboSpacing.pageX),
+        child: Align(alignment: Alignment.centerLeft, child: GlassBackButton()),
+      );
+
+  /// [_appBarBackLeading] 的槽宽 = 左内边距 + 钮宽 + 同量右余量。
+  ///
+  /// 钮的**自然直径**不是 40，而是 `LuoboGlass.circleButtonSize + 2 × borderWidth`
+  /// （41.6）—— `LuoboGlassSurface` 的 `Container` 会按 Flutter 语义把
+  /// `BoxDecoration.border` 的宽度当 padding 加在子级外。槽位必须放得下这个自然
+  /// 直径，否则钮会被挤扁（曾实测：给 40 宽 → 钮成 40×41.6，不是正圆）。
+  static const double _appBarBackLeadingWidth =
+      LuoboSpacing.pageX * 2 + LuoboGlass.circleButtonSize;
+
   Widget _buildTypePicker(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final c = LuoboColors.of(context);
@@ -338,7 +362,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         // 与设计体系二级页对齐：玻璃圆返回 + 15px 居中标题。
         // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
         //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
-        leading: const GlassBackButton(),
+        leadingWidth: _appBarBackLeadingWidth,
+        leading: _appBarBackLeading(),
         title: Text(
           l10n.addServer,
           style: LuoboType.navTitle.copyWith(color: c.fg),
@@ -359,11 +384,11 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
           LuoboSpacing.pageY,
           LuoboSpacing.pageX,
-          LuoboSpacing.pageBottom,
+          LuoboSpacing.pageBottomWithStrip(context),
         ),
         children: [
           LuoboSectionHeader(l10n.serverType),
@@ -747,7 +772,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
           _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
       appBar: AppBar(
         // 与设计体系二级页对齐（同路由的类型网格步骤用的是同一套页头）。
-        leading: const GlassBackButton(),
+        leadingWidth: _appBarBackLeadingWidth,
+        leading: _appBarBackLeading(),
         title: Text(
           _isEdit ? l10n.editServer : l10n.addServer,
           style: LuoboType.navTitle.copyWith(color: LuoboColors.of(context).fg),

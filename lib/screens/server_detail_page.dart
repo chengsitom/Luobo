@@ -68,11 +68,11 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
     return SettingsSubPage(
       title: l10n.serverDetail,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
           LuoboSpacing.pageY,
           LuoboSpacing.pageX,
-          LuoboSpacing.pageBottom,
+          LuoboSpacing.pageBottomWithStrip(context),
         ),
         children: [
           // ── 头图：服务器色渐变 + 徽标 + 名称 ────────────────────────────

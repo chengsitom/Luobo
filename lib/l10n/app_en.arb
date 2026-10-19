@@ -87,11 +87,6 @@
     "description": "Subtitle under the Roaming card on the home screen"
   },
 
-  "quickStart": "Quick Start",
-  "@quickStart": {
-    "description": "Home section title for the Roaming / Playlist / Favorites entry cards"
-  },
-
   "favoritePlaylists": "Favorite Playlists",
   "@favoritePlaylists": {
     "description": "Favorite playlists section title on home screen"

@@ -61,9 +61,6 @@ class AppLocalizationsEl extends AppLocalizations {
   String get roamingSubtitle => 'Shuffle the whole library';
 
   @override
-  String get quickStart => 'Quick Start';
-
-  @override
   String get favoritePlaylists => 'Favorite Playlists';
 
   @override

@@ -43,11 +43,11 @@ class SettingsAppPage extends StatelessWidget {
     return SettingsSubPage(
       title: l10n.settingsTitle,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
           LuoboSpacing.pageY,
           LuoboSpacing.pageX,
-          LuoboSpacing.pageBottom,
+          LuoboSpacing.pageBottomWithStrip(context),
         ),
         children: [
           // ── 外观 / 语言 ────────────────────────────────────────────────
@@ -279,11 +279,11 @@ class _SettingsAppearancePageState extends State<SettingsAppearancePage> {
     return SettingsSubPage(
       title: l10n.appearance,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
           LuoboSpacing.pageY,
           LuoboSpacing.pageX,
-          LuoboSpacing.pageBottom,
+          LuoboSpacing.pageBottomWithStrip(context),
         ),
         children: [
           LuoboSectionHeader(l10n.themeModeTitle),

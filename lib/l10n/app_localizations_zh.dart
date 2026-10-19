@@ -60,9 +60,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get roamingSubtitle => '随机漫游曲库';
 
   @override
-  String get quickStart => '快速开始';
-
-  @override
   String get favoritePlaylists => '收藏的歌单';
 
   @override

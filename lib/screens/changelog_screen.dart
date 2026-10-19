@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 
@@ -145,7 +146,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 12, bottom: 32),
                   itemCount: _sections.length,
                   itemBuilder: (context, index) =>
                       _buildSection(context, _sections[index]),

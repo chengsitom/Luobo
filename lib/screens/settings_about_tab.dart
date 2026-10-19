@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../services/analytics_service.dart';
@@ -42,7 +43,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
       children: [
         _buildSection(
           context,

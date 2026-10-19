@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/cupertino.dart' hide RepeatMode;
 import 'package:flutter/foundation.dart';
@@ -13,9 +14,9 @@ import '../theme/design_tokens.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
-import '../services/subsonic_service.dart';
 import '../services/transcoding_service.dart';
 import 'album_artwork.dart';
+import 'luobo/glass.dart';
 
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTap;
@@ -73,11 +74,18 @@ class MiniPlayer extends StatelessWidget {
         // 玻璃样式固定（`liquidGlass` 用户开关已删除，方案 §7 ⑭）。
         // 迷你播放条属于**小面积固定元素**，允许毛玻璃；sigma 取 12 而非 24
         // 是为省 GPU —— 这条每帧都在渲染。
+        //
+        // 尺寸对齐飞牛（§6.3）：高 50dp、左右外边距 16dp、**圆角 = 高度/2 → 胶囊**。
         return RepaintBoundary(
           child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            margin: const EdgeInsets.fromLTRB(
+              LuoboGlass.barMarginX,
+              4,
+              LuoboGlass.barMarginX,
+              0,
+            ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(LuoboGlass.barRadius),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.18),
@@ -87,7 +95,7 @@ class MiniPlayer extends StatelessWidget {
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(LuoboGlass.barRadius),
               child: BackdropFilter(
                 filter: ImageFilter.blur(
                   sigmaX: LuoboGlass.blurBar,
@@ -100,12 +108,12 @@ class MiniPlayer extends StatelessWidget {
                     // 是松宽度约束（同 SettingsSubPage 踩过的坑）。这里原本靠
                     // `_MiniPlayerRow` 内部的 Row 撑开，写明确更稳。
                     width: double.infinity,
-                    height: 64,
+                    height: LuoboGlass.barHeight,
                     decoration: BoxDecoration(
                       color: isDark
                           ? Colors.black.withValues(alpha: 0.45)
                           : Colors.white.withValues(alpha: 0.62),
-                      borderRadius: BorderRadius.circular(22),
+                      borderRadius: BorderRadius.circular(LuoboGlass.barRadius),
                       border: Border.all(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.14)
@@ -113,49 +121,10 @@ class MiniPlayer extends StatelessWidget {
                         width: 0.8,
                       ),
                     ),
-                    child: Stack(
-                      children: [
-                        row,
-                        // 底部细进度线。
-                        // ⚠️ 原来默认（非玻璃）分支里有一条 LinearProgressIndicator
-                        // 显示播放进度，随「删 liquidGlass 用户开关」一并被删掉了 ——
-                        // 迷你条上没有进度，就等于「不点开播放页不知道听到哪了」。
-                        // 只包一层 Selector，避免整条播放条跟着进度每帧重建。
-                        Positioned(
-                          left: 14,
-                          right: 14,
-                          bottom: 4,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(1.5),
-                            child: SizedBox(
-                              height: 2.5,
-                              child: Selector<PlayerProvider, double>(
-                                selector: (_, p) => p.progress,
-                                builder: (_, progress, __) => Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ColoredBox(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.18)
-                                          : Colors.black.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                    ),
-                                    FractionallySizedBox(
-                                      alignment: Alignment.centerLeft,
-                                      widthFactor: progress.clamp(0.0, 1.0),
-                                      child: const ColoredBox(
-                                        color: LuoboAccent.accent,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    // ⚠️ 底部那条细进度线已删（§6.3）：条改成**胶囊**后贴底线会切过
+                    // 全圆的端头；进度改画到**封面外圈**的细环上（见 `_BarArtwork`），
+                    // 于是「对齐飞牛」与「二级页仍看得到进度」同时成立。
+                    child: row,
                   ),
                 ),
               ),
@@ -203,37 +172,22 @@ class _MiniPlayerRow extends StatelessWidget {
         children: [
           if (isPlayingRadio)
             Container(
-              width: 44,
-              height: 44,
+              width: LuoboGlass.barArtSize,
+              height: LuoboGlass.barArtSize,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [Color(0xFFFF2D55), Color(0xFFFF6B35)],
                 ),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(LuoboGlass.barArtRadius),
               ),
-              child: const Icon(Icons.radio, color: Colors.white, size: 24),
+              child: const Icon(Icons.radio, color: Colors.white, size: 20),
             )
           else
             GestureDetector(
               onLongPress: () => _showTranscodeToast(context),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: _networkBorderColor(context),
-                    width: 1.5,
-                  ),
-                ),
-                child: AlbumArtwork(
-                  coverArt: coverArt,
-                  size: 44,
-                  borderRadius: 6,
-                ),
-              ),
+              child: _BarArtwork(coverArt: coverArt),
             ),
           const SizedBox(width: 12),
           Expanded(
@@ -325,6 +279,170 @@ class _MiniPlayerRow extends StatelessWidget {
   }
 }
 
+/// 播放条封面的定位锚点 —— 长按浮层靠它算锚定坐标（§6.2「锚定而非居中」）。
+final GlobalKey barArtworkKey = GlobalKey(debugLabel: 'barArtwork');
+
+/// 播放条封面：**外圈进度环** + 贴封面的**转码描边**。
+///
+/// §6.2 的转码描边与 §6.3 的进度环都长在这个封面上 —— 合并成**一个** `CustomPaint`
+/// 统一绘制，避免两层各自包 `RepaintBoundary` 互相覆盖，也省一次绘制。
+///
+/// 环**不贴封面**（与封面留 ~2dp 间隙，飞牛实测见 §6.1）；**暂停时环与进度冻结在原位**，
+/// 不变暗、不隐藏（用户 2026-10-09 明确）。
+class _BarArtwork extends StatelessWidget {
+  const _BarArtwork({required this.coverArt});
+
+  final String? coverArt;
+
+  /// 外框总尺寸 = 封面 32 + 2×间隙 2 + 2×笔画 1.5 ≈ 39dp（§6.3 实测口径）。
+  static const double _box =
+      LuoboGlass.barArtSize + 2 * 2 + 2 * LuoboGlass.navArtRingWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return SizedBox(
+      key: barArtworkKey,
+      width: _box,
+      height: _box,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          // ⚠️ 必须用 `foregroundPainter` 而不是 `painter`：
+          // `painter` 画在 child **下面**，而「贴封面的转码描边」正好落在封面边缘
+          // 内侧 —— 会被 32dp 的封面**整个盖住**（用户 2026-10-09 反馈
+          // 「描边不是应该用转码/网络的颜色吗」，根因就是它压根没显示出来）。
+          // 轨道环在封面**外面**，画在上面不受影响。
+          foregroundPainter: _BarArtRingPainter(
+            progress: context.select<PlayerProvider, double>((p) => p.progress),
+            track: c.fg.withValues(alpha: LuoboGlass.ringTrackAlpha),
+            fill: c.fg.withValues(alpha: LuoboGlass.ringProgressAlpha),
+            artBorder: artworkBorderColor(context),
+          ),
+          child: Center(
+            child: AlbumArtwork(
+              coverArt: coverArt,
+              size: LuoboGlass.barArtSize,
+              borderRadius: LuoboGlass.barArtRadius,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 一次画完两件事：**外圈进度环**（灰轨道 + 深一档的填充）与**贴封面的转码描边**。
+class _BarArtRingPainter extends CustomPainter {
+  const _BarArtRingPainter({
+    required this.progress,
+    required this.track,
+    required this.fill,
+    required this.artBorder,
+  });
+
+  final double progress;
+  final Color track;
+  final Color fill;
+  final Color artBorder;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const w = LuoboGlass.navArtRingWidth;
+    const art = LuoboGlass.barArtSize;
+    const artR = LuoboGlass.barArtRadius;
+    const ringR = artR + 2;
+
+    // ── 外圈进度环：与封面同形（圆角矩形），且**不贴封面** ──
+    final ringRect = Rect.fromLTWH(
+      w / 2,
+      w / 2,
+      size.width - w,
+      size.height - w,
+    );
+    final ringPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(ringRect, const Radius.circular(ringR)));
+
+    canvas.drawPath(
+      ringPath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w
+        ..color = track,
+    );
+
+    final p = progress.clamp(0.0, 1.0);
+    if (p > 0) {
+      // ⚠️ **不能**对圆角矩形用 `drawArc` —— 那画出来的是**内切圆/椭圆**，
+      // 会与圆角矩形的轨道错开，观感就是「进度描边是圆的、封面是方的」
+      // （用户 2026-10-09 反馈）。改为沿轨道**路径**取一段长度。
+      //
+      // `RRect` 的路径起点在「上边、左上圆角结束处」，所以要先跳过
+      // 「起点 → 上边中点」这一段，进度才是从 12 点起笔。
+      // 该段长度 = 上边长的一半 = `ringRect.width / 2 - 圆角半径`
+      // （**不是**绝对坐标 —— `extractPath` 的偏移是相对路径起点的）。
+      _drawPathSegment(
+        canvas,
+        ringPath,
+        p,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w
+          ..strokeCap = StrokeCap.round
+          ..color = fill,
+        startOffset: ringRect.width / 2 - ringR,
+      );
+    }
+
+    // ── 贴封面的转码描边 ──
+    final artRect = Rect.fromLTWH(
+      (size.width - art) / 2,
+      (size.height - art) / 2,
+      art,
+      art,
+    ).deflate(w / 2);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(artRect, const Radius.circular(artR)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w
+        ..color = artBorder,
+    );
+  }
+
+  /// 沿 [path] 从 `startOffset` 处起笔、顺时针取 [fraction] 比例画出来（会绕回起点）。
+  static void _drawPathSegment(
+    Canvas canvas,
+    Path path,
+    double fraction,
+    Paint paint, {
+    required double startOffset,
+  }) {
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final total = metric.length;
+    if (total <= 0) return;
+
+    final target = total * fraction;
+    var drawn = 0.0;
+    var cursor = startOffset % total;
+    while (drawn < target) {
+      final seg = math.min(target - drawn, total - cursor);
+      if (seg <= 0) break;
+      canvas.drawPath(metric.extractPath(cursor, cursor + seg), paint);
+      drawn += seg;
+      cursor = 0;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarArtRingPainter old) =>
+      old.progress != progress ||
+      old.track != track ||
+      old.fill != fill ||
+      old.artBorder != artBorder;
+}
+
 class _MiniPlayerControls extends StatelessWidget {
   final bool isRadio;
 
@@ -365,7 +483,7 @@ class _MiniPlayerControls extends StatelessWidget {
                                 onPressed: provider.toggleFavorite,
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(
-                                    minWidth: 36, minHeight: 36),
+                                    minWidth: 34, minHeight: 34),
                                 icon: Icon(
                                   isStarred
                                       ? Icons.favorite_rounded
@@ -387,7 +505,7 @@ class _MiniPlayerControls extends StatelessWidget {
                                 onPressed: provider.toggleShuffle,
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(
-                                    minWidth: 36, minHeight: 36),
+                                    minWidth: 34, minHeight: 34),
                                 icon: Icon(
                                   CupertinoIcons.shuffle,
                                   size:
@@ -404,7 +522,7 @@ class _MiniPlayerControls extends StatelessWidget {
                           onPressed: provider.togglePlayPause,
                           padding: EdgeInsets.zero,
                           constraints:
-                              const BoxConstraints(minWidth: 40, minHeight: 40),
+                              const BoxConstraints(minWidth: 36, minHeight: 36),
                           icon: Icon(
                             isPlaying
                                 ? Icons.pause_rounded
@@ -429,7 +547,7 @@ class _MiniPlayerControls extends StatelessWidget {
                                 onPressed: provider.toggleRepeat,
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(
-                                    minWidth: 36, minHeight: 36),
+                                    minWidth: 34, minHeight: 34),
                                 icon: Icon(icon,
                                     size: ScreenHelper.miniPlayerIconSize(
                                         context)),
@@ -464,16 +582,35 @@ class _MiniPlayerControls extends StatelessWidget {
   }
 }
 
-/// Semi-transparent border color for the mini player artwork showing
-/// whether the server connection is local (Wi‑Fi / LAN, green) or remote
-/// (WAN, orange). Deliberately subtle so it doesn't steal attention.
-Color _networkBorderColor(BuildContext context) {
-  final isLan =
-      Provider.of<SubsonicService>(context, listen: false).isUsingLocalUrl;
+/// 「当前流**已转码**」。与 [isStreamTranscoding] 一起构成转码判定，
+/// **描边与长按浮层共用**，不写第二份（§6.2）。
+bool _isStreamTranscoded(BuildContext context) => Provider.of<PlayerProvider>(
+  context,
+  listen: false,
+).isActiveStreamTranscoded;
+
+/// 「当前流**正在**转码」。
+bool _isStreamTranscoding(BuildContext context) =>
+    Provider.of<TranscodingService>(
+      context,
+      listen: false,
+    ).getCurrentBitrate() !=
+    null;
+
+/// 播放条封面的**转码**描边色（§6.2）。
+///
+/// ⚠️ 原为**网络**维度（LAN 绿 / WAN 橙，且是硬编码 Material 的
+/// `green600` / `orange700`）—— 用户 2026-10-09 反馈「一橙一绿不协调」，改为
+/// **转码**维度：非转码 = 玫红 [LuoboAccent.accent]，转码 = 橙 [LuoboAccent.warnFor]。
+/// 色值复用 `docs/设置页重构技术方案.md` §9.2.1 的已定表。
+///
+/// 为什么协调：玫红 + 橙是**相邻暖色**（≈350° / 30°），玫红是品牌色（底栏选中气泡、
+/// 封面进度环用的都是它），橙**只在转码时出现** → 常态安静、异常才跳。
+Color artworkBorderColor(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  return isLan
-      ? (isDark ? const Color(0x804CAF50) : const Color(0x4D43A047))
-      : (isDark ? const Color(0x80FB8C00) : const Color(0x4DFB8C00));
+  return (_isStreamTranscoded(context) || _isStreamTranscoding(context))
+      ? LuoboAccent.warnFor(isDark)
+      : LuoboAccent.accent;
 }
 
 /// Currently visible transcode toast (replaced on re-trigger so repeated
@@ -520,13 +657,14 @@ void _showTranscodeToast(BuildContext context) {
   final network = isWifi ? l10n.networkWifi : l10n.networkMobile;
   final String statusLabel;
   final Color statusColor;
-  if (player.isActiveStreamTranscoded) {
+  // 判定复用 [_isStreamTranscoded] / [_isStreamTranscoding]，与封面描边**同一份**（§6.2）。
+  if (_isStreamTranscoded(context)) {
     statusLabel = l10n.transcodedToNoNetwork(
       TranscodeFormat.getLabel(player.activeStreamFormat ?? ''),
       player.activeStreamBitrate ?? 0,
     );
     statusColor = LuoboAccent.warnFor(isDark);
-  } else if (transcoding.getCurrentBitrate() != null) {
+  } else if (_isStreamTranscoding(context)) {
     statusLabel = l10n.transcodingInProgress(
       TranscodeFormat.getLabel(transcoding.getCurrentFormat() ?? ''),
       transcoding.getCurrentBitrate() ?? 0,
@@ -534,16 +672,26 @@ void _showTranscodeToast(BuildContext context) {
     statusColor = LuoboAccent.warnFor(isDark);
   } else {
     statusLabel = l10n.noTranscoding;
-    statusColor = theme.colorScheme.primary;
+    // 与描边的「非转码」同一色（§9.2.1 的「不转码 = 强调色」），
+    // 不用 `colorScheme.primary` —— 那是用户自选强调色，会与描边/底栏的固定玫红打架。
+    statusColor = LuoboAccent.accent;
   }
 
-  // Insert into the root overlay so the toast floats above every screen, and
-  // keep a reference to replace it on re-trigger instead of stacking.
+  // 锚定在播放条封面上（§6.2「锚定而非居中」，修 §2.8 #9）。
+  // 插入 root overlay 以浮在所有页面之上；重触发时替换而不是叠加。
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+  final anchorBox =
+      barArtworkKey.currentContext?.findRenderObject() as RenderBox?;
+  final Offset? anchorTopLeft = (anchorBox != null && overlayBox != null)
+      ? anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox)
+      : null;
+
   _transcodeToastEntry?.remove();
   late final OverlayEntry entry;
   entry = OverlayEntry(
-    builder: (overlayContext) => Center(
-      child: _TranscodeToast(
+    builder: (overlayContext) {
+      final card = _TranscodeToast(
         title: song.title,
         fileInfo: fileInfo,
         sampleInfo: sampleInfo,
@@ -552,23 +700,41 @@ void _showTranscodeToast(BuildContext context) {
         statusColor: statusColor,
         network: network,
         networkIcon: isWifi ? Icons.wifi_rounded : Icons.signal_cellular_alt,
-        networkColor: isWifi ? Colors.green : Colors.orange,
+        networkColor: isWifi ? LuoboAccent.wifi : LuoboAccent.cell,
         onDismiss: () {
           if (_transcodeToastEntry == entry) _transcodeToastEntry = null;
           if (entry.mounted) entry.remove();
         },
-      ),
-    ),
+      );
+
+      // 锚点拿不到（封面还没布局）时退回屏幕中下部的安全位置。
+      if (anchorTopLeft == null || overlayBox == null) {
+        return Align(alignment: const Alignment(0, 0.6), child: card);
+      }
+
+      const gap = 8.0;
+      // 卡片左缘对齐封面左缘，但不越出左右各 12dp 的安全边距。
+      final maxLeft = overlayBox.size.width - 12;
+      final left = anchorTopLeft.dx.clamp(12.0, maxLeft);
+      // 卡片**底边**贴封面顶边再往上留 gap → 视觉上「从播放条长出来」。
+      final bottom = overlayBox.size.height - anchorTopLeft.dy + gap;
+      return Stack(
+        children: [
+          Positioned(left: left, bottom: bottom, child: card),
+        ],
+      );
+    },
   );
   _transcodeToastEntry = entry;
-  Overlay.of(context, rootOverlay: true).insert(entry);
+  overlay.insert(entry);
 }
 
-/// Auto-dismissing toast card rendered in the screen center, styled like the
-/// app's centered SnackBar toasts (inverseSurface + rounded bar). Fades in on
-/// insertion and fades out before removal. The card itself is the only
-/// tappable area (tapping it dismisses early); everything around it passes
-/// through to the UI underneath.
+/// 长按播放条封面弹出的**转码信息卡**（§6.2）。
+///
+/// 材质用 [LuoboGlassSurface]（毛玻璃 + 圆角 20），与迷你播放条**同属玻璃材质** ——
+/// 观感是「从播放条长出来」；定位由调用方**锚定在封面上**（不再居中，修 §2.8 #9）。
+/// 从封面处淡入 + 轻微上移，出场反向；~2s 后自动消失，点卡片可提前关。
+/// 卡片自身是唯一的可点区域，四周的点击穿透到下层 UI。
 class _TranscodeToast extends StatefulWidget {
   final String title;
   final String fileInfo;
@@ -632,94 +798,99 @@ class _TranscodeToastState extends State<_TranscodeToast>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = LuoboColors.of(context);
     final sampleInfo = widget.sampleInfo;
     final depthInfo = widget.depthInfo;
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: LuoboMotion.enter,
+      reverseCurve: LuoboMotion.exit,
+    );
     return FadeTransition(
-      opacity: _controller,
-      child: GestureDetector(
-        onTap: () {
-          _controller.reverse().whenComplete(() {
-            if (mounted) _dismiss();
-          });
-        },
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Material(
-            // SnackBar 观感：inverseSurface 深色圆角条，与刷新提示
-            // （refresh_feedback.dart 的居中 SnackBar）视觉统一。
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            color: theme.colorScheme.inverseSurface,
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.3),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.colorScheme.onInverseSurface,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (widget.fileInfo.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+      opacity: curved,
+      // 从封面处**淡入 + 轻微上移**，出场反向（§6.2）。
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.12),
+          end: Offset.zero,
+        ).animate(curved),
+        child: GestureDetector(
+          onTap: () {
+            _controller.reverse().whenComplete(() {
+              if (mounted) _dismiss();
+            });
+          },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            // ⚠️ 原为 `Material` + `colorScheme.inverseSurface` 的居中深色条
+            // （SnackBar 配方、圆角 4）—— 与设计体系（白卡/毛玻璃 + 圆角 14/20 +
+            // 玫红点睛）完全不是一回事，且违反 §2.8 #9「锚定而非居中」。
+            // 现改为玻璃卡，与迷你播放条同材质。
+            // ⚠️ 必须包一层 `Material`（透明）：本卡挂在 **root overlay** 上，
+            // 祖先里没有 `Material` —— 不包的话里面的 `Text` 会落到 Flutter 的
+            // 「无样式文本」调试样式（**黄字 + 双下划线**）。
+            // 文档 §9.17 已记过这条教训：「写卡片容器一律用 `Material` 作卡体」。
+            child: Material(
+              type: MaterialType.transparency,
+              child: LuoboGlassSurface(
+                borderRadius: LuoboRadius.groupR,
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      widget.fileInfo,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onInverseSurface,
+                      widget.title,
+                      style: LuoboType.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: c.fg,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  if (sampleInfo.isNotEmpty || depthInfo.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      [sampleInfo, depthInfo]
-                          .where((s) => s.isNotEmpty)
-                          .join(' · '),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onInverseSurface.withValues(
-                          alpha: 0.7,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(
-                        widget.networkIcon,
-                        size: 16,
-                        color: widget.networkColor,
-                      ),
-                      const SizedBox(width: 6),
+                    if (widget.fileInfo.isNotEmpty) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        widget.network,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onInverseSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          widget.statusLabel,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: widget.statusColor,
-                          ),
-                        ),
+                        widget.fileInfo,
+                        style: LuoboType.caption.copyWith(color: c.fg2),
                       ),
                     ],
-                  ),
-                ],
+                    if (sampleInfo.isNotEmpty || depthInfo.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        [sampleInfo, depthInfo]
+                            .where((s) => s.isNotEmpty)
+                            .join(' · '),
+                        style: LuoboType.caption.copyWith(color: c.fg2),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          widget.networkIcon,
+                          size: 14,
+                          color: widget.networkColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.network,
+                          style: LuoboType.caption.copyWith(color: c.fg2),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.statusLabel,
+                            style: LuoboType.caption.copyWith(
+                              color: widget.statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

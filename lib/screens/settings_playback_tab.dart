@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/player_provider.dart';
 import '../services/replay_gain_service.dart';
@@ -58,7 +59,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
       children: [
         // 2026-10-08：「自动播放 / AutoDJ」小节已移除 —— 续播模式与「每次追加
         // 数量」搬到了首页「漫游」卡的长按面板（方案 §5.3「路 3」）。

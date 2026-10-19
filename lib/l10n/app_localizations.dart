@@ -250,12 +250,6 @@ abstract class AppLocalizations {
   /// **'Shuffle the whole library'**
   String get roamingSubtitle;
 
-  /// Home section title for the Roaming / Playlist / Favorites entry cards
-  ///
-  /// In en, this message translates to:
-  /// **'Quick Start'**
-  String get quickStart;
-
   /// Favorite playlists section title on home screen
   ///
   /// In en, this message translates to:

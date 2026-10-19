@@ -243,6 +243,31 @@ abstract final class LuoboSpacing {
   /// 二级页 `ListView` 的底部留白。
   static const double pageBottom = 32;
 
+  /// 覆盖式（§6.1）下二级页 `ListView` 的底部留白 = 设计值 + **条带净空**。
+  ///
+  /// `main_screen` 用 `Scaffold.extendBody`，框架已把「底栏 / 播放条」的高度写进
+  /// `MediaQuery.padding.bottom`（见 SDK 的 `_BodyBuilder`）—— 但**显式传 `padding`
+  /// 的 `ListView` 不会自动吃到它**，所以这些页面要显式加上。
+  /// 传 `padding: null` 的页面由框架自动处理，无需调用本函数。
+  static double pageBottomWithStrip(BuildContext context) =>
+      pageBottom + MediaQuery.paddingOf(context).bottom;
+
+  /// [pageBottomWithStrip] 的**通用形式**：`bottom + 条带净空`，可另带左右 / 上留白。
+  ///
+  /// ⚠️ 只用于**页面级**滚动视图。`DraggableScrollableSheet` / 底部 sheet 里的列表
+  /// **不要**用 —— 那些是浮层、本就在条带之上，加了会多出一大块空白。
+  static EdgeInsets scrollPadding(
+    BuildContext context, {
+    double horizontal = 0,
+    double top = 0,
+    double bottom = 0,
+  }) => EdgeInsets.only(
+    left: horizontal,
+    right: horizontal,
+    top: top,
+    bottom: bottom + MediaQuery.paddingOf(context).bottom,
+  );
+
   /// 渐变头图（服务器详情）的上下内边距。
   static const double headerY = 22;
 
@@ -349,12 +374,15 @@ abstract final class LuoboType {
     fontWeight: FontWeight.w600,
   );
 
-  /// 流体卡内的**主行**（叠在流体内，纯白）—— `FluidCardOverlay` 用。
+  /// 流体大卡（首页「漫游 / 收藏」与「你的歌单」）的标题 —— 叠在流体内，纯白。
   ///
-  /// 15px/w600 原先写死在组件里；本轮字体对齐把硬编码字号收敛到 token，故补此项。
-  static const TextStyle cardOverlayTitle = TextStyle(
-    fontSize: 15,
+  /// 19px/w600 —— 对标飞牛首页大卡（实测标题字号 ≈18dp / 粗体）；**取代**了旧的
+  /// `cardOverlayTitle`（15px，随 `FluidCardOverlay` 一起在 2026-10-09 下线）。
+  static const TextStyle heroCardTitle = TextStyle(
+    fontSize: 19,
     fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+    height: 1.1,
   );
 
   /// 徽章文字（服务器行「已连接」）。
@@ -381,17 +409,72 @@ abstract final class LuoboGlass {
   /// 玻璃圆钮直径（飞牛 / 箭头实测 119px @3x ≈ 40dp）。
   static const double circleButtonSize = 40;
 
-  /// 底栏高度。
+  /// 底栏胶囊宽度。
+  ///
+  /// 飞牛实测 **767px @3x = 256dp**（左 156px / 右 923px）→ **居中浮动，两侧各留 52dp**。
+  /// ⚠️ 飞牛同样是「3 图标 + 分隔线 + 封面」**4 槽**（与 Luobo 一一对应），
+  /// 所以 256dp 对 Luobo 同样成立 —— 单槽落到 **64dp**，而非满宽时的 84dp。
+  static const double navWidth = 256;
+
+  /// 底栏高度（飞牛实测 186px = 62dp）。
   static const double navHeight = 56;
 
   /// 底栏选中态实心圆直径。
   ///
-  /// 飞牛实测只有 ~20dp（**指示器**级），38 是「大按钮」观感、明显更重；
-  /// 折中取 30（图标 20 + 四周 5dp），既靠近飞牛又不至于装不下图标。
-  static const double navBubbleSize = 30;
+  /// ⚠️ **飞牛其实没有这个气泡** —— 它选中态是「**图标本身染玫红**」（且飞牛用的是
+  /// *填充*图标，Luobo 是 Lucide *线性*图标）。飞牛实测的 18.3dp 是那个**填充字形**的
+  /// 尺寸，不是气泡。所以这里不存在「照抄飞牛的值」—— 只能取「**刚好包住图标**」：
+  /// 图标 18dp（= 飞牛实测字形大小）+ 四周 3dp = **24dp**（原为 30 = 图标 20 + 5dp）。
+  static const double navBubbleSize = 24;
+
+  /// 底栏图标字形大小（飞牛实测未选中图标 53px @3x ≈ **18dp**）。
+  static const double navIconSize = 18;
 
   /// 专辑封面槽直径。
-  static const double navArtSize = 34;
+  ///
+  /// 飞牛实测 **135px @3x = 45dp**（≈ 图标 18dp 的 **2.5 倍**）→ 由 34 提到 45。
+  static const double navArtSize = 45;
+
+  /// 封面槽**外圈进度环**：外径 / 笔画 / 与封面之间的间隙。
+  ///
+  /// 飞牛实测：外径 156px = **52dp**、笔画 5px ≈ **1.67dp**、与封面间隙 5.5px ≈ **1.8dp**
+  /// （**环不贴封面**，用户 2026-10-09 明确）。环中心线直径 = 45 + 2×1.8 + 1.67 ≈ 50.3dp，
+  /// 与实测 50.3dp 吻合。
+  static const double navArtRingSize = 52;
+  static const double navArtRingWidth = 1.5;
+  static const double navArtRingGap = 2;
+
+  /// 进度环两档不透明度：**轨道 / 进度**。
+  ///
+  /// 与 `fg` **同源、只提一档** → **亮色下进度更深、深色下进度更亮**，
+  /// 一份定义覆盖双模式（用户 2026-10-09 描述：「灰环里填**更深**的颜色」）。
+  /// 亮色轨道落 ≈ `#CCCCCC`，对上飞牛实测的 `#CACACA`。
+  static const double ringTrackAlpha = 0.20;
+  static const double ringProgressAlpha = 0.55;
+
+  // ── 迷你播放条 ───────────────────────────────────────────────────────────
+  // 飞牛实测：高 **150px = 50dp**、宽 984px = 328dp（左右各 16dp）、
+  // 圆角 ≈68px = 22.7dp ≈ **高度/2 → 胶囊**、封面缩略图 97×101px ≈ **32dp**（圆角 ≈4dp）。
+
+  /// 播放条高度（由 64 收到 50）。
+  static const double barHeight = 50;
+
+  /// 播放条左右外边距（由 12 放到 16 → 条宽 328dp）。
+  static const double barMarginX = 16;
+
+  /// 播放条圆角 = **高度的一半** → 胶囊（飞牛实测 22.7 ≈ 50 ÷ 2）。
+  static const double barRadius = barHeight / 2;
+
+  /// 播放条封面缩略图尺寸与圆角（由 44 / 6 收到 32 / 4）。
+  static const double barArtSize = 32;
+  static const double barArtRadius = 4;
+
+  /// 底部条带距屏幕底的**最小**距离（飞牛实测 **34.3dp**，§6.3）。
+  ///
+  /// 实际取值 = `max(系统底部安全区, 本值)`：
+  /// 有些机型上报的安全区只有 ~16dp，会让条看起来「贴着底」（用户 2026-10-09 反馈
+  /// 「播放条太靠下」）；取较大值 → 既尊重系统安全区，又保证不小于飞牛的观感。
+  static const double stripBottomInset = 34;
 
   /// ⚠️ 深色玻璃圆钮的可见性来自「模糊 + 描边 + 阴影」，**tint 是黑色几乎不可见**。
   /// 因此它**不能放在纯色深色平面上**。纯色深底场景用 [LuoboGlass.needsStrongBorder]。

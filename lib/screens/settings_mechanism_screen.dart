@@ -31,7 +31,7 @@ class SettingsMechanismScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
         children: [
           for (final group in _buildGroups(l10n)) ...[
             _sectionHeader(context, group),
@@ -70,7 +70,7 @@ class SettingsMechanismDetailScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
         children: [
           _summaryCard(context, item),
           const SizedBox(height: 24),

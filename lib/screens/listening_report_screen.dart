@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import '../theme/design_tokens.dart';
 import '../services/recommendation_service.dart';
 import '../theme/app_theme.dart';
 
@@ -45,7 +46,7 @@ class ListeningReportScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 12, bottom: 12),
         children: [
           _OverviewSection(report: report),
           const SizedBox(height: 24),

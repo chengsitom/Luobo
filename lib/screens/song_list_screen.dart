@@ -126,7 +126,7 @@ class _SongListScreenState extends State<SongListScreen> {
 
   /// 记录本页 hero 用了流体背景（把 `frame.jank` 归属到实际渲染路径）。
   ///
-  /// 放到帧后，确保 route observer 已写入当前路由（同 `MixGridSection`）。
+  /// 放到帧后，确保 route observer 已写入当前路由。
   void _recordModeOnce() {
     if (_modeRecorded) return;
     _modeRecorded = true;

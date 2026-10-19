@@ -55,7 +55,7 @@ class SettingsStreamingTab extends StatelessWidget {
         }
 
         return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
           children: [
             _buildSection(
               title: AppLocalizations.of(context)!.sectionStreamingQuality,

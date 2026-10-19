@@ -33,11 +33,11 @@ class SettingsAboutPage extends StatelessWidget {
     return SettingsSubPage(
       title: l10n.settingsGroupAbout,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
           LuoboSpacing.pageY,
           LuoboSpacing.pageX,
-          LuoboSpacing.pageBottom,
+          LuoboSpacing.pageBottomWithStrip(context),
         ),
         children: [
           // ── App 图标 + 版本 ────────────────────────────────────────────

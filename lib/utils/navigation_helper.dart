@@ -73,4 +73,56 @@ class NavigationHelper {
     tabIndex.value = index;
     _onTabChanged?.call(index);
   }
+
+  /// 嵌套 Navigator 的**二级页深度**（`0` = 一级页）。
+  ///
+  /// 由 [secondaryDepthObserver] 在 `didPush` / `didPop` 维护。`main_screen` 用它决定
+  /// 底部条带显示**底栏**（一级页）还是**播放条**（二级页）—— 两者**互斥**（§6.1）。
+  ///
+  /// ⚠️ **只有挂在嵌套 Navigator 上的路由才算**：`_openNowPlaying` 落的是 **root**
+  /// navigator（播放页全屏不透明，本也不需要计入），`showLuoboSheet` 已
+  /// `useRootNavigator: true`（§9.19.1）—— 两者都**不计入**，所以这个值干净地等于
+  /// 「二级页层数」。
+  static final ValueNotifier<int> secondaryDepth = ValueNotifier<int>(0);
+
+  /// 维护 [secondaryDepth] 的观察者 —— 挂到 `main_screen` 的**嵌套** Navigator 上。
+  ///
+  /// 用**同一个实例**是刻意的：Navigator 会一直持有它，重复 `setState` 不会重复计数。
+  static final NavigatorObserver secondaryDepthObserver =
+      _SecondaryDepthObserver();
+}
+
+/// 见 [NavigationHelper.secondaryDepthObserver]。
+class _SecondaryDepthObserver extends NavigatorObserver {
+  void _bump(int delta) {
+    final next = NavigationHelper.secondaryDepth.value + delta;
+    NavigationHelper.secondaryDepth.value = next < 0 ? 0 : next;
+  }
+
+  /// 嵌套 Navigator 自己那条**初始**路由（`IndexedStack`）不算二级页 —— 它 `isFirst`。
+  static bool _counts(Route<dynamic>? route) =>
+      route != null && !route.isFirst;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_counts(route)) _bump(1);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_counts(route)) _bump(-1);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_counts(route)) _bump(-1);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final had = _counts(oldRoute);
+    final has = _counts(newRoute);
+    if (had && !has) _bump(-1);
+    if (!had && has) _bump(1);
+  }
 }

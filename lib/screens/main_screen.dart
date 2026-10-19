@@ -14,7 +14,6 @@ import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
-import '../widgets/home_v2_tokens.dart';
 import '../widgets/luobo/glass_pill_nav.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
@@ -174,11 +173,13 @@ class _MainScreenState extends State<MainScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _VersionBadge(
-                          label: l10n.updateCurrentVersion(
-                            UpdateService.currentVersion,
+                        Flexible(
+                          child: _VersionBadge(
+                            label: l10n.updateCurrentVersion(
+                              UpdateService.currentVersion,
+                            ),
+                            color: Colors.white24,
                           ),
-                          color: Colors.white24,
                         ),
                         const SizedBox(width: 8),
                         const Icon(
@@ -187,10 +188,12 @@ class _MainScreenState extends State<MainScreen> {
                           size: 16,
                         ),
                         const SizedBox(width: 8),
-                        _VersionBadge(
-                          label: l10n.updateLatestVersion(release.version),
-                          color: Colors.white.withValues(alpha: 0.3),
-                          bold: true,
+                        Flexible(
+                          child: _VersionBadge(
+                            label: l10n.updateLatestVersion(release.version),
+                            color: Colors.white.withValues(alpha: 0.3),
+                            bold: true,
+                          ),
                         ),
                       ],
                     ),
@@ -436,6 +439,18 @@ class _MainScreenState extends State<MainScreen> {
           },
           child: Scaffold(
             resizeToAvoidBottomInset: false,
+            // 覆盖式（§6.1）：内容延伸到屏幕底，底栏 / 播放条**悬浮**其上
+            // （飞牛首页的卡片会被底栏压住一半）。
+            //
+            // 用 `extendBody: true` + `bottomNavigationBar` 而不是手写 `Stack`：
+            // Scaffold 会据此把 body 包进一个 MediaQuery，令
+            // `padding.bottom = max(安全区, 条带高度)`（见 SDK 的 `_BodyBuilder`）——
+            // 于是页面里 `ListView(padding: null)` 与 `SafeArea` **自动**留出净空，
+            // 最后一条内容不会被永久压在玻璃下面。
+            //
+            // ⚠️ 因此**不再需要** `ColoredBox` 底色（§9.17.3 那个「色差带」的修法）——
+            // 条带现在是真悬浮，玻璃自己负责模糊，内容从下方流过。
+            extendBody: true,
             body: Column(
               children: [
                 if (widget.isOfflineMode || isLocalMode)
@@ -533,6 +548,9 @@ class _MainScreenState extends State<MainScreen> {
                 Expanded(
                   child: Navigator(
                     key: NavigationHelper.mobileNavigatorKey,
+                    // 维护 `NavigationHelper.secondaryDepth` → 底部条带据此在
+                    // 「底栏（一级页）」与「播放条（二级页）」之间二选一（§6.1）。
+                    observers: [NavigationHelper.secondaryDepthObserver],
                     onGenerateRoute: (settings) {
                       return MaterialPageRoute(
                         builder: (_) => IndexedStack(
@@ -552,23 +570,15 @@ class _MainScreenState extends State<MainScreen> {
                     },
                   ),
                 ),
-                // ⚠️ 底部条带必须**跟随当前 tab 的页面底色**：
-                // 首页亮色是纯白（`HomeV2Tokens`），音乐库/设置是全局 `#F2F2F7`，
-                // 而这条条带在 `Expanded` 内容区之外、露的是 Scaffold 的底色 ——
-                // 不跟的话首页底部会出现一条明显比内容暗的灰带，
-                // 观感就是「悬浮的播放条与底栏背后有一块背景」。
-                ColoredBox(
-                  color: _bottomStripBackground(context),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasCurrentSong) MiniPlayer(onTap: _openNowPlaying),
-                      // 玻璃样式固定为设计体系（liquidGlass 用户开关已删除）。
-                      _buildBottomNav(context),
-                    ],
-                  ),
-                ),
               ],
+            ),
+            bottomNavigationBar: ValueListenableBuilder<int>(
+              valueListenable: NavigationHelper.secondaryDepth,
+              builder: (context, depth, _) => _buildBottomStrip(
+                context,
+                isSecondary: depth > 0,
+                hasSong: hasCurrentSong,
+              ),
             ),
           ),
         );
@@ -591,6 +601,40 @@ class _MainScreenState extends State<MainScreen> {
     SystemNavigator.pop();
   }
 
+  /// 底部条带（覆盖式，悬浮在内容之上）—— 见 `Scaffold.extendBody` 的注释。
+  ///
+  /// §6.1：**一级页只出底栏、二级页只出播放条**（互斥）。对齐飞牛：一级页的
+  /// 「正在播放」入口是底栏的封面槽（带进度环），二级页没有底栏、才由播放条承担。
+  ///
+  /// ⚠️ **不加任何底色** —— 悬浮条带必须让内容从下方流过，玻璃自己负责模糊。
+  /// 系统安全区统一在这里加（而不是各自加），条带高度 = 这里的总高度，
+  /// 也正是 Scaffold 注入给 body 的 `padding.bottom`。
+  Widget _buildBottomStrip(
+    BuildContext context, {
+    required bool isSecondary,
+    required bool hasSong,
+  }) {
+    // 二级页且没有在播内容 → 条带整条不渲染（返回零高度，不挡点击）。
+    if (isSecondary && !hasSong) return const SizedBox.shrink();
+
+    // 飞牛实测条底边在屏幕底上方 **34.3dp**（§6.3）；部分机型上报的底部安全区
+    // 只有 ~16dp，会让条看起来「贴着底」—— 取两者较大值。
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final bottom = safeBottom > LuoboGlass.stripBottomInset
+        ? safeBottom
+        : LuoboGlass.stripBottomInset;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isSecondary) MiniPlayer(onTap: _openNowPlaying),
+          if (!isSecondary) _buildBottomNav(context),
+        ],
+      ),
+    );
+  }
+
   /// 底栏（C2 改造）—— 3 项纯图标（首页 / 音乐库 / **设置**）均匀分布
   /// + 分隔线 + 专辑封面等宽槽。
   ///
@@ -601,46 +645,46 @@ class _MainScreenState extends State<MainScreen> {
   /// - 搜索改由首页 / 音乐库右上角圆钮进入
   /// - **彩蛋页（连点搜索 11 次）已按用户要求移除**
   /// - 玻璃样式**固定为设计体系**（`liquidGlass` 用户开关已删除）
-  /// 底部条带（迷你播放条 + 底栏）的底色 —— 与当前 tab 的页面底色一致，
-  /// 避免两条悬浮元素背后出现色差带。首页有独立 token（亮色纯白）。
-  Color _bottomStripBackground(BuildContext context) => _currentIndex == 0
-      ? HomeV2Tokens.of(context).background
-      : LuoboColors.of(context).bg;
-
   Widget _buildBottomNav(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Selector<PlayerProvider, bool>(
       selector: (_, p) => p.currentSong != null,
       builder: (context, hasSong, _) => Padding(
-        padding:
-            EdgeInsets.fromLTRB(12, 6, 12, safeBottom > 0 ? safeBottom : 14),
-        child: GlassPillNav(
-          currentIndex: _currentIndex,
-          items: [
-            GlassPillNavItem(icon: AppIcons.home, label: l10n.home),
-            GlassPillNavItem(icon: AppIcons.library, label: l10n.library),
-            GlassPillNavItem(
-              icon: AppIcons.settings,
-              label: l10n.settingsTitle,
+        // 底部安全区由 [_buildBottomStrip] 统一加，这里只管与播放条之间的间隔。
+        padding: const EdgeInsets.only(top: 6),
+        // §6.1：飞牛实测 **256dp 居中浮动**（两侧各留 52dp），单槽落到 64dp。
+        // 用 `maxWidth` 而非固定宽 —— 窄屏不溢出，宽屏（平板）也保持 256dp 居中。
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: LuoboGlass.navWidth),
+            child: GlassPillNav(
+              currentIndex: _currentIndex,
+              items: [
+                GlassPillNavItem(icon: AppIcons.home, label: l10n.home),
+                GlassPillNavItem(icon: AppIcons.library, label: l10n.library),
+                GlassPillNavItem(
+                  icon: AppIcons.settings,
+                  label: l10n.settingsTitle,
+                ),
+              ],
+              onTap: (index) {
+                final navigatorState =
+                    NavigationHelper.mobileNavigatorKey.currentState;
+                navigatorState?.popUntil((route) => route.isFirst);
+                _setTab(index);
+              },
+              art: hasSong ? const _NavAlbumArt() : null,
+              onArtTap: _openNowPlaying,
             ),
-          ],
-          onTap: (index) {
-            final navigatorState =
-                NavigationHelper.mobileNavigatorKey.currentState;
-            navigatorState?.popUntil((route) => route.isFirst);
-            _setTab(index);
-          },
-          art: hasSong ? const _NavAlbumArt() : null,
-          onArtTap: _openNowPlaying,
+          ),
         ),
       ),
     );
   }
 }
 
-/// 底栏最右的**当前专辑圆封面**（点击进播放页）。
+/// 底栏最右的**当前专辑圆封面 + 外圈进度环**（点击进播放页）。
 /// 无播放时由 [GlassPillNav] 的 `art == null` 决定不渲染该槽。
 class _NavAlbumArt extends StatelessWidget {
   const _NavAlbumArt();
@@ -651,7 +695,14 @@ class _NavAlbumArt extends StatelessWidget {
     if (song == null) return const SizedBox.shrink();
     final coverArt = Provider.of<LibraryProvider>(context, listen: false)
         .effectiveCoverArt(song);
-    return AlbumArtwork(coverArt: coverArt, size: 34);
+    // ⚠️ 进度订阅只落在这个环上（不是整条底栏）—— 否则底栏的毛玻璃会跟着每帧重建。
+    return Selector<PlayerProvider, double>(
+      selector: (_, p) => p.progress,
+      builder: (context, progress, _) => LuoboNavArtRing(
+        progress: progress,
+        art: AlbumArtwork(coverArt: coverArt, size: LuoboGlass.navArtSize),
+      ),
+    );
   }
 }
 
@@ -674,12 +725,20 @@ class _VersionBadge extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+      // 窄屏下「当前版本 / 最新版本」两个徽标会超出弹窗宽度，
+      // 用 FittedBox 等比缩字而不是裁掉或换行，保证版本号始终完整可读。
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
       ),
     );

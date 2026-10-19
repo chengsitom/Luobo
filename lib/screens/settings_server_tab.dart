@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
@@ -65,7 +66,7 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 8, bottom: 32),
       children: [
         _buildSection(
           title: l10n.sectionServerConnection,
