@@ -150,13 +150,12 @@ jobs:
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
             echo "::error::缺少 ANDROID_KEYSTORE_BASE64 secret，无法用正式密钥签名。"
-            echo "请在仓库 Settings → Secrets and variables → Actions 中补齐三项："
-            echo "  ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD"
+            echo "请在仓库 Settings → Secrets and variables → Actions 中补齐两项："
+            echo "  ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD"
             exit 1
           fi
           if [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]; then
@@ -179,9 +178,13 @@ jobs:
           fi
           echo "✅ 探测到签名别名: $ALIAS"
 
+          # keystore 是 PKCS12：key 密码必须等于 store 密码。
+          # 因此 keyPassword 直接复用 storePassword，不再单独读
+          # ANDROID_KEY_PASSWORD（该 secret 极易粘贴带空格，导致
+          # "Get Key failed: Given final block not properly padded"）。
           cat > android/key.properties <<EOF
           storePassword=${ANDROID_KEYSTORE_PASSWORD}
-          keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}
+          keyPassword=${ANDROID_KEYSTORE_PASSWORD}
           keyAlias=${ALIAS}
           storeFile=luobo-release.jks
           EOF
