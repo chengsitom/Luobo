@@ -142,28 +142,47 @@ jobs:
 
       # release 包必须用正式 keystore 签名。secret 缺失时**直接失败**，
       # 不再回退 debug keystore（debug 签名无法覆盖安装正式包）。
+      #
+      # 别名不再从 secret 读，而是从 keystore 里自动探测：
+      # secret 粘贴时极易带上不可见空格/大小写差异，导致
+      # "No key with alias 'xxx' found" 这种与代码无关的失败。
       - name: Decode Android Keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
           if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
             echo "::error::缺少 ANDROID_KEYSTORE_BASE64 secret，无法用正式密钥签名。"
-            echo "请在仓库 Settings → Secrets and variables → Actions 中补齐四项："
-            echo "  ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD / ANDROID_KEY_ALIAS"
+            echo "请在仓库 Settings → Secrets and variables → Actions 中补齐三项："
+            echo "  ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+          if [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]; then
+            echo "::error::缺少 ANDROID_KEYSTORE_PASSWORD secret"
             exit 1
           fi
 
           echo "Decoding keystore from base64..."
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/luobo-release.jks
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/luobo-release.jks
+
+          # 用 keytool 探测别名（输出里含 "PrivateKeyEntry" 的那行，逗号前即别名）
+          ALIAS=$(keytool -list \
+            -keystore android/app/luobo-release.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>/dev/null \
+            | grep 'PrivateKeyEntry' | head -1 | sed 's/,.*//' | tr -d '[:space:]')
+
+          if [ -z "$ALIAS" ]; then
+            echo "::error::无法从 keystore 读取别名——多半是 ANDROID_KEYSTORE_PASSWORD 不正确"
+            exit 1
+          fi
+          echo "✅ 探测到签名别名: $ALIAS"
 
           cat > android/key.properties <<EOF
           storePassword=${ANDROID_KEYSTORE_PASSWORD}
-          keyPassword=${ANDROID_KEY_PASSWORD}
-          keyAlias=${ANDROID_KEY_ALIAS}
+          keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}
+          keyAlias=${ALIAS}
           storeFile=luobo-release.jks
           EOF
 
