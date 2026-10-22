@@ -376,6 +376,24 @@
   "@genres": {
     "description": "Genres section label"
   },
+  "albumLabel": "Album: {album}",
+  "@albumLabel": {
+    "description": "Song menu row (with album name)",
+    "placeholders": { "album": { "type": "String" } }
+  },
+  "artistLabel": "Artist: {artist}",
+  "@artistLabel": {
+    "description": "Song menu row (with artist name)",
+    "placeholders": { "artist": { "type": "String" } }
+  },
+  "addToPlaybackQueue": "Add to queue",
+  "songInfo": "Song info",
+  "year": "Year",
+  "genreLabel": "Genre",
+  "fileLocation": "Location",
+  "paramBitrate": "Bitrate",
+  "paramSampleRate": "Sample rate",
+  "paramBitDepth": "Bit depth",
   "years": "Years",
   "@years": {
     "description": "Years filter tab label"

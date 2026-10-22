@@ -275,6 +275,40 @@ class AppLocalizationsAz extends AppLocalizations {
   String get genres => 'Genres';
 
   @override
+  String albumLabel(String album) {
+    return 'Album: $album';
+  }
+
+  @override
+  String artistLabel(String artist) {
+    return 'Artist: $artist';
+  }
+
+  @override
+  String get addToPlaybackQueue => 'Add to queue';
+
+  @override
+  String get songInfo => 'Song info';
+
+  @override
+  String get year => 'Year';
+
+  @override
+  String get genreLabel => 'Genre';
+
+  @override
+  String get fileLocation => 'Location';
+
+  @override
+  String get paramBitrate => 'Bitrate';
+
+  @override
+  String get paramSampleRate => 'Sample rate';
+
+  @override
+  String get paramBitDepth => 'Bit depth';
+
+  @override
   String get years => 'Years';
 
   @override

@@ -91,6 +91,18 @@ class HomeRecommendationService extends ChangeNotifier {
   final Duration _prefDebounce;
 
   DateTime? _syncedCacheTime;
+
+  /// 是否已经同步过一次知识库缓存（与 [_syncedCacheTime] 配对使用）。
+  ///
+  /// 只比较时间戳是不够的：缓存文件存在但 `meta` 里没有时间戳时
+  /// （`getLastUpdateTime()` 返回 null），守卫
+  /// `updated != null && updated == _syncedCacheTime` 会永远放行，于是
+  /// [refreshKnowledgeFromCache] 每次调用都 `rebuildKnowledge()` +
+  /// `notifyListeners()`。而它是由 `build()` 里的 `generateFeed()` 调用的，
+  /// 于是形成「通知 → 重建 → 再生成 feed」的无限循环：实测 UI 线程 82%、
+  /// 帧率 ~8fps、[_feedRevision] 每秒 +11。
+  bool _knowledgeSynced = false;
+
   Timer? _prefDebounceTimer;
   String _lastStarredSignature = '';
 
@@ -140,9 +152,14 @@ class HomeRecommendationService extends ChangeNotifier {
     final cache = _knowledgeCache;
     if (cache == null || !cache.isInitialized) return;
     final updated = cache.getLastUpdateTime();
-    if (updated != null && updated == _syncedCacheTime) return;
-    rebuildKnowledge(cache.getAllTags());
+    // ⚠️ 守卫必须覆盖「时间戳为 null」的缓存。只判断 `updated != null` 时，
+    // 没有 meta 时间戳的缓存会让这里永远放行，与 `build()` 里的
+    // generateFeed 构成无限重建循环（见 [_knowledgeSynced]）。
+    if (_knowledgeSynced && updated == _syncedCacheTime) return;
+    // 先记状态再重建：rebuildKnowledge 会 notifyListeners，避免重入。
+    _knowledgeSynced = true;
     _syncedCacheTime = updated;
+    rebuildKnowledge(cache.getAllTags());
   }
 
   /// 收藏集合签名（排序拼串），用于识别「收藏是否变化」。

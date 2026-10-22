@@ -18,6 +18,7 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/diagnostics/diagnostics.dart';
 import '../services/subsonic_service.dart';
+import '../theme/app_icons.dart';
 import '../services/player_ui_settings_service.dart';
 import '../widgets/star_rating_widget.dart';
 import '../widgets/dolby_atmos_badge.dart';
@@ -32,6 +33,7 @@ import '../widgets/compact_lyrics_view.dart';
 import 'album_screen.dart';
 import 'car_mode_screen.dart';
 import '../widgets/multi_artist_widget.dart';
+import '../widgets/song_tile.dart' show SongMenuContext, showSongMenuSheet;
 import '../widgets/album_artwork.dart' show isLocalFilePath;
 
 const _kCarouselGap = 40.0;
@@ -2599,6 +2601,17 @@ class _SongInfoState extends State<_SongInfo> {
               color: _isStarred ? AppTheme.appleMusicRed : Colors.white,
               size: 26,
             ),
+          ),
+        if (!isAudiobook)
+          // 播放页变体 ⋮（设计稿/09 变体 B）：无横排主操作、无「收藏」——
+          // ♡ 已在左侧常驻（与 fnos 播放页一致）。
+          IconButton(
+            onPressed: () => showSongMenuSheet(
+              context,
+              song: widget.song!,
+              menuContext: SongMenuContext.player,
+            ),
+            icon: const Icon(AppIcons.moreV, color: Colors.white, size: 24),
           ),
       ],
     );

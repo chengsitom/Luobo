@@ -577,7 +577,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     if (success) {
       // 先取 root messenger，pop 后再显示——避免 SnackBar 因 context 随
       // pop 销毁而被吞。
-      final messenger = ScaffoldMessenger.of(context);
       // 统一 pop 回来源页（设置二级页 / 网关），带回 true 触发列表刷新：
       // - 设置二级页新增：回列表并刷新，不再被 popUntil 甩回首页；
       // - 网关（根）场景：pop 后 AuthWrapper 已按 state 换成 MainScreen，

@@ -706,6 +706,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     playlist: _playlist!.songs,
                     index: index,
                     showArtist: true,
+                    // ⋮ 菜单变体 C（设计稿/09）：歌单内 = 横排 + 收藏 + 从当前歌单移除。
+                    menuContext: SongMenuContext.playlist,
+                    onRemoveFromPlaylist: () {
+                      _removeSongFromPlaylist(index);
+                    },
                     // 逐首播放也记录「最近播放的歌单」。
                     onTap: () {
                       _recordPlayback();

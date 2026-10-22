@@ -3,6 +3,7 @@ import 'package:luobo/models/song.dart';
 import 'package:luobo/services/home_recommendation_service.dart';
 import 'package:luobo/services/recommendation_service.dart';
 import 'package:luobo/services/recommended_history_store.dart';
+import 'package:luobo/services/song_knowledge_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Song _song(
@@ -453,6 +454,29 @@ void main() {
 
       expect(daily.where((s) => s.artist == 'X').length, lessThanOrEqualTo(2));
       expect(daily.map((s) => s.albumId).toSet().length, daily.length);
+    });
+
+    test('缓存无时间戳时 refreshKnowledgeFromCache 只同步一次（防无限重建循环）',
+        () async {
+      // 复现线上事故：缓存文件存在但 meta 没有时间戳时
+      // （getLastUpdateTime() == null），旧守卫 `updated != null && …` 永远
+      // 放行，rebuildKnowledge + notifyListeners 会在每次 build 的
+      // generateFeed 里重复触发 → 首页无限重建（UI 线程 82%、~8fps）。
+      final cache = SongKnowledgeCache();
+      await cache.saveTags('a', '摇滚'); // _cache 非空、_lastUpdateTime 仍为 null
+      final svc = HomeRecommendationService(
+        behavior: behavior,
+        knowledgeCache: cache,
+      );
+      var notifies = 0;
+      svc.addListener(() => notifies++);
+
+      svc.refreshKnowledgeFromCache();
+      svc.refreshKnowledgeFromCache();
+      svc.refreshKnowledgeFromCache();
+
+      expect(notifies, 1, reason: '只有首次需要重建并通知');
+      expect(svc.feedRevision, 1);
     });
   });
 }

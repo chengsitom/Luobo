@@ -18,6 +18,7 @@ import '../theme/design_tokens.dart';
 import 'album_artwork.dart';
 import 'animated_equalizer.dart';
 import 'dolby_atmos_badge.dart';
+import 'luobo/action_grid.dart';
 import 'luobo/create_playlist_dialog.dart';
 import 'luobo/empty_state.dart';
 import 'luobo/luobo_toast.dart';
@@ -27,6 +28,21 @@ import 'multi_artist_widget.dart';
 import 'pressable_scale.dart';
 import '../screens/album_screen.dart';
 import '../screens/artist_screen.dart';
+
+/// 歌曲 `⋮` 菜单的调用来源（设计稿/09，规格见
+/// `docs/歌曲列表弹窗对标飞牛技术方案.md` §4.1）：
+/// 菜单按来源**显式裁剪**，不靠运行时猜；缺参时 [SongTile.menuContext]
+/// 默认 [SongMenuContext.list]（最全变体），避免漏项。
+enum SongMenuContext {
+  /// 列表页 / 首页：横排主操作 + 收藏 + 添加到歌单。
+  list,
+
+  /// 播放页：无横排主操作、无「收藏」（♡ 已在播放页常驻）。
+  player,
+
+  /// 歌单详情页内：同 [list]，多「从当前歌单移除」。
+  playlist,
+}
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -41,6 +57,13 @@ class SongTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
+  /// `⋮` 菜单的调用来源（默认 [SongMenuContext.list]）。
+  final SongMenuContext menuContext;
+
+  /// 仅 [SongMenuContext.playlist] 需要：从当前歌单移除的回调
+  /// （由调用方弹确认 + 执行移除；`null` 时菜单不出该项）。
+  final VoidCallback? onRemoveFromPlaylist;
+
   const SongTile({
     super.key,
     required this.song,
@@ -54,6 +77,8 @@ class SongTile extends StatelessWidget {
     this.titleMaxLines = 1,
     this.onTap,
     this.onLongPress,
+    this.menuContext = SongMenuContext.list,
+    this.onRemoveFromPlaylist,
   });
 
   /// Cached adaptive font sizes for the `artist • album` subtitle,
@@ -110,9 +135,9 @@ class SongTile extends StatelessWidget {
                   // 序号行（设计稿/08 §3）：两位补零 + 等宽数字，对齐 fnos「01/02」。
                   '${song.track ?? index ?? 1}'.padLeft(2, '0'),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.lightSecondaryText,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
+                    color: AppTheme.lightSecondaryText,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
         ),
       );
@@ -151,28 +176,33 @@ class SongTile extends StatelessWidget {
                     // 对标 fnos「封面内嵌播放按钮」）。状态由封面单一外显，
                     // 标题不再用主色/加粗。⚠️ 与右下角质量徽章（_buildQualityTag）
                     // 位置不同（中心 vs 角），互不遮挡。
-                    Center(
-                      child: Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          shape: BoxShape.circle,
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 6,
-                              offset: Offset(0, 1),
+                    // ⚠️ 必须用 Positioned.fill：裸 Center 是 Stack 的**非定位**
+                    // 子节点，会撑满上级宽松约束把行撑成整行宽（真机复现，
+                    // 2026-10-22 修复——S1 重写时丢掉了原 Positioned.fill 包装）。
+                    Positioned.fill(
+                      child: Center(
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            shape: BoxShape.circle,
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          // 三角形视觉重心偏左，右移 2px 使其在圆内居中。
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 2),
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              size: 15,
+                              color: Colors.black,
                             ),
-                          ],
-                        ),
-                        // 三角形视觉重心偏左，右移 2px 使其在圆内居中。
-                        child: const Padding(
-                          padding: EdgeInsets.only(left: 2),
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            size: 15,
-                            color: Colors.black,
                           ),
                         ),
                       ),
@@ -453,17 +483,25 @@ class SongTile extends StatelessWidget {
   }
 
   void _showOptions(BuildContext context) {
-    showGlassBottomSheet(
-      context: context,
-      builder: (context) => _SongOptionsSheet(song: song),
+    showSongMenuSheet(
+      context,
+      song: song,
+      menuContext: menuContext,
+      onRemoveFromPlaylist: onRemoveFromPlaylist,
     );
   }
 }
 
 class _SongOptionsSheet extends StatefulWidget {
   final Song song;
+  final SongMenuContext menuContext;
+  final VoidCallback? onRemoveFromPlaylist;
 
-  const _SongOptionsSheet({required this.song});
+  const _SongOptionsSheet({
+    required this.song,
+    this.menuContext = SongMenuContext.list,
+    this.onRemoveFromPlaylist,
+  });
 
   @override
   State<_SongOptionsSheet> createState() => _SongOptionsSheetState();
@@ -475,6 +513,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
   final _offlineService = OfflineService();
+
+  /// 竖列行规格（方案 §9）：行高 52（文字 20 + 上下 16）+ 卡间 gap 12。
+  static const _rowPadding = EdgeInsets.symmetric(horizontal: 14, vertical: 16);
+  static const double _rowGap = 12;
 
   @override
   void initState() {
@@ -489,185 +531,179 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final song = widget.song;
     final l10n = AppLocalizations.of(context)!;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final isPlayer = widget.menuContext == SongMenuContext.player;
+    final isPlaylist = widget.menuContext == SongMenuContext.playlist;
+    final coverArt = Provider.of<LibraryProvider>(context, listen: false)
+        .effectiveCoverArt(song);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 5,
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-                borderRadius: BorderRadius.circular(2.5),
+    // 三段式（设计稿/09）：上下文头 → 主操作横排（非 player）→ 竖列行。
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SongMenuHeader(song: song, coverArt: coverArt),
+        if (!isPlayer) ...[
+          const SizedBox(height: 15),
+          LuoboActionGrid(
+            items: [
+              LuoboActionItem(
+                icon: AppIcons.play,
+                label: l10n.play,
+                onTap: () {
+                  Navigator.pop(context);
+                  playerProvider.playSong(song);
+                },
               ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  AlbumArtwork(
-                    coverArt:
-                        Provider.of<LibraryProvider>(context, listen: false)
-                            .effectiveCoverArt(widget.song),
-                    size: 60,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.song.title,
-                          style: theme.textTheme.titleMedium,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (widget.song.artist != null)
-                          Text(
-                            widget.song.artist!,
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+              LuoboActionItem(
+                icon: AppIcons.skipForward,
+                label: l10n.playNext,
+                onTap: () {
+                  playerProvider.addToQueueNext(song);
+                  Navigator.pop(context);
+                },
               ),
-            ),
-            // Compact audio quality info, shown directly in the sheet so no
-            // navigation / sheet-stacking is needed.
-            const SizedBox(height: 16),
-            _QualityInfo(song: widget.song),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _OptionTile(
-                      icon: _isStarred
-                          ? CupertinoIcons.heart_fill
-                          : CupertinoIcons.heart,
-                      title: _isStarred
-                          ? l10n.removeFromLikedSongs
-                          : l10n.addToLikedSongs,
-                      iconColor: _isStarred
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                      onTap: () async {
-                        await _toggleFavorite(context);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                    _OptionTile(
-                      icon: Icons.play_arrow_rounded,
-                      title: l10n.playNext,
-                      onTap: () {
-                        playerProvider.addToQueueNext(widget.song);
-                        Navigator.pop(context);
-                      },
-                    ),
-                    _OptionTile(
-                      icon: Icons.queue_music_rounded,
-                      title: l10n.addToQueue,
-                      onTap: () {
-                        playerProvider.addToQueue(widget.song);
-                        Navigator.pop(context);
-                      },
-                    ),
-                    _OptionTile(
-                      icon: Icons.playlist_add_rounded,
-                      title: AppLocalizations.of(context)!.addToPlaylist,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _showPlaylistPicker(context, widget.song);
-                      },
-                    ),
-                    _OptionTile(
-                      icon: Icons.album_rounded,
-                      title: l10n.goToAlbum,
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (widget.song.albumId != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  AlbumScreen(albumId: widget.song.albumId!),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    _OptionTile(
-                      icon: Icons.person_rounded,
-                      title: l10n.goToArtist,
-                      onTap: () {
-                        final nav = Navigator.of(context);
-                        nav.pop();
-                        _navigateToArtist(nav);
-                      },
-                    ),
-                    _buildRatingTile(context),
-                    _buildDownloadTile(context),
-                    const SizedBox(height: 16),
-                  ],
-                ),
+              LuoboActionItem(
+                icon: AppIcons.queue,
+                label: l10n.addToPlaybackQueue,
+                onTap: () {
+                  playerProvider.addToQueue(song);
+                  Navigator.pop(context);
+                },
               ),
-            ),
-          ],
+            ],
+          ),
+        ],
+        const SizedBox(height: 12),
+        // 专辑：xxx —— 有 albumId 才可点。
+        LuoboSheetRow(
+          title: l10n.albumLabel(song.album ?? '—'),
+          contentPadding: _rowPadding,
+          gap: _rowGap,
+          trailing:
+              const Icon(AppIcons.album, size: 18, color: LuoboAccent.accent),
+          onTap: song.albumId == null
+              ? null
+              : () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AlbumScreen(albumId: song.albumId!),
+                    ),
+                  );
+                },
         ),
-      ),
+        // 歌手：xxx —— 有 artistId 才可点。
+        LuoboSheetRow(
+          title: l10n.artistLabel(song.artist ?? '—'),
+          contentPadding: _rowPadding,
+          gap: _rowGap,
+          trailing:
+              const Icon(AppIcons.artist, size: 18, color: LuoboAccent.accent),
+          onTap: song.artistId == null
+              ? null
+              : () {
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  _navigateToArtist(nav);
+                },
+        ),
+        _buildDownloadTile(context),
+        if (!isPlayer)
+          LuoboSheetRow(
+            title:
+                _isStarred ? l10n.removeFromLikedSongs : l10n.addToLikedSongs,
+            contentPadding: _rowPadding,
+            gap: _rowGap,
+            trailing: Icon(
+              AppIcons.heart,
+              size: 18,
+              color: _isStarred
+                  ? LuoboAccent.accent
+                  : Theme.of(context).colorScheme.primary,
+            ),
+            onTap: () async {
+              await _toggleFavorite(context);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+        LuoboSheetRow(
+          title: l10n.addToPlaylist,
+          contentPadding: _rowPadding,
+          gap: _rowGap,
+          trailing: const Icon(AppIcons.playlist,
+              size: 18, color: LuoboAccent.accent),
+          onTap: () {
+            Navigator.pop(context);
+            _showPlaylistPicker(context, song);
+          },
+        ),
+        if (isPlaylist && widget.onRemoveFromPlaylist != null)
+          LuoboSheetRow(
+            title: l10n.removeFromPlaylist,
+            contentPadding: _rowPadding,
+            gap: _rowGap,
+            trailing: const Icon(AppIcons.playlist,
+                size: 18, color: LuoboAccent.accent),
+            onTap: () {
+              Navigator.pop(context);
+              widget.onRemoveFromPlaylist!();
+            },
+          ),
+        LuoboSheetRow(
+          title: l10n.songInfo,
+          contentPadding: _rowPadding,
+          gap: 0,
+          trailing:
+              const Icon(AppIcons.info, size: 18, color: LuoboAccent.accent),
+          onTap: () {
+            Navigator.pop(context);
+            showSongInfoSheet(context, song);
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildDownloadTile(BuildContext context) {
     final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
         AuthState.offlineMode;
+    final l10n = AppLocalizations.of(context)!;
 
     if (_isDownloading) {
-      return ListTile(
-        leading: SizedBox(
-          width: 24,
-          height: 24,
+      // 下载进度行（竖列行规格 52 高）。
+      return LuoboSheetRow(
+        title: l10n.downloading((_downloadProgress * 100).toInt()),
+        contentPadding: _rowPadding,
+        gap: _rowGap,
+        trailing: SizedBox(
+          width: 18,
+          height: 18,
           child: CircularProgressIndicator(
             value: _downloadProgress > 0 ? _downloadProgress : null,
             strokeWidth: 2,
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
-        title: Text(
-          AppLocalizations.of(
-            context,
-          )!
-              .downloading((_downloadProgress * 100).toInt()),
-        ),
       );
     }
 
     if (_isDownloaded) {
-      return _OptionTile(
-        icon: Icons.download_done_rounded,
-        title: AppLocalizations.of(context)!.downloaded,
-        iconColor: Colors.green,
+      return LuoboSheetRow(
+        title: l10n.downloaded,
+        contentPadding: _rowPadding,
+        gap: _rowGap,
+        trailing: const Icon(
+          Icons.download_done_rounded,
+          size: 18,
+          color: Colors.green,
+        ),
         onTap: () async {
-          final l10n = AppLocalizations.of(context)!;
           final confirm = await showLuoboConfirmSheet(
             context: context,
             title: l10n.removeDownload,
@@ -693,9 +729,15 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
 
     if (isOffline) return const SizedBox.shrink();
 
-    return _OptionTile(
-      icon: Icons.download_rounded,
-      title: AppLocalizations.of(context)!.download,
+    return LuoboSheetRow(
+      title: l10n.download,
+      contentPadding: _rowPadding,
+      gap: _rowGap,
+      trailing: const Icon(
+        Icons.download_rounded,
+        size: 18,
+        color: LuoboAccent.accent,
+      ),
       onTap: () => _downloadSong(context),
     );
   }
@@ -759,105 +801,6 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     }
   }
 
-  Widget _buildRatingTile(BuildContext context) {
-    final rating = widget.song.userRating ?? 0;
-    final l10n = AppLocalizations.of(context)!;
-    return _OptionTile(
-      icon: Icons.star_rounded,
-      title: rating > 0 ? l10n.rateSongWithRating(rating) : l10n.rateSong,
-      iconColor: rating > 0 ? Colors.amber : null,
-      onTap: () => _showRatingDialog(context),
-    );
-  }
-
-  Future<void> _showRatingDialog(BuildContext context) async {
-    final currentRating = widget.song.userRating ?? 0;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.rateSong),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.song.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                final starValue = index + 1;
-                return Flexible(
-                  child: IconButton(
-                    icon: Icon(
-                      starValue <= currentRating
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
-                      color: Colors.amber,
-                      size: 32,
-                    ),
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await _setRating(context, starValue);
-                    },
-                  ),
-                );
-              }),
-            ),
-            if (currentRating > 0) ...[
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await _setRating(context, 0);
-                },
-                child: Text(AppLocalizations.of(ctx)!.removeRating),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppLocalizations.of(ctx)!.cancel),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _setRating(BuildContext context, int rating) async {
-    final subsonicService = Provider.of<SubsonicService>(
-      context,
-      listen: false,
-    );
-    final l10n = AppLocalizations.of(context)!;
-
-    try {
-      await subsonicService.setRating(widget.song.id, rating);
-
-      if (mounted) {
-        showLuoboToast(
-          context,
-          message: rating > 0 ? l10n.songRated(rating) : l10n.ratingRemoved,
-          tone: LuoboToastTone.info,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        showLuoboToast(
-          context,
-          message: l10n.failedToSetRating(e),
-          tone: LuoboToastTone.error,
-        );
-      }
-    }
-  }
-
   Future<void> _toggleFavorite(BuildContext context) async {
     final subsonicService = Provider.of<SubsonicService>(
       context,
@@ -879,14 +822,11 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             tone: LuoboToastTone.info,
             actionLabel: l10n.undo,
             onAction: () {
-              subsonicService
-                  .star(id: widget.song.id)
-                  .then((_) {
-                    if (mounted) {
-                      setState(() => _isStarred = true);
-                    }
-                  })
-                  .catchError((Object _) {});
+              subsonicService.star(id: widget.song.id).then((_) {
+                if (mounted) {
+                  setState(() => _isStarred = true);
+                }
+              }).catchError((Object _) {});
             },
           );
         }
@@ -902,14 +842,11 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             tone: LuoboToastTone.success,
             actionLabel: l10n.undo,
             onAction: () {
-              subsonicService
-                  .unstar(id: widget.song.id)
-                  .then((_) {
-                    if (mounted) {
-                      setState(() => _isStarred = false);
-                    }
-                  })
-                  .catchError((Object _) {});
+              subsonicService.unstar(id: widget.song.id).then((_) {
+                if (mounted) {
+                  setState(() => _isStarred = false);
+                }
+              }).catchError((Object _) {});
             },
           );
         }
@@ -976,247 +913,344 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     // 设计稿/08 §5（规格见 `docs/歌曲列表弹窗对标飞牛技术方案.md` §4.3）：
     // 无标题 + 保留把手；「新建歌单」行置顶（玫红圆角方 + 白＋）；
     // 已有歌单显示封面缩略图 + 「N 首」；无歌单时显示空态（EmptyState）。
+    // ⚠️ isScrollControlled + 可滚动：歌单多时防止列表被 50% 屏高裁掉。
     showLuoboSheet(
       context: context,
-      builder: (ctx) => Column(
+      isScrollControlled: true,
+      builder: (ctx) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LuoboSheetRow(
+              leading: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: LuoboAccent.accent,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(AppIcons.plus, size: 16, color: Colors.white),
+              ),
+              title: l10n.newPlaylist,
+              showChevron: false,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                showCreatePlaylistDialog(context);
+              },
+            ),
+            if (libraryProvider.playlists.isEmpty)
+              const LuoboEmptyState(
+                message: '还没有歌单，先建一个吧~',
+              )
+            else
+              ...libraryProvider.playlists.map(
+                (playlist) => LuoboSheetRow(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: SizedBox(
+                      width: 38,
+                      height: 38,
+                      child: playlist.coverArt != null
+                          ? AlbumArtwork(
+                              coverArt: playlist.coverArt,
+                              size: 38,
+                              borderRadius: 7,
+                            )
+                          : Container(
+                              color: LuoboAccent.soft(0.12),
+                              child: const Icon(
+                                CupertinoIcons.music_note_list,
+                                size: 18,
+                                color: LuoboAccent.accent,
+                              ),
+                            ),
+                    ),
+                  ),
+                  title: playlist.name,
+                  subtitle: l10n.songsCount(playlist.songCount ?? 0),
+                  showChevron: false,
+                  onTap: () async {
+                    Navigator.pop(ctx);
+
+                    final subsonicService = Provider.of<SubsonicService>(
+                      context,
+                      listen: false,
+                    );
+
+                    try {
+                      await subsonicService.updatePlaylist(
+                        playlistId: playlist.id,
+                        songIdsToAdd: [song.id],
+                      );
+                      await libraryProvider.loadPlaylists();
+                      if (!mounted) return;
+
+                      // 轻提示（设计稿/08 §6）：可逆操作带「撤销」——刚加的歌
+                      // 在歌单末尾（下标 = 添加前的 songCount），按 index 移除。
+                      showLuoboToast(
+                        context,
+                        message: l10n.addedToPlaylist(
+                          song.title,
+                          playlist.name,
+                        ),
+                        tone: LuoboToastTone.success,
+                        actionLabel: l10n.undo,
+                        onAction: () {
+                          subsonicService
+                              .updatePlaylist(
+                                playlistId: playlist.id,
+                                songIndexesToRemove: [playlist.songCount ?? 0],
+                              )
+                              .then((_) => libraryProvider.loadPlaylists())
+                              .catchError((Object _) {
+                                // 撤销失败只记录，不再弹（服务器已变时索引可能错位）。
+                                debugPrint(
+                                  'Undo add-to-playlist failed for ${playlist.id}',
+                                );
+                              });
+                        },
+                      );
+                    } catch (e) {
+                      debugPrint('Error adding song to playlist: $e');
+                      if (!mounted) return;
+                      showLuoboToast(
+                        context,
+                        message: l10n.errorAddingToPlaylist(e),
+                        tone: LuoboToastTone.error,
+                      );
+                    }
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ⋮ 菜单的上下文头（设计稿/09）：封面 46 r9 + 歌名 15/600 + 歌手 12（方案 §9）。
+class _SongMenuHeader extends StatelessWidget {
+  final Song song;
+  final String? coverArt;
+
+  const _SongMenuHeader({required this.song, this.coverArt});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return Row(
+      children: [
+        AlbumArtwork(coverArt: coverArt, size: 46),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                song.title,
+                style: LuoboType.body.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (song.artist != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  song.artist!,
+                  style: LuoboType.caption.copyWith(color: c.fg2),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 只读歌曲信息卡（设计稿/09；规格见
+/// `docs/歌曲列表弹窗对标飞牛技术方案.md` §4.8）：
+/// 「歌曲信息」入口的落点——**无输入框、无保存按钮、无修改歌手/风格选择器**
+/// （后端无写标签接口，编辑一律不做）。可滚动。
+///
+/// 内容：大封面 150 + 歌名/歌手 → 技术参数横排卡（码率/采样率/位深，
+/// **有值才显示**，全无则整卡隐藏）→ 只读信息行（专辑/年份/曲目序号/风格/
+/// 格式/文件位置，**字段缺省整行隐藏**）。
+Future<void> showSongInfoSheet(BuildContext context, Song song) {
+  final l10n = AppLocalizations.of(context)!;
+  final coverArt = Provider.of<LibraryProvider>(context, listen: false)
+      .effectiveCoverArt(song);
+
+  // 技术参数：值有才显示（方案 §7⑦：声道数无解析，用位深列）。
+  final params = <(String, String)>[
+    if (song.bitRate != null && song.bitRate! > 0)
+      ('${song.bitRate} kbps', l10n.paramBitrate),
+    if (song.formattedSampleRate.isNotEmpty)
+      (song.formattedSampleRate, l10n.paramSampleRate),
+    if (song.bitDepth != null) ('${song.bitDepth} bit', l10n.paramBitDepth),
+  ];
+
+  // 只读信息行：缺省整行隐藏。
+  final rows = <(String, String)>[
+    if (song.album != null && song.album!.isNotEmpty)
+      (l10n.albums, song.album!),
+    if (song.year != null) (l10n.year, '${song.year}'),
+    if (song.track != null) (l10n.trackNumber(song.track!), ''),
+    if (song.genre != null && song.genre!.isNotEmpty)
+      (l10n.genreLabel, song.genre!),
+    if (song.suffix != null && song.suffix!.isNotEmpty)
+      (l10n.format, song.suffix!.toUpperCase()),
+    if (song.path != null && song.path!.isNotEmpty)
+      (l10n.fileLocation, song.path!),
+  ];
+
+  return showLuoboSheet(
+    context: context,
+    title: l10n.songInfo,
+    isScrollControlled: true,
+    builder: (ctx) => SingleChildScrollView(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LuoboSheetRow(
-            leading: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: LuoboAccent.accent,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(AppIcons.plus, size: 16, color: Colors.white),
+          Center(
+            child: AlbumArtwork(
+              coverArt: coverArt,
+              size: 150,
+              borderRadius: 14,
             ),
-            title: l10n.newPlaylist,
-            showChevron: false,
-            onTap: () {
-              Navigator.of(ctx).pop();
-              showCreatePlaylistDialog(context);
-            },
           ),
-          if (libraryProvider.playlists.isEmpty)
-            const LuoboEmptyState(
-              message: '还没有歌单，先建一个吧~',
-            )
-          else
-            ...libraryProvider.playlists.map(
-              (playlist) => LuoboSheetRow(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(7),
-                  child: SizedBox(
-                    width: 38,
-                    height: 38,
-                    child: playlist.coverArt != null
-                        ? AlbumArtwork(
-                            coverArt: playlist.coverArt,
-                            size: 38,
-                            borderRadius: 7,
-                          )
-                        : Container(
-                            color: LuoboAccent.soft(0.12),
-                            child: const Icon(
-                              CupertinoIcons.music_note_list,
-                              size: 18,
-                              color: LuoboAccent.accent,
+          const SizedBox(height: 14),
+          Text(
+            song.title,
+            textAlign: TextAlign.center,
+            style: LuoboType.navTitle.copyWith(fontSize: 17),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (song.artist != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              song.artist!,
+              textAlign: TextAlign.center,
+              style: LuoboType.caption.copyWith(
+                color: LuoboColors.of(ctx).fg2,
+              ),
+            ),
+          ],
+          if (params.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            // 技术参数横排卡：整宽、高 64、3 列等分（方案 §9）。
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: LuoboColors.of(ctx).card,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  for (final (i, p) in params.indexed) ...[
+                    if (i > 0)
+                      Container(
+                        width: 0.5,
+                        height: 36,
+                        color: LuoboColors.of(ctx).divider,
+                      ),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            p.$1,
+                            style: LuoboType.body.copyWith(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                  ),
-                ),
-                title: playlist.name,
-                subtitle: l10n.songsCount(playlist.songCount ?? 0),
-                showChevron: false,
-                onTap: () async {
-                  Navigator.pop(ctx);
-
-                  final subsonicService = Provider.of<SubsonicService>(
-                    context,
-                    listen: false,
-                  );
-
-                  try {
-                    await subsonicService.updatePlaylist(
-                      playlistId: playlist.id,
-                      songIdsToAdd: [song.id],
-                    );
-                    await libraryProvider.loadPlaylists();
-                    if (!mounted) return;
-
-                    // 轻提示（设计稿/08 §6）：可逆操作带「撤销」——刚加的歌
-                    // 在歌单末尾（下标 = 添加前的 songCount），按 index 移除。
-                    showLuoboToast(
-                      context,
-                      message: l10n.addedToPlaylist(
-                        song.title,
-                        playlist.name,
+                          const SizedBox(height: 4),
+                          Text(
+                            p.$2,
+                            style: LuoboType.caption.copyWith(
+                              color: LuoboColors.of(ctx).fg2,
+                            ),
+                          ),
+                        ],
                       ),
-                      tone: LuoboToastTone.success,
-                      actionLabel: l10n.undo,
-                      onAction: () {
-                        subsonicService
-                            .updatePlaylist(
-                              playlistId: playlist.id,
-                              songIndexesToRemove: [playlist.songCount ?? 0],
-                            )
-                            .then((_) => libraryProvider.loadPlaylists())
-                            .catchError((Object _) {
-                          // 撤销失败只记录，不再弹（服务器已变时索引可能错位）。
-                          debugPrint(
-                            'Undo add-to-playlist failed for ${playlist.id}',
-                          );
-                        });
-                      },
-                    );
-                  } catch (e) {
-                    debugPrint('Error adding song to playlist: $e');
-                    if (!mounted) return;
-                    showLuoboToast(
-                      context,
-                      message: l10n.errorAddingToPlaylist(e),
-                      tone: LuoboToastTone.error,
-                    );
-                  }
-                },
+                    ),
+                  ],
+                ],
               ),
             ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact quality info shown inline in the song options sheet — no
-/// navigation or stacking. Displays original file info plus the actual
-/// transcode state of the current stream, or the settings-implied state
-/// for songs that aren't currently playing.
-class _QualityInfo extends StatelessWidget {
-  final Song song;
-
-  const _QualityInfo({required this.song});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final l10n = AppLocalizations.of(context)!;
-    final transcoding = Provider.of<TranscodingService>(context);
-
-    // Original file info
-    final format = song.suffix?.toUpperCase() ?? '';
-    final bitrate = song.bitRate;
-    final size = song.formattedSize;
-
-    final fileParts = <String>[];
-    if (format.isNotEmpty) fileParts.add(format);
-    if (bitrate != null && bitrate > 0) fileParts.add('$bitrate kbps');
-    if (size.isNotEmpty) fileParts.add(size);
-    final fileInfo = fileParts.join(' · ');
-    final sampleInfo = song.formattedSampleRate;
-    final depthInfo = song.bitDepth != null ? '${song.bitDepth} bit' : '';
-
-    // Transcode status — actual for the current stream, settings-implied
-    // otherwise.
-    //
-    // ⚠️ 与 `utils/connection_status.dart`（账号卡短形态）**故意不合并**：
-    // 这里要区分「这首歌就是当前曲目」（已转码）与「不是当前曲目，但按当前
-    // 网络设置会被转码」两种情况，而短形态没有「非当前曲目」这个维度。
-    // 三处共享的橙色深浅档已收敛到 `LuoboAccent.warnFor`。
-    final player = Provider.of<PlayerProvider>(context, listen: false);
-    final isCurrent =
-        player.currentSong?.id == song.id && !player.isPlayingRadio;
-    final network = transcoding.currentConnectionType == ConnectionType.wifi
-        ? l10n.networkWifi
-        : l10n.networkMobile;
-    String statusLabel;
-    Color? statusColor;
-    IconData statusIcon;
-    if (isCurrent && player.isActiveStreamTranscoded) {
-      statusLabel = l10n.transcodedTo(
-        TranscodeFormat.getLabel(player.activeStreamFormat ?? ''),
-        player.activeStreamBitrate ?? 0,
-        network,
-      );
-      statusColor = LuoboAccent.warnFor(isDark);
-      statusIcon = Icons.speed_rounded;
-    } else if (!isCurrent && transcoding.getCurrentBitrate() != null) {
-      statusLabel = l10n.streamWillTranscodeTo(
-        TranscodeFormat.getLabel(transcoding.getCurrentFormat() ?? ''),
-        transcoding.getCurrentBitrate() ?? 0,
-        network,
-      );
-      statusIcon = Icons.speed_rounded;
-    } else {
-      statusLabel = l10n.noTranscoding;
-      statusIcon = Icons.verified_rounded;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (fileInfo.isNotEmpty)
-            Text(
-              fileInfo,
-              style: theme.textTheme.bodySmall,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          if (sampleInfo.isNotEmpty || depthInfo.isNotEmpty)
-            Text(
-              [sampleInfo, depthInfo].where((s) => s.isNotEmpty).join(' · '),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Icon(statusIcon, size: 14, color: statusColor),
-              const SizedBox(width: 4),
-              Text(
-                statusLabel,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: statusColor,
+          ],
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: LuoboColors.of(ctx).card,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.$1,
+                      style: LuoboType.body.copyWith(
+                        color: LuoboColors.of(ctx).fg2,
+                      ),
+                    ),
+                    if (row.$2.isNotEmpty) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          row.$2,
+                          textAlign: TextAlign.right,
+                          style: LuoboType.body,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _OptionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final Color? iconColor;
-
-  const _OptionTile({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: iconColor ?? Theme.of(context).colorScheme.primary,
+/// 歌曲 `⋮` 菜单的公共入口（设计稿/09）：`SongTile` 与**播放页**共用，
+/// 按 [menuContext] 裁剪变体。统一走 `showLuoboSheet`（把手 + 圆角 20 +
+/// 遮罩 .42 + root navigator——遮罩盖住播放条/底栏，见 sheet_shell.dart 注释）。
+void showSongMenuSheet(
+  BuildContext context, {
+  required Song song,
+  SongMenuContext menuContext = SongMenuContext.list,
+  VoidCallback? onRemoveFromPlaylist,
+}) {
+  showLuoboSheet(
+    context: context,
+    // ⚠️ 必须放开高度 + 可滚动：showModalBottomSheet 默认只给 50% 屏高，
+    // 三段式内容（上下文头 + 横排 + 7 行 ≈ 600dp）会直接裁掉末行
+    // （「歌曲信息」看不见）。原 _SongOptionsSheet 的 SingleChildScrollView
+    // 在 P0 重写时丢了，此修复补回。
+    isScrollControlled: true,
+    builder: (context) => SingleChildScrollView(
+      child: _SongOptionsSheet(
+        song: song,
+        menuContext: menuContext,
+        onRemoveFromPlaylist: onRemoveFromPlaylist,
       ),
-      title: Text(title),
-      onTap: onTap,
-    );
-  }
+    ),
+  );
 }

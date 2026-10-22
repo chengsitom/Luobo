@@ -175,7 +175,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
     final subsonicService = libraryProvider.subsonicService;
 
-    final messenger = ScaffoldMessenger.of(context);
     final loc = AppLocalizations.of(context);
 
     try {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FramePhase;
 
 import 'package:flutter/painting.dart';
 import 'package:flutter/scheduler.dart';
@@ -30,6 +31,7 @@ class MetricsCollector {
   final List<FrameTiming> _frames = [];
   Timer? _sampleTimer;
   int _frameSeq = 0;
+  DateTime? _lastFrameAt;
   DateTime? _lastJankRecordedAt;
   DateTime? _lastSlowRecordedAt;
 
@@ -122,7 +124,9 @@ class MetricsCollector {
   }
 
   void _onTimings(List<FrameTiming> timings) {
+    if (timings.isEmpty) return;
     final now = DateTime.now();
+    _lastFrameAt = now;
     for (final t in timings) {
       _frames.add(t);
       _frameSeq++;
@@ -173,17 +177,37 @@ class MetricsCollector {
         }
       }
     }
-    // 只保留最近 ~10s 帧（60fps ≈ 600 帧）
-    if (_frames.length > 900) {
-      _frames.removeRange(0, _frames.length - 900);
+    // 只保留最近 [_frameWindow] 内的帧（按时间裁剪）。
+    //
+    // 早先按「最多 900 帧」裁剪：60fps 下约 15s、8fps 下约 112s——窗口长度
+    // 随帧率漂移，jankRate 的统计区间跟着失真。按时间裁剪后窗口恒定；
+    // 另外保留 1200 帧硬上限（120Hz × 10s）兜住内存。
+    final newestUs = _frames.last.timestampInMicroseconds(FramePhase.vsyncStart);
+    final cutoffUs = newestUs - _frameWindow.inMicroseconds;
+    var drop = 0;
+    while (drop < _frames.length - 1 &&
+        _frames[drop].timestampInMicroseconds(FramePhase.vsyncStart) <
+            cutoffUs) {
+      drop++;
+    }
+    if (drop > 0) _frames.removeRange(0, drop);
+    if (_frames.length > 1200) {
+      _frames.removeRange(0, _frames.length - 1200);
     }
   }
 
   /// 计算最近窗口 FPS 与 jank 率。
   void _aggregate() {
     if (_frames.isEmpty) return;
-    // 以采样到的帧数估算 FPS：帧间采样无法精确计时，
-    // 采用"最近 10s 窗口内 jank 帧占比"作为卡顿指标（与事件判定同源）。
+    // 空闲保护：长时间没有新帧时窗口数据已失效，报 0 而不是沿用旧值。
+    // 否则「停在某个页面不动」会被诊断页读成「持续 100% jank」。
+    final lastAt = _lastFrameAt;
+    if (lastAt != null &&
+        DateTime.now().difference(lastAt) > _frameWindow * 2) {
+      DiagnosticsService.instance.updateFrameStats(fps: 0, jankRate: 0);
+      return;
+    }
+    // 最近 10s 窗口内 jank 帧占比（与事件判定同源）。
     final jank = _frames.where((f) {
       return (f.buildDuration.inMicroseconds +
                   f.rasterDuration.inMicroseconds) /
@@ -195,9 +219,19 @@ class MetricsCollector {
     DiagnosticsService.instance.updateFrameStats(fps: fps, jankRate: jankRate);
   }
 
+  /// 真实帧率：窗口内「帧数差 ÷ 时间跨度」。
+  ///
+  /// 早先用 `帧数 × 1000 / 窗口毫秒`，缓冲一满（900 帧）就恒定输出 90，
+  /// 与真实帧率无关——诊断页的 FPS 卡片因此长期是假数。
   double _estimateFps() {
-    // 依据 buildDuration 采样间隔粗略估计；窗口内帧数 / 窗口时长
-    return (_frames.length * 1000) / _frameWindow.inMilliseconds;
+    if (_frames.length < 2) return 0;
+    final firstUs = _frames.first.timestampInMicroseconds(FramePhase.vsyncStart);
+    final lastUs = _frames.last.timestampInMicroseconds(FramePhase.vsyncStart);
+    final spanUs = lastUs - firstUs;
+    if (spanUs <= 0) return 0;
+    return (_frames.length - 1) *
+        Duration.microsecondsPerSecond /
+        spanUs;
   }
 
   Future<void> _sample() async {

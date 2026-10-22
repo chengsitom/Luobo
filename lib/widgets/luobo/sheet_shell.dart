@@ -200,6 +200,10 @@ class LuoboSheetShell extends StatelessWidget {
 /// Sheet 内的一行（独立白卡）。
 ///
 /// 用于：单选面板的每个选项、胶囊叠面板的每个动作、`⋮` 面板的次操作行。
+///
+/// [contentPadding] / [gap] 可调：歌曲 `⋮` 竖列行按方案 §9 的量值
+/// （行高 52 = 文字 20 + 上下 16；卡间 gap 12）传入，默认值保持
+/// 设置页既有规格（~46 / gap 8）不变，避免影响已落地页面。
 class LuoboSheetRow extends StatelessWidget {
   const LuoboSheetRow({
     super.key,
@@ -211,6 +215,11 @@ class LuoboSheetRow extends StatelessWidget {
     this.danger = false,
     this.selected = false,
     this.showChevron = true,
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 12,
+    ),
+    this.gap = 8,
   });
 
   final String title;
@@ -225,13 +234,18 @@ class LuoboSheetRow extends StatelessWidget {
 
   final bool showChevron;
 
+  final EdgeInsetsGeometry contentPadding;
+
+  /// 行与下一行之间的间距。
+  final double gap;
+
   @override
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
     final fg = danger ? LuoboAccent.accent : c.fg;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: gap),
       child: Material(
         color: c.card,
         borderRadius: BorderRadius.circular(LuoboRadius.sheetRow),
@@ -239,7 +253,7 @@ class LuoboSheetRow extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(LuoboRadius.sheetRow),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: contentPadding,
             child: Row(
               children: [
                 if (leading != null) ...[leading!, const SizedBox(width: 10)],

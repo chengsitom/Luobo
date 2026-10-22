@@ -194,7 +194,6 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
     );
 
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     if (success) {
       showLuoboToast(
       context,

@@ -664,6 +664,66 @@ abstract class AppLocalizations {
   /// **'Genres'**
   String get genres;
 
+  /// Song menu row (with album name)
+  ///
+  /// In en, this message translates to:
+  /// **'Album: {album}'**
+  String albumLabel(String album);
+
+  /// Song menu row (with artist name)
+  ///
+  /// In en, this message translates to:
+  /// **'Artist: {artist}'**
+  String artistLabel(String artist);
+
+  /// No description provided for @addToPlaybackQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get addToPlaybackQueue;
+
+  /// No description provided for @songInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Song info'**
+  String get songInfo;
+
+  /// No description provided for @year.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get year;
+
+  /// No description provided for @genreLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Genre'**
+  String get genreLabel;
+
+  /// No description provided for @fileLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get fileLocation;
+
+  /// No description provided for @paramBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Bitrate'**
+  String get paramBitrate;
+
+  /// No description provided for @paramSampleRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample rate'**
+  String get paramSampleRate;
+
+  /// No description provided for @paramBitDepth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bit depth'**
+  String get paramBitDepth;
+
   /// Years filter tab label
   ///
   /// In en, this message translates to:

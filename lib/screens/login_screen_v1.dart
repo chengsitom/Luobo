@@ -444,7 +444,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (success && mounted) {
       // 先取 root messenger，pop 后再显示——避免 SnackBar 因 LoginScreen
       // context 随 pop 销毁而被吞（此前 show 在 pop 前，用户看不到成功提示）。
-      final messenger = ScaffoldMessenger.of(context);
       // 跳转首页：弹到根路由。从设置页添加配置时，导航栈是
       // [AuthWrapper, SettingsRootScreen, SettingsServerTab, LoginScreen]，
       // popUntil(isFirst) 全部弹出 → AuthWrapper 因 state=authenticated 显示

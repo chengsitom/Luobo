@@ -170,6 +170,63 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   String _computeSongsKey(List<Song> songs) =>
       songs.isEmpty ? '' : songs.map((s) => s.id).join('|');
 
+  /// 正在后台计 feed / 已排队但尚未落地的目标 key 与曲库快照。
+  bool _computingFeed = false;
+  String _pendingFeedKey = '';
+  List<Song>? _pendingFeedSongs;
+
+  /// 帧后异步生成推荐 feed（原因见 `build()` 内注释）。
+  ///
+  /// 同一 [key] 只排队一次；计算期间若有更新的 key 到来，当前结果仍会落地，
+  /// 随后继续算最新一版，保证「收藏/知识库变化后推荐跟着变」不丢。
+  void _scheduleFeedBuild({
+    required String key,
+    required List<Song> songs,
+    required HomeRecommendationService homeRecommendation,
+  }) {
+    if (key == _lastFeedKey) return;
+    _pendingFeedKey = key;
+    _pendingFeedSongs = songs;
+    if (_computingFeed) return;
+    _computingFeed = true;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _drainFeedBuild(homeRecommendation),
+    );
+  }
+
+  void _drainFeedBuild(HomeRecommendationService homeRecommendation) {
+    if (!mounted) {
+      _computingFeed = false;
+      return;
+    }
+    final key = _pendingFeedKey;
+    final songs = _pendingFeedSongs;
+    if (key.isEmpty || songs == null || key == _lastFeedKey) {
+      _computingFeed = false;
+      return;
+    }
+    final feed = homeRecommendation.generateFeed(allSongs: songs);
+    if (!mounted) {
+      _computingFeed = false;
+      return;
+    }
+    final hasNewer = _pendingFeedKey != key;
+    setState(() {
+      _cachedFeed = feed;
+      _lastFeedKey = key;
+    });
+    if (hasNewer) {
+      // 计算期间来了更新的 key：接着算下一轮。
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _drainFeedBuild(homeRecommendation),
+      );
+    } else {
+      _computingFeed = false;
+      _pendingFeedKey = '';
+      _pendingFeedSongs = null;
+    }
+  }
+
   void _play(
     BuildContext context,
     Song song,
@@ -275,12 +332,16 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                     : '$songsKey#${homeRecommendation.feedRevision}';
 
                 if (recommendationService.enabled && feedKey.isNotEmpty) {
-                  if (feedKey != _lastFeedKey) {
-                    _cachedFeed = homeRecommendation.generateFeed(
-                      allSongs: allSongs,
-                    );
-                    _lastFeedKey = feedKey;
-                  }
+                  // ⚠️ 不能在这里同步算 feed：generateFeed 会把全曲库打六遍分，
+                  // 曲库大时单次几十毫秒。早先它和 refreshKnowledgeFromCache
+                  // 的守卫缺陷叠加，直接变成「通知 → 重建 → 再算 feed」的
+                  // 无限循环（线上实测 UI 线程 82%、约 8fps）。改成帧后异步：
+                  // 算完再 setState，期间继续渲染上一版 feed。
+                  _scheduleFeedBuild(
+                    key: feedKey,
+                    songs: allSongs,
+                    homeRecommendation: homeRecommendation,
+                  );
                 } else {
                   _cachedFeed = null;
                   _lastFeedKey = '';

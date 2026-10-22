@@ -273,6 +273,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get genres => '分类';
 
   @override
+  String albumLabel(String album) {
+    return '专辑：$album';
+  }
+
+  @override
+  String artistLabel(String artist) {
+    return '歌手：$artist';
+  }
+
+  @override
+  String get addToPlaybackQueue => '加入播放列表';
+
+  @override
+  String get songInfo => '歌曲信息';
+
+  @override
+  String get year => '年份';
+
+  @override
+  String get genreLabel => '风格';
+
+  @override
+  String get fileLocation => '文件位置';
+
+  @override
+  String get paramBitrate => '码率';
+
+  @override
+  String get paramSampleRate => '采样率';
+
+  @override
+  String get paramBitDepth => '位深';
+
+  @override
   String get years => '年份';
 
   @override
