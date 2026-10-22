@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_icons.dart';
 import '../../theme/design_tokens.dart';
+import 'capsule_button.dart';
 
 /// Sheet 壳 —— **5 种浮层共用这一个外壳**：
 /// 歌曲 `⋮` 上下文面板 / 单选面板 / 胶囊叠面板 / 确认弹窗 / 选择器。
@@ -68,6 +70,63 @@ Future<T?> showLuoboPickerSheet<T>({
             showChevron: false,
             onTap: () => Navigator.of(ctx).pop(opt.value),
           ),
+      ],
+    ),
+  );
+}
+
+/// **确认弹窗**（设计稿/08 §4，规格见 `docs/歌曲列表弹窗对标飞牛技术方案.md` §4.2）：
+/// 底部升起 · **无把手**（fnos 确认卡没有拖拽把手，与多选/选择器不同，
+/// 故 `showHandle: false`）· 居中标题 + 灰字说明 + 左右双胶囊
+/// （取消=灰底 [LuoboCapsuleStyle.normal] / 确认=玫红实心 [LuoboCapsuleStyle.primary]，
+/// **含删除类**——fnos 全站确认键统一玫红，不另设红色变体）。
+///
+/// 返回值：`true`=用户确认；点遮罩/下滑取消时返回 `null`。
+Future<bool?> showLuoboConfirmSheet({
+  required BuildContext context,
+  required String title,
+  required String message,
+  required String confirmLabel,
+}) {
+  return showLuoboSheet<bool>(
+    context: context,
+    title: title,
+    showHandle: false,
+    builder: (ctx) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: LuoboType.caption.copyWith(
+              fontSize: 13,
+              color: LuoboColors.of(ctx).fg2,
+              height: 1.55,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: LuoboCapsuleButton(
+                label: AppLocalizations.of(ctx)!.cancel,
+                onPressed: () => Navigator.of(ctx).pop(false),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: LuoboCapsuleButton(
+                label: confirmLabel,
+                style: LuoboCapsuleStyle.primary,
+                onPressed: () => Navigator.of(ctx).pop(true),
+              ),
+            ),
+          ],
+        ),
       ],
     ),
   );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
@@ -603,13 +604,11 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
                     context,
                     listen: false,
                   ).clearData();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context)!.historyCleared,
-                      ),
-                    ),
-                  );
+                  showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.historyCleared,
+      tone: LuoboToastTone.info,
+    );
                 },
                 child: Text(
                   AppLocalizations.of(context)!.delete,

@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -325,8 +326,11 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                       libraryProvider,
                       hPad,
                     ),
-                    // 视口已排除迷你播放器与底部导航，尾部仅留少量呼吸空间。
-                    const SizedBox(height: 32),
+                    // 覆盖式底栏（`extendBody`）悬浮在内容之上，Scaffold 把底栏高度注入
+                    // 成 `MediaQuery.padding.bottom`——但 `CustomScrollView` 不像 `ListView`
+                    // 会自动吃掉这段 padding，得手动补，否则「探索发现」最后一排会被玻璃
+                    // 底栏压住（用户 2026-10-20 反馈）。32 是额外的呼吸空间。
+                    SizedBox(height: 32 + MediaQuery.of(context).padding.bottom),
                   ],
                 );
               },
@@ -389,9 +393,11 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
             final started = await playerProvider.startRoaming();
             // 曲库还没同步好时给个明确反馈——静默无反应看起来像坏了。
             if (!started && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.noSongsFound)),
-              );
+              showLuoboToast(
+      context,
+      message: l10n.noSongsFound,
+      tone: LuoboToastTone.info,
+    );
             }
           },
           onLongPress: () => _pickRoamingMode(context, playerProvider),

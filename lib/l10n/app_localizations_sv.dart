@@ -693,6 +693,9 @@ class AppLocalizationsSv extends AppLocalizations {
   String get newPlaylist => 'Ny Spellista';
 
   @override
+  String get undo => 'Undo';
+
+  @override
   String get playlistName => 'Spellistans Namn';
 
   @override

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../widgets/luobo/luobo_toast.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
@@ -1925,15 +1926,12 @@ class _PlayerHeader extends StatelessWidget {
                             fadeOut: fadeOut,
                             fadeDurationSeconds: fadeOutSeconds,
                           );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                AppLocalizations.of(context)!
+                          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!
                                     .sleepTimerSetFor(opt.$1),
-                              ),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
+      tone: LuoboToastTone.info,
+    );
                         },
                       ),
                     ),
@@ -2038,17 +2036,14 @@ class _PlayerHeader extends StatelessWidget {
                   fadeOut: fadeOut,
                   fadeDurationSeconds: fadeOutSeconds,
                 );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      AppLocalizations.of(context)!.sleepTimerSetFor(
+                showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.sleepTimerSetFor(
                         AppLocalizations.of(context)!
                             .sleepTimerMinutes(minutes),
                       ),
-                    ),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+      tone: LuoboToastTone.info,
+    );
               },
               child: Text(
                 AppLocalizations.of(ctx)!.set,
@@ -2620,33 +2615,30 @@ class _SongInfoState extends State<_SongInfo> {
         await subsonicService.unstar(id: widget.song!.id);
         setState(() => _isStarred = false);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.removedFromFavorites),
-              duration: const Duration(seconds: 1),
-            ),
-          );
+          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.removedFromFavorites,
+      tone: LuoboToastTone.info,
+    );
         }
       } else {
         await subsonicService.star(id: widget.song!.id);
         setState(() => _isStarred = true);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.addedToFavorites),
-              duration: const Duration(seconds: 1),
-            ),
-          );
+          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.addedToFavorites,
+      tone: LuoboToastTone.info,
+    );
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: 'Error: $e',
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }
@@ -2842,14 +2834,11 @@ class _SongInfoState extends State<_SongInfo> {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.errorLoadingPlaylists(e),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.errorLoadingPlaylists(e),
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }
@@ -2936,26 +2925,22 @@ class _SongInfoState extends State<_SongInfo> {
       );
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                 context,
               )!
                   .playlistCreatedWithSong(playlistName),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: 'Error: $e',
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }
@@ -2979,26 +2964,22 @@ class _SongInfoState extends State<_SongInfo> {
       );
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                 context,
               )!
                   .addedToPlaylist(widget.song!.title, playlistName),
-            ),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: 'Error: $e',
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }

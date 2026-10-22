@@ -219,15 +219,17 @@ class _NavSlot extends StatelessWidget {
                 Container(
                   width: LuoboGlass.navBubbleSize,
                   height: LuoboGlass.navBubbleSize,
-                  decoration: const BoxDecoration(
-                    color: LuoboAccent.accent,
+                  decoration: BoxDecoration(
+                    // 对标飞牛：选中态是「淡玫红圆底 + 玫红图标」，而非「饱和实心圆 +
+                    // 白图标」（用户 2026-10-20：配色向飞牛看齐、审美更轻盈）。
+                    color: LuoboAccent.soft(LuoboGlass.navBubbleAlpha),
                     shape: BoxShape.circle,
                   ),
                 ),
               Icon(
                 item.icon,
                 size: LuoboGlass.navIconSize,
-                color: selected ? LuoboAccent.onAccent : unselectedColor,
+                color: selected ? LuoboAccent.accent : unselectedColor,
               ),
             ],
           ),

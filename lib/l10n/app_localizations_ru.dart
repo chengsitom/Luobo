@@ -700,6 +700,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get newPlaylist => 'Новый плейлист';
 
   @override
+  String get undo => 'Undo';
+
+  @override
   String get playlistName => 'Название плейлиста';
 
   @override

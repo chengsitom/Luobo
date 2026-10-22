@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import '../l10n/app_localizations.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -197,23 +198,21 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
       final addedToQueueMessage =
           loc?.addedArtistToQueue ?? 'Added artist to Queue';
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(addedToQueueMessage),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: addedToQueueMessage,
+      tone: LuoboToastTone.info,
+    );
     } catch (e) {
       if (!mounted) return;
 
       final addedToQueueErrorMessage =
           loc?.addedArtistToQueueError ?? 'Failed adding artist to Queue';
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(addedToQueueErrorMessage),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: addedToQueueErrorMessage,
+      tone: LuoboToastTone.info,
+    );
     }
   }
 

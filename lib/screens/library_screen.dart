@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -1084,28 +1085,22 @@ class _LibraryScreenState extends State<LibraryScreen>
               try {
                 await libraryProvider.deletePlaylist(item.id);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(
+                  showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                           context,
                         )!
                             .playlistDeleted(item.name),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+      tone: LuoboToastTone.info,
+    );
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context)!.errorDeletingPlaylist(e),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.errorDeletingPlaylist(e),
+      tone: LuoboToastTone.info,
+    );
                 }
               }
             },
@@ -1246,21 +1241,19 @@ class _LibraryScreenState extends State<LibraryScreen>
                 try {
                   await libraryProvider.createPlaylist(name);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.playlistCreated(name)),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    showLuoboToast(
+      context,
+      message: l10n.playlistCreated(name),
+      tone: LuoboToastTone.info,
+    );
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.errorCreatingPlaylist(e)),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    showLuoboToast(
+      context,
+      message: l10n.errorCreatingPlaylist(e),
+      tone: LuoboToastTone.info,
+    );
                   }
                 }
               }

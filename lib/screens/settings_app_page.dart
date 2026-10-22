@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -169,8 +170,10 @@ class _CacheAndPrivacyCardState extends State<_CacheAndPrivacyCard> {
       if (mounted) setState(() => _busy = false);
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? l10n.allCacheCleared : l10n.operationFailed)),
+    showLuoboToast(
+      context,
+      message: ok ? l10n.allCacheCleared : l10n.operationFailed,
+      tone: LuoboToastTone.info,
     );
   }
 
@@ -208,12 +211,11 @@ class _CacheAndPrivacyCardState extends State<_CacheAndPrivacyCard> {
       } catch (e) {
         debugPrint('[SettingsApp] logout failed: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.operationFailed),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          showLuoboToast(
+      context,
+      message: l10n.operationFailed,
+      tone: LuoboToastTone.info,
+    );
         }
       }
     }

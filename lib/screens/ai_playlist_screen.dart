@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../providers/library_provider.dart';
@@ -874,9 +875,11 @@ class _AiPlaylistScreenState extends State<AiPlaylistScreen>
 
     final name = _playlistNameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入歌单名称')),
-      );
+      showLuoboToast(
+      context,
+      message: '请输入歌单名称',
+      tone: LuoboToastTone.info,
+    );
       return;
     }
 
@@ -888,8 +891,10 @@ class _AiPlaylistScreenState extends State<AiPlaylistScreen>
     );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('歌单「$name」已创建')),
+    showLuoboToast(
+      context,
+      message: '歌单「$name」已创建',
+      tone: LuoboToastTone.info,
     );
     Navigator.pop(context);
   }

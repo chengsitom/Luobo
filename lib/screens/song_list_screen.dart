@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../widgets/luobo/luobo_toast.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -168,14 +169,12 @@ class _SongListScreenState extends State<SongListScreen> {
     if (widget.songs.isEmpty) return;
     Provider.of<PlayerProvider>(context, listen: false)
         .addAllToQueue(widget.songs);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.addedToQueue),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    // showLuoboToast 自带单例替换（重触发不叠加），无需再清队列。
+    showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.addedToQueue,
+      tone: LuoboToastTone.info,
+    );
   }
 
   @override

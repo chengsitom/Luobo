@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -63,11 +64,11 @@ class _RadioScreenState extends State<RadioScreen> {
 
   Future<void> _openHomePage(RadioStation station) async {
     if (station.homePageUrl == null || station.homePageUrl!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.noHomepageUrl),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.noHomepageUrl,
+      tone: LuoboToastTone.info,
+    );
       return;
     }
 
@@ -167,16 +168,14 @@ class _RadioScreenState extends State<RadioScreen> {
                 onTap: () {
                   Navigator.pop(context);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(
+                  showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                           context,
                         )!
                             .streamUrl(station.streamUrl),
-                      ),
-                    ),
-                  );
+      tone: LuoboToastTone.info,
+    );
                 },
               ),
               const SizedBox(height: 16),

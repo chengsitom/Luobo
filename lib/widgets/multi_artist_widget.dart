@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -98,25 +99,19 @@ class MultiArtistWidget extends StatelessWidget {
           builder: (_) => ArtistScreen(artistId: matched.id),
         ));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.artistNotFound(name),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.artistNotFound(name),
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.errorSearchingArtist(e),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.errorSearchingArtist(e),
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }

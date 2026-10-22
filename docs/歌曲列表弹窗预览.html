@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luobo 歌曲列表弹窗 · 对标飞牛预览</title>
+<style>
+  :root{
+    --accent:#F0305C; --accentSoft:rgba(240,48,92,.12);
+    --sheetTop:20px; --card:14px; --pill:30px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:#2a2a2e;color:#eee;padding:28px 20px 60px;}
+  h1{font-size:19px;font-weight:600;margin-bottom:4px;}
+  .sub{color:#aaa;font-size:12.5px;margin-bottom:24px;line-height:1.6;}
+  .grid{display:flex;flex-wrap:wrap;gap:26px;}
+  .cell{width:300px;}
+  .cap{font-size:13px;font-weight:600;margin-bottom:9px;color:#fff;}
+  .cap small{font-weight:400;color:#9a9aa0;margin-left:6px;}
+  /* phone */
+  .phone{width:300px;height:600px;border-radius:30px;overflow:hidden;position:relative;
+    box-shadow:0 10px 34px rgba(0,0,0,.5);border:1px solid #000;}
+  .phone.light{background:#F2F2F7;} .phone.dark{background:#121212;}
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.42);}
+  /* faux list behind */
+  .bg{padding:18px 16px;}
+  .bgrow{display:flex;align-items:center;gap:10px;height:50px;opacity:.5;}
+  .light .bgcover{background:#d9d9de;} .dark .bgcover{background:#2a2a2e;}
+  .bgcover{width:40px;height:40px;border-radius:8px;flex:none;}
+  .bgline{height:9px;border-radius:5px;}
+  .light .bgline{background:#d2d2d7;} .dark .bgline{background:#2a2a2e;}
+  /* sheet */
+  .sheet{position:absolute;left:0;right:0;bottom:0;border-radius:var(--sheetTop) var(--sheetTop) 0 0;
+    padding:14px 14px 22px;}
+  .light .sheet{background:#F2F2F7;} .dark .sheet{background:#121212;}
+  .handle{width:36px;height:4px;border-radius:2px;margin:0 auto 14px;}
+  .light .handle{background:#E5E5EA;} .dark .handle{background:#38383A;}
+  .title-c{text-align:center;font-size:15px;font-weight:600;margin-bottom:13px;}
+  .light .title-c,.light .fg{color:#000;} .dark .title-c,.dark .fg{color:#fff;}
+  .fg2{color:#8E8E93;} .dark .fg2{color:#98989E;}
+  /* context header */
+  .chead{display:flex;align-items:center;gap:12px;padding:4px 4px 14px;}
+  .chead .cov{width:46px;height:46px;border-radius:10px;flex:none;
+    background:linear-gradient(135deg,#f0305c,#ff6b6b);}
+  .chead .t{font-size:15px;font-weight:600;line-height:1.3;}
+  .chead .a{font-size:12.5px;margin-top:2px;}
+  /* action grid (3 squares) */
+  .agrid{display:flex;gap:10px;margin-bottom:12px;}
+  .asq{flex:1;height:68px;border-radius:14px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:7px;font-size:12px;}
+  .light .asq{background:#fff;} .dark .asq{background:#1C1C1E;}
+  .asq .ic{font-size:17px;line-height:1;}
+  /* rows (cards) */
+  .row{display:flex;align-items:center;height:50px;padding:0 14px;border-radius:14px;margin-bottom:8px;font-size:14px;}
+  .light .row{background:#fff;} .dark .row{background:#1C1C1E;}
+  .row .ic{margin-left:auto;font-size:16px;opacity:.85;}
+  .row.danger{color:var(--accent);}
+  .sub2{font-size:12px;}
+  /* confirm */
+  .desc{text-align:center;font-size:12px;line-height:1.5;margin:2px 14px 20px;}
+  .pills{display:flex;gap:12px;}
+  .pill{flex:1;height:44px;border-radius:30px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;}
+  .light .pill.cancel{background:#E5E5E7;color:#000;} .dark .pill.cancel{background:#2C2C2E;color:#fff;}
+  .pill.go{background:var(--accent);color:#fff;}
+  /* capsule stack */
+  .cap-pill{height:44px;border-radius:30px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;margin-bottom:10px;}
+  .light .cap-pill{background:#E5E5E7;color:#000;} .dark .cap-pill{background:#2C2C2E;color:#fff;}
+  .cap-pill.danger{background:var(--accentSoft);color:var(--accent);}
+  /* add to playlist */
+  .plrow{display:flex;align-items:center;gap:12px;height:58px;}
+  .plrow .cov{width:44px;height:44px;border-radius:10px;flex:none;}
+  .plrow .new{width:44px;height:44px;border-radius:10px;flex:none;background:var(--accent);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;}
+  .plrow .cov.a{background:linear-gradient(135deg,#5bc0de,#7fd4c1);}
+  .plrow .cov.b{background:linear-gradient(135deg,#a970ff,#6366f1);}
+  /* multi-select */
+  .mtop{display:flex;align-items:center;gap:12px;padding:0 16px;height:52px;}
+  .mtop .minus{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .mtop .done{margin-left:auto;font-size:15px;font-weight:500;}
+  .mrow{display:flex;align-items:center;gap:12px;padding:0 16px;height:60px;}
+  .mrow .ck{width:22px;height:22px;border-radius:50%;border:1.5px solid #c7c7cc;flex:none;}
+  .mrow .ck.on{background:var(--accent);border-color:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .mrow .cov{width:44px;height:44px;border-radius:8px;flex:none;
+    background:linear-gradient(135deg,#f0305c,#ff6b6b);}
+  .mbar{position:absolute;left:0;right:0;bottom:0;display:flex;padding:14px 8px 26px;}
+  .light .mbar{background:#fff;border-top:1px solid #E5E5EA;}
+  .dark .mbar{background:#1C1C1E;border-top:1px solid #38383A;}
+  .mbar .it{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;}
+  .mbar .it .ic{font-size:18px;}
+  .divline{height:1px;margin:2px 0 10px;}
+  .light .divline{background:#E5E5EA;} .dark .divline{background:#38383A;}
+</style>
+</head>
+<body>
+<h1>Luobo 歌曲列表弹窗 · 对标飞牛预览</h1>
+<div class="sub">字号/尺寸贴 <code>lib/theme/design_tokens.dart</code>（行 body 14 · 副文字 caption 12 · 胶囊 44/14 · Sheet 标题 15/w600）。<br>飞牛新面板已实测回填方案 §9：横排方块 72dp · 多选圆「−」/选择框 20dp · 「已选N首」16/w600 · 技术参数卡高 64dp/值 16/w600。</div>
+<div class="grid" id="grid"></div>
+<script>
+const G=document.getElementById('grid');
+function bg(theme){let r='';for(let i=0;i<9;i++){r+=`<div class="bgrow"><div class="bgcover"></div>
+  <div style="flex:1"><div class="bgline" style="width:60%"></div>
+  <div class="bgline" style="width:35%;margin-top:7px"></div></div></div>`;}
+  return `<div class="bg">${r}</div>`;}
+function phone(theme,sheet,{noScrim=false}={}){return `<div class="phone ${theme}">${bg(theme)}
+  ${noScrim?'':'<div class="scrim"></div>'}${sheet}</div>`;}
+function cell(cap,sub,inner){const d=document.createElement('div');d.className='cell';
+  d.innerHTML=`<div class="cap">${cap}<small>${sub}</small></div>${inner}`;G.appendChild(d);}
+// reusable pieces
+const chead=`<div class="chead"><div class="cov"></div>
+  <div><div class="t fg">绿色劫难</div><div class="a fg2">黑豹乐队</div></div></div>`;
+const agrid=`<div class="agrid">
+  <div class="asq fg"><div class="ic">▶</div>播放</div>
+  <div class="asq fg"><div class="ic">↙</div>下一首播放</div>
+  <div class="asq fg"><div class="ic">☰</div>加入播放列表</div></div>`;
+const r=(t,ic,extra='')=>`<div class="row fg ${extra}"><span>${t}</span><span class="ic">${ic}</span></div>`;
+// PHONES
+// 1. ⋮ 列表页/首页
+cell('歌曲 ⋮ · 列表页 / 首页','变体 A：横排主操作 + 收藏',
+ phone('dark',`<div class="sheet">${chead}${agrid}
+  ${r('专辑：光芒之神','◉')}${r('歌手：黑豹乐队','◡')}${r('下载','⤓')}
+  ${r('收藏','♡')}${r('添加到歌单','▭')}${r('歌曲信息（只读）','ⓘ')}</div>`));
+// 2. ⋮ 播放页
+cell('歌曲 ⋮ · 播放页','变体 B：无横排、无收藏',
+ phone('light',`<div class="sheet">${chead}
+  ${r('专辑：光芒之神','◉')}${r('歌手：黑豹乐队','◡')}${r('下载','⤓')}
+  ${r('添加到歌单','▭')}${r('歌曲信息（只读）','ⓘ')}</div>`));
+// 3. ⋮ 歌单内
+cell('歌曲 ⋮ · 歌单详情内','变体 C：末项「从当前歌单移除」在信息项前',
+ phone('dark',`<div class="sheet">${chead}${agrid}
+  ${r('专辑：光芒之神','◉')}${r('歌手：黑豹乐队','◡')}${r('下载','⤓')}
+  ${r('收藏','♡')}${r('添加到歌单','▭')}${r('从当前歌单移除','⌫','danger')}${r('歌曲信息（只读）','ⓘ')}</div>`));
+// 4. 确认弹窗
+cell('确认弹窗 · 从歌单移除','底部升起短卡（无把手）+ 双胶囊',
+ phone('dark',`<div class="sheet">
+  <div class="title-c" style="margin-top:8px">从歌单移除</div>
+  <div class="desc fg2">确认要从歌单中移除所选歌曲？</div>
+  <div class="pills"><div class="pill cancel">取消</div><div class="pill go">移除</div></div></div>`));
+// 5. 添加到歌单
+cell('添加到歌单','首项「新建歌单」+ 封面缩略图',
+ phone('light',`<div class="sheet"><div class="handle"></div>
+  <div class="plrow"><div class="new">+</div><div class="fg" style="font-size:14px;font-weight:500">新建歌单</div></div>
+  <div class="divline"></div>
+  <div class="plrow"><div class="cov a"></div><div><div class="fg" style="font-size:14px">摇滚乐</div><div class="fg2 sub2">1 首</div></div></div>
+  <div class="plrow"><div class="cov b"></div><div><div class="fg" style="font-size:14px">夜跑</div><div class="fg2 sub2">42 首</div></div></div></div>`));
+// 6. 歌单设置（胶囊叠）
+cell('歌单设置 ···','胶囊叠：编辑 / 删除 / 取消',
+ phone('light',`<div class="sheet"><div class="handle"></div>
+  <div class="title-c">歌单设置</div>
+  <div class="cap-pill">编辑（改名）</div>
+  <div class="cap-pill danger">删除</div>
+  <div class="cap-pill">取消</div></div>`));
+// 7. 多选模式（整屏接管）
+const mrow=(name,on=false)=>`<div class="mrow"><div class="ck ${on?'on':''}">${on?'✓':''}</div>
+  <div class="cov"></div><div><div class="fg" style="font-size:14px">${name}</div>
+  <div class="fg2 sub2">黑豹乐队</div></div></div>`;
+cell('多选模式','整屏接管 + 底部 4 等分操作栏',
+ phone('light',`<div class="handle" style="margin:14px auto 8px"></div>
+  <div class="mtop"><div class="minus">−</div>
+   <div class="fg" style="font-size:16px;font-weight:600">已选 1 首</div>
+   <div class="done fg">完成</div></div>
+  <div class="divline" style="margin:0 0 4px"></div>
+  ${mrow('光芒之神 [Karaoke]')}${mrow('海市蜃楼')}${mrow('绿色劫难')}
+  ${mrow('美丽的天堂 没有悲伤',true)}${mrow('你就是你')}
+  <div class="mbar">
+   <div class="it fg"><span class="ic">▶</span>播放</div>
+   <div class="it fg"><span class="ic">☰</span>加入播放列表</div>
+   <div class="it fg"><span class="ic">⤓</span>下载</div>
+   <div class="it fg"><span class="ic">▭</span>添加到歌单</div></div>`,{noScrim:true}));
+// 8. 歌曲信息（只读）
+const ivrow=(k,v)=>`<div class="row" style="margin-bottom:8px"><span class="fg">${k}</span>
+  <span class="fg2" style="margin-left:auto">${v}</span></div>`;
+cell('歌曲信息（只读）','⋮「歌曲信息」落点：只展示不编辑',
+ phone('light',`<div class="sheet" style="padding-bottom:14px">
+  <div class="handle"></div>
+  <div style="text-align:center">
+   <div style="width:140px;height:140px;border-radius:14px;margin:2px auto 12px;background:linear-gradient(135deg,#f0305c,#ff6b6b)"></div>
+   <div class="fg" style="font-size:17px;font-weight:600">绿色劫难</div>
+   <div class="fg2" style="font-size:12px;margin-top:3px">黑豹乐队</div></div>
+  <div class="agrid" style="margin:14px 0 10px">
+   <div class="asq fg"><div style="font-size:16px;font-weight:600">1009</div>kbps</div>
+   <div class="asq fg"><div style="font-size:16px;font-weight:600">44.1</div>kHz</div>
+   <div class="asq fg"><div style="font-size:16px;font-weight:600">FLAC</div>格式</div></div>
+  ${ivrow('专辑','光芒之神')}${ivrow('年份','2025')}${ivrow('曲目序号','3')}${ivrow('风格','摇滚')}</div>`));
+// PLACEHOLDER_PHONES
+</script>
+</body>
+</html>

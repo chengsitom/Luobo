@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -35,13 +36,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     } else {
       _hasScanned = true;
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.invalidQrCode),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.invalidQrCode,
+      tone: LuoboToastTone.error,
+    );
       // Allow scanning again after a short delay
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) setState(() => _hasScanned = false);
@@ -58,13 +57,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (result == null || !result.barcodes.isNotEmpty) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.invalidQrCode),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.invalidQrCode,
+      tone: LuoboToastTone.error,
+    );
       return;
     }
 
@@ -77,13 +74,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     } else {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.invalidQrCode),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.invalidQrCode,
+      tone: LuoboToastTone.error,
+    );
     }
   }
 

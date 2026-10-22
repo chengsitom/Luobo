@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import '../providers/library_provider.dart';
 import '../l10n/app_localizations.dart';
 
@@ -22,20 +23,13 @@ Future<void> refreshLibraryWithFeedback(
   showCenteredToast(context, message);
 }
 
-/// 原生 SnackBar（floating）经 margin 垂直居中到屏幕中部：
-/// 完整保留 SnackBar 的观感与行为（主题样式、滑动关闭、消息队列），
-/// 仅改变出现位置。
+/// 轻提示（showLuoboToast）：玻璃卡 + 单例替换 + 锚定播放条上方。
+/// 原为原生 SnackBar（floating）经 margin 垂直居中到屏幕中部，
+/// 已随「统一轻提示」批次替换。
 void showCenteredToast(BuildContext context, String message) {
-  // 减掉 SnackBar 自身高度的一半（约 28），使条体中心对齐屏幕垂直中心。
-  final bottom = MediaQuery.of(context).size.height / 2 - 28;
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.removeCurrentSnackBar(); // 替换而非排队，连续刷新不堆积提示
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(message),
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 2),
-      margin: EdgeInsets.fromLTRB(24, 0, 24, bottom < 24 ? 24 : bottom),
-    ),
+  showLuoboToast(
+    context,
+    message: message,
+    tone: LuoboToastTone.info,
   );
 }

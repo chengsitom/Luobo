@@ -12,6 +12,7 @@ import '../providers/library_provider.dart';
 import '../services/player_ui_settings_service.dart';
 import '../theme/design_tokens.dart';
 import '../theme/app_theme.dart';
+import 'luobo/luobo_toast.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
 import '../services/transcoding_service.dart';
@@ -76,7 +77,10 @@ class MiniPlayer extends StatelessWidget {
         // 是为省 GPU —— 这条每帧都在渲染。
         //
         // 尺寸对齐飞牛（§6.3）：高 50dp、左右外边距 16dp、**圆角 = 高度/2 → 胶囊**。
+        // 挂 `luoboToastAnchorKey`：`showLuoboToast`（轻提示）据此把
+        // 提示条锚定在播放条上方（设计稿/08 §6）。
         return RepaintBoundary(
+          key: luoboToastAnchorKey,
           child: Container(
             margin: const EdgeInsets.fromLTRB(
               LuoboGlass.barMarginX,

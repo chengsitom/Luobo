@@ -696,6 +696,9 @@ class AppLocalizationsSq extends AppLocalizations {
   String get newPlaylist => 'Playlisti e re';
 
   @override
+  String get undo => 'Undo';
+
+  @override
   String get playlistName => 'Emri i listës t\'kngve';
 
   @override

@@ -20,8 +20,8 @@ import 'package:flutter/material.dart' show Icons;
 /// - [moreH]（横向 `···`）—— **顶部悬浮圆钮内**
 /// - [moreV]（纵向 `⋮`）—— **行内右侧**
 ///
-/// ⚠️ 项目现状：`song_tile.dart` 用的是 `Icons.more_horiz`（横向），
-/// 按 fnos 的**行内**规范应改为 [moreV]（纵向）。
+/// ⚠️ 项目现状：行内 `⋮` 已改 [moreV]（2026-10-21，`song_tile.dart`），
+/// [moreH] 仅用于顶部悬浮圆钮内。
 abstract final class AppIcons {
   // ── 导航 ──────────────────────────────────────────────────────────────────
   static const IconData back = CupertinoIcons.chevron_back;

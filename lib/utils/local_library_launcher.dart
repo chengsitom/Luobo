@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -30,12 +31,11 @@ Future<bool> launchLocalLibrary(
   final granted = await localService.requestPermission();
   if (!granted) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.storagePermissionRequired),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.storagePermissionRequired,
+      tone: LuoboToastTone.error,
+    );
     }
     return false;
   }
@@ -46,14 +46,11 @@ Future<bool> launchLocalLibrary(
     final added = await localService.pickAndAddFiles();
     if (!context.mounted) return false;
     if (localService.songs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            added == 0 ? l10n.noFilesSelected : l10n.noMusicFilesFound,
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: added == 0 ? l10n.noFilesSelected : l10n.noMusicFilesFound,
+      tone: LuoboToastTone.error,
+    );
       return false;
     }
     await _switchToLocalOnly(context);
@@ -70,12 +67,11 @@ Future<bool> launchLocalLibrary(
     await localService.scanForMusic();
     if (!context.mounted) return false;
     if (localService.songs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.noMusicFilesFound),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.noMusicFilesFound,
+      tone: LuoboToastTone.error,
+    );
       return false;
     }
     await _switchToLocalOnly(context);

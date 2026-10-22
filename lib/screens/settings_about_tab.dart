@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -175,14 +176,11 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                       onPressed: () {
                         if (_deviceId != null) {
                           Clipboard.setData(ClipboardData(text: _deviceId!));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  AppLocalizations.of(context)!.deviceIdCopied),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.deviceIdCopied,
+      tone: LuoboToastTone.info,
+    );
                         }
                       },
                     )
@@ -464,10 +462,11 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       await AnalyticsService().markAppAsRated();
       if (mounted) {
         setState(() => _hasRated = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(AppLocalizations.of(context)!.thankYouFeedback)),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.thankYouFeedback,
+      tone: LuoboToastTone.info,
+    );
       }
     }
     ratingController.dispose();

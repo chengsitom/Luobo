@@ -694,6 +694,9 @@ class AppLocalizationsRo extends AppLocalizations {
   String get newPlaylist => 'New Playlist';
 
   @override
+  String get undo => 'Undo';
+
+  @override
   String get playlistName => 'Playlist Name';
 
   @override

@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -185,21 +186,19 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     } catch (e) {
       debugPrint('[ServerForm] save music folder failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.operationFailed),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.operationFailed,
+      tone: LuoboToastTone.info,
+    );
       return;
     }
     if (!mounted) return;
     setState(() => _selectedFolderIds = ids);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.musicFoldersSaved),
-        behavior: SnackBarBehavior.floating,
-      ),
+    showLuoboToast(
+      context,
+      message: l10n.musicFoldersSaved,
+      tone: LuoboToastTone.info,
     );
   }
 
@@ -588,13 +587,11 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       } else {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.connectedSuccessfully),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.connectedSuccessfully,
+      tone: LuoboToastTone.success,
+    );
     } else {
       setState(
         () => _loginError = authProvider.error ??
@@ -620,15 +617,12 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!
                   .failedToSelectClientCert(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+      tone: LuoboToastTone.error,
+    );
       }
     }
   }
@@ -649,17 +643,14 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                 context,
               )!
                   .failedToSelectCertificate(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+      tone: LuoboToastTone.error,
+    );
       }
     }
   }
@@ -1552,14 +1543,11 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                       const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: error));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.errorCopiedToClipboard),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        width: 260,
-                      ),
-                    );
+                    showLuoboToast(
+      context,
+      message: l10n.errorCopiedToClipboard,
+      tone: LuoboToastTone.info,
+    );
                   },
                 ),
               ],

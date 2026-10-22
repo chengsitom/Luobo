@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -99,24 +100,20 @@ class _AlbumScreenState extends State<AlbumScreen> {
     offlineService.startBackgroundDownload(_songs, subsonicService).then((_) {
       if (mounted) {
         setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.downloadedSongsFrom(_songs.length, _album!.name),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.downloadedSongsFrom(_songs.length, _album!.name),
+      tone: LuoboToastTone.info,
+    );
       }
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.downloadingSongsInBackground(_songs.length)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.downloadingSongsInBackground(_songs.length),
+      tone: LuoboToastTone.info,
+    );
     }
   }
 
@@ -336,13 +333,23 @@ class _AlbumScreenState extends State<AlbumScreen> {
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final song = _songs[index];
-                  return SongTile(
-                    song: song,
-                    playlist: _songs,
-                    index: index,
-                    showArtwork: false,
-                    showTrackNumber: true,
-                    showArtist: false,
+                  return Column(
+                    children: [
+                      SongTile(
+                        song: song,
+                        playlist: _songs,
+                        index: index,
+                        showArtwork: false,
+                        showTrackNumber: true,
+                        showArtist: false,
+                      ),
+                      // 序号行分隔线：左缩 42 对到歌名（设计稿/08 §3）。
+                      if (index < _songs.length - 1)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 42),
+                          child: Divider(height: 1, thickness: 0.5),
+                        ),
+                    ],
                   );
                 }, childCount: _songs.length),
               ),

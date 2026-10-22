@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -120,12 +121,10 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
         Provider.of<LibraryProvider>(context, listen: false);
     final result = await libraryProvider.refresh();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text(result.success ? l10n.libraryRefreshed : l10n.refreshFailed),
-        behavior: SnackBarBehavior.floating,
-      ),
+    showLuoboToast(
+      context,
+      message: result.success ? l10n.libraryRefreshed : l10n.refreshFailed,
+      tone: LuoboToastTone.info,
     );
   }
 
@@ -297,15 +296,11 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
       // 正常失败路径一致的提示，避免静默无反馈。
       debugPrint('[SavedProfiles] switchProfile threw: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              authProvider.error ?? l10n.failedToConnectToServer,
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: authProvider.error ?? l10n.failedToConnectToServer,
+      tone: LuoboToastTone.error,
+    );
       }
       return;
     } finally {
@@ -323,15 +318,11 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     // 提示并停留在当前页（成功时根路由已换成 MainScreen）。
     final applied = _isActive(authProvider, profile);
     if (!applied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            authProvider.error ?? l10n.failedToConnectToServer,
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: authProvider.error ?? l10n.failedToConnectToServer,
+      tone: LuoboToastTone.error,
+    );
       return;
     }
     // 成功：pop 回设置页避免叠层。

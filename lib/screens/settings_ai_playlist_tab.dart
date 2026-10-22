@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../widgets/luobo/luobo_toast.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -395,21 +396,18 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
     final processed = AiKnowledgeService.instance.processed;
     final failureReason = AiKnowledgeService.instance.lastFailureReason;
     if (processed > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text(AppLocalizations.of(context)!.knowledgeGenerated(processed)),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.knowledgeGenerated(processed),
+      tone: LuoboToastTone.info,
+    );
     } else if (failureReason != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!
                 .knowledgeGenerationFailed(failureReason),
-          ),
-        ),
-      );
+      tone: LuoboToastTone.info,
+    );
     }
   }
 
@@ -435,11 +433,11 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
           bytes: bytes,
         );
         if (result != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text(AppLocalizations.of(context)!.exportedTo(result))),
-          );
+          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.exportedTo(result),
+      tone: LuoboToastTone.info,
+    );
         }
       } else {
         final result = await FilePicker.platform.saveFile(
@@ -450,21 +448,21 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
           final file = File(result);
           await file.writeAsString(jsonStr);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content:
-                      Text(AppLocalizations.of(context)!.exportedTo(result))),
-            );
+            showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.exportedTo(result),
+      tone: LuoboToastTone.info,
+    );
           }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  AppLocalizations.of(context)!.exportFailed(e.toString()))),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.exportFailed(e.toString()),
+      tone: LuoboToastTone.info,
+    );
       }
     } finally {
       if (mounted) setState(() => _isExporting = false);
@@ -504,18 +502,18 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
       await AiKnowledgeService.instance
           .initialize(totalSongs: libraryProvider.cachedAllSongs.length);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(AppLocalizations.of(context)!.knowledgeImported(count))),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.knowledgeImported(count),
+      tone: LuoboToastTone.info,
+    );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  AppLocalizations.of(context)!.importFailed(e.toString()))),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.importFailed(e.toString()),
+      tone: LuoboToastTone.info,
+    );
       }
     } finally {
       if (mounted) setState(() => _isImporting = false);

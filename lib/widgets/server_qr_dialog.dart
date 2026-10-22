@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../widgets/luobo/luobo_toast.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -56,22 +57,18 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
 
       if (!mounted) return;
       final success = result['isSuccess'] == true;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? l10n.savedToGallery : l10n.failedToSaveQr),
-          backgroundColor: success ? Colors.green : Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: success ? l10n.savedToGallery : l10n.failedToSaveQr,
+      tone: LuoboToastTone.info,
+    );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.failedToSaveQr),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.failedToSaveQr,
+      tone: LuoboToastTone.error,
+    );
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import '../l10n/app_localizations.dart';
 import '../services/analytics_service.dart';
@@ -77,9 +78,11 @@ Future<void> showRatingDialog(BuildContext context) async {
     );
     await AnalyticsService().markAppAsRated();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.thankYouFeedback)),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.thankYouFeedback,
+      tone: LuoboToastTone.info,
+    );
     }
   }
   ratingController.dispose();

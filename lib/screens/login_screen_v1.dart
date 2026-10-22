@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -234,14 +235,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: error));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.errorCopiedToClipboard),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        width: 260,
-                      ),
-                    );
+                    showLuoboToast(
+      context,
+      message: l10n.errorCopiedToClipboard,
+      tone: LuoboToastTone.info,
+    );
                   },
                 ),
               ],
@@ -325,17 +323,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                 context,
               )!
                   .failedToSelectClientCert(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+      tone: LuoboToastTone.error,
+    );
       }
     }
   }
@@ -356,17 +351,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(
                 context,
               )!
                   .failedToSelectCertificate(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+      tone: LuoboToastTone.error,
+    );
       }
     }
   }
@@ -458,15 +450,11 @@ class _LoginScreenState extends State<LoginScreen> {
       // popUntil(isFirst) 全部弹出 → AuthWrapper 因 state=authenticated 显示
       // MainScreen 首页；首次登录时根路由已是 first，无副作用。
       Navigator.of(context).popUntil((route) => route.isFirst);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!.connectedSuccessfully,
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.connectedSuccessfully,
+      tone: LuoboToastTone.success,
+    );
     } else if (!success && mounted) {
       setState(
         () => _loginError = authProvider.error ??
@@ -514,13 +502,11 @@ class _LoginScreenState extends State<LoginScreen> {
             AppLocalizations.of(context)!.failedToConnectToServer,
       );
     } else if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.qrConfigImported),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.qrConfigImported,
+      tone: LuoboToastTone.success,
+    );
       // 与表单登录一致：弹到根路由显示首页。
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
@@ -532,14 +518,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final granted = await localService.requestPermission();
     if (!granted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.storagePermissionRequired,
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.storagePermissionRequired,
+      tone: LuoboToastTone.error,
+    );
       }
       return;
     }
@@ -559,14 +542,13 @@ class _LoginScreenState extends State<LoginScreen> {
             await authProvider.setLocalOnlyMode(true);
             _popIfPushed();
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(added == 0
+            showLuoboToast(
+      context,
+      message: added == 0
                     ? AppLocalizations.of(context)!.noFilesSelected
-                    : AppLocalizations.of(context)!.noMusicFilesFound),
-                backgroundColor: Colors.orange,
-              ),
-            );
+                    : AppLocalizations.of(context)!.noMusicFilesFound,
+      tone: LuoboToastTone.error,
+    );
           }
         }
       } finally {
@@ -604,12 +586,11 @@ class _LoginScreenState extends State<LoginScreen> {
           await authProvider.setLocalOnlyMode(true);
           _popIfPushed();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.noMusicFilesFound),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.noMusicFilesFound,
+      tone: LuoboToastTone.error,
+    );
         }
       }
     } finally {

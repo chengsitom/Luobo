@@ -1,6 +1,6 @@
-# Luobo - 最佳 Navidrome 客户端
+# Luobo - 飞牛音乐 / 道理鱼 客户端
 
-**Luobo**（萝卜）是基于 [Musly](https://github.com/dddevid/Musly) 二次开发的 Navidrome / Subsonic 音乐播放客户端，使用 Flutter 构建，支持 Android 和 iOS。**相比原版 Musly 增加了 Apple Music 风格首页、车载模式、听歌报告、AI 歌单等特色功能，并对设置页、音乐库艺术家页做了重构，以及大规模国际化适配。**
+**Luobo**（萝卜）是基于 [Musly](https://github.com/dddevid/Musly) 二次开发的音乐播放客户端，使用 Flutter 构建，支持 Android 和 iOS，**专注服务飞牛音乐与道理鱼两大音乐平台**。**相比原版 Musly 增加了 Apple Music 风格首页、车载模式、听歌报告、AI 歌单等特色功能，并对设置页、音乐库艺术家页做了重构，以及大规模国际化适配。**
 
 > **当前版本：v1.1.20**（在 Musly v1.0.13 基础上独立迭代）
 
@@ -10,7 +10,7 @@
 
 ### 核心播放与服务器支持
 
-- **多服务器兼容** — 支持 Navidrome、Subsonic、Airsonic、Gonic、Emby、Jellyfin
+- **双平台支持** — 专注连接飞牛音乐与道理鱼两大音乐平台
 - **高品质音乐流** — 智能转码（WiFi/移动网络自适应比特率切换）、ReplayGain、无缝播放（Gapless Playback）
 - **转码流完整进度控制** — 转码播放（AAC/MP3/Opus）时进度条正常显示，可随意拖动跳转，不再受限于服务器实时转码
 - **音频增强** — 10 波段均衡器、淡入淡出、音高控制、播放速度调节、Dolby Atmos 支持

@@ -102,6 +102,18 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  /// 搜索框右侧「取消」（设计稿/08 §2）：有输入 → 清空 + 收键盘；
+  /// 无输入 → 退出搜索页（与 fnos 一致）。
+  void _onCancelSearch() {
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+      _focusNode.unfocus();
+      _onSearchChanged('');
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
   void _onSearchChanged(String value) {
     _debounceTimer?.cancel();
 
@@ -185,23 +197,74 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(56),
+                  // 设计稿/08 §2：白卡 r14 + 放大镜 + 框外「取消」（空态弱化 /
+                  // 输入态强调）。替换原 CupertinoSearchTextField（灰底 r12，
+                  // 与白卡一族的设计体系不一致）。
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: CupertinoSearchTextField(
-                      controller: _searchController,
-                      focusNode: _focusNode,
-                      placeholder: AppLocalizations.of(
-                        context,
-                      )!
-                          .searchPlaceholder,
-                      style: theme.textTheme.bodyLarge,
-                      backgroundColor:
-                          isDark ? AppTheme.darkCard : AppTheme.lightBackground,
-                      onChanged: _onSearchChanged,
-                      onSubmitted: (value) {
-                        setState(() => _showSuggestions = false);
-                        _search(value);
-                      },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppTheme.darkCard
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: isDark
+                                  ? null
+                                  : const [
+                                      BoxShadow(
+                                        color: Colors.black12,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ],
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _focusNode,
+                              style: theme.textTheme.bodyLarge,
+                              decoration: InputDecoration(
+                                hintText: AppLocalizations.of(
+                                  context,
+                                )!
+                                    .searchPlaceholder,
+                                hintStyle: theme.textTheme.bodyLarge
+                                    ?.copyWith(
+                                      color: AppTheme.lightSecondaryText,
+                                    ),
+                                prefixIcon: Icon(
+                                  Icons.search_rounded,
+                                  size: 20,
+                                  color: AppTheme.lightSecondaryText,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onChanged: _onSearchChanged,
+                              onSubmitted: (value) {
+                                setState(() => _showSuggestions = false);
+                                _search(value);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: _onCancelSearch,
+                          child: Text(
+                            AppLocalizations.of(context)!.cancel,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: _query.isEmpty
+                                  ? AppTheme.lightSecondaryText
+                                  : theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

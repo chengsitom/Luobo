@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -291,8 +292,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     final path = await service.pickMusicDirectory();
     if (path == null) return;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context)!.addedFolder(path))),
+    showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.addedFolder(path),
+      tone: LuoboToastTone.info,
     );
     // Trigger a rescan if merge mode is enabled
     final libraryProvider = context.read<LibraryProvider>();
@@ -325,8 +328,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     if (confirmed != true) return;
     await service.removeCustomScanPath(path);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context)!.folderRemoved)),
+    showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.folderRemoved,
+      tone: LuoboToastTone.info,
     );
   }
 
@@ -412,11 +417,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     final hasPermission = await service.requestPermission();
     if (!hasPermission) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  AppLocalizations.of(context)!.storagePermissionRequired)),
-        );
+        showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.storagePermissionRequired,
+      tone: LuoboToastTone.info,
+    );
       }
       return;
     }
@@ -480,9 +485,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     await coverCacheManager.emptyCache();
     await _bpmAnalyzer.clearCache();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.allCacheCleared)),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.allCacheCleared,
+      tone: LuoboToastTone.info,
+    );
       await _loadCacheSizes();
       setState(() {});
     }
@@ -509,11 +516,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         await _offlineService.deleteAllDownloads();
         await _loadOfflineInfo();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.downloadsDeleted),
-            ),
-          );
+          showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.downloadsDeleted,
+      tone: LuoboToastTone.info,
+    );
         }
       },
     );
@@ -573,11 +580,11 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
             await _bpmAnalyzer.clearCache();
             setState(() {});
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.bpmCacheCleared),
-                ),
-              );
+              showLuoboToast(
+      context,
+      message: l10n.bpmCacheCleared,
+      tone: LuoboToastTone.info,
+    );
             }
           },
         ),

@@ -13,10 +13,15 @@ import '../services/offline_service.dart';
 import '../services/transcoding_service.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import 'album_artwork.dart';
 import 'animated_equalizer.dart';
 import 'dolby_atmos_badge.dart';
+import 'luobo/create_playlist_dialog.dart';
+import 'luobo/empty_state.dart';
+import 'luobo/luobo_toast.dart';
+import 'luobo/sheet_shell.dart';
 import 'glass_surface.dart';
 import 'multi_artist_widget.dart';
 import 'pressable_scale.dart';
@@ -73,12 +78,7 @@ class SongTile extends StatelessWidget {
             leading: _buildLeading(context, isCurrentSong),
             title: Text(
               song.title,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: isCurrentSong
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-                fontWeight: isCurrentSong ? FontWeight.w600 : FontWeight.normal,
-              ),
+              style: theme.textTheme.bodyLarge,
               maxLines: titleMaxLines,
               overflow: TextOverflow.ellipsis,
             ),
@@ -107,9 +107,11 @@ class SongTile extends StatelessWidget {
                   ),
                 )
               : Text(
-                  '${song.track ?? index ?? 1}',
+                  // 序号行（设计稿/08 §3）：两位补零 + 等宽数字，对齐 fnos「01/02」。
+                  '${song.track ?? index ?? 1}'.padLeft(2, '0'),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppTheme.lightSecondaryText,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                 ),
         ),
@@ -145,19 +147,32 @@ class SongTile extends StatelessWidget {
                     preserveAspectRatio: true,
                   ),
                   if (isCurrentSong)
-                    Positioned.fill(
+                    // 播放中态：封面中央叠 26px 半透明白圆 + 黑 ▶（设计稿/08 §1，
+                    // 对标 fnos「封面内嵌播放按钮」）。状态由封面单一外显，
+                    // 标题不再用主色/加粗。⚠️ 与右下角质量徽章（_buildQualityTag）
+                    // 位置不同（中心 vs 角），互不遮挡。
+                    Center(
                       child: Container(
+                        width: 26,
+                        height: 26,
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(resolvedRadius),
-                        ),
-                        child: Center(
-                          child: Selector<PlayerProvider, bool>(
-                            selector: (ctx, p) => p.isPlaying,
-                            builder: (ctx, isPlaying, __) => AnimatedEqualizer(
-                              color: Colors.white,
-                              isPlaying: isPlaying,
+                          color: Colors.white.withValues(alpha: 0.82),
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(0, 1),
                             ),
+                          ],
+                        ),
+                        // 三角形视觉重心偏左，右移 2px 使其在圆内居中。
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 2),
+                          child: Icon(
+                            Icons.play_arrow_rounded,
+                            size: 15,
+                            color: Colors.black,
                           ),
                         ),
                       ),
@@ -423,7 +438,7 @@ class SongTile extends StatelessWidget {
           ),
         const SizedBox(width: 8),
         IconButton(
-          icon: const Icon(Icons.more_horiz),
+          icon: const Icon(AppIcons.moreV),
           iconSize: 20,
           color: Theme.of(context).textTheme.bodySmall?.color,
           onPressed: () => _showOptions(context),
@@ -653,25 +668,11 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         iconColor: Colors.green,
         onTap: () async {
           final l10n = AppLocalizations.of(context)!;
-          final messenger = ScaffoldMessenger.of(context);
-          final confirm = await showDialog<bool>(
+          final confirm = await showLuoboConfirmSheet(
             context: context,
-            builder: (context) => AlertDialog(
-              title: Text(AppLocalizations.of(context)!.removeDownload),
-              content: Text(
-                AppLocalizations.of(context)!.removeDownloadConfirm,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(AppLocalizations.of(context)!.cancel),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(AppLocalizations.of(context)!.remove),
-                ),
-              ],
-            ),
+            title: l10n.removeDownload,
+            message: l10n.removeDownloadConfirm,
+            confirmLabel: l10n.remove,
           );
           if (confirm == true) {
             await _offlineService.deleteSong(widget.song.id);
@@ -679,11 +680,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
               setState(() {
                 _isDownloaded = false;
               });
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text(l10n.downloadRemoved),
-                  duration: const Duration(seconds: 2),
-                ),
+              showLuoboToast(
+                context,
+                message: l10n.downloadRemoved,
+                tone: LuoboToastTone.success,
               );
             }
           }
@@ -706,7 +706,6 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       listen: false,
     );
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
 
     setState(() {
       _isDownloading = true;
@@ -733,18 +732,16 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         });
 
         if (success) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(l10n.downloadedTitle(widget.song.title)),
-              duration: const Duration(seconds: 2),
-            ),
+          showLuoboToast(
+            context,
+            message: l10n.downloadedTitle(widget.song.title),
+            tone: LuoboToastTone.success,
           );
         } else {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(l10n.downloadFailed),
-              duration: const Duration(seconds: 2),
-            ),
+          showLuoboToast(
+            context,
+            message: l10n.downloadFailed,
+            tone: LuoboToastTone.error,
           );
         }
       }
@@ -753,11 +750,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         setState(() {
           _isDownloading = false;
         });
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(l10n.downloadError(e)),
-            duration: const Duration(seconds: 2),
-          ),
+        showLuoboToast(
+          context,
+          message: l10n.downloadError(e),
+          tone: LuoboToastTone.error,
         );
       }
     }
@@ -840,28 +836,23 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       listen: false,
     );
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       await subsonicService.setRating(widget.song.id, rating);
 
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              rating > 0 ? l10n.songRated(rating) : l10n.ratingRemoved,
-            ),
-            duration: const Duration(seconds: 2),
-          ),
+        showLuoboToast(
+          context,
+          message: rating > 0 ? l10n.songRated(rating) : l10n.ratingRemoved,
+          tone: LuoboToastTone.info,
         );
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(l10n.failedToSetRating(e)),
-            duration: const Duration(seconds: 2),
-          ),
+        showLuoboToast(
+          context,
+          message: l10n.failedToSetRating(e),
+          tone: LuoboToastTone.error,
         );
       }
     }
@@ -873,7 +864,6 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       listen: false,
     );
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       if (_isStarred) {
@@ -882,11 +872,22 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           _isStarred = false;
         });
         if (mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(l10n.removedFromLikedSongs),
-              duration: const Duration(seconds: 2),
-            ),
+          // 可逆操作带「撤销」（设计稿/08 §6）：撤销 = 重新收藏。
+          showLuoboToast(
+            context,
+            message: l10n.removedFromLikedSongs,
+            tone: LuoboToastTone.info,
+            actionLabel: l10n.undo,
+            onAction: () {
+              subsonicService
+                  .star(id: widget.song.id)
+                  .then((_) {
+                    if (mounted) {
+                      setState(() => _isStarred = true);
+                    }
+                  })
+                  .catchError((Object _) {});
+            },
           );
         }
       } else {
@@ -895,21 +896,30 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           _isStarred = true;
         });
         if (mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(l10n.addedToLikedSongs),
-              duration: const Duration(seconds: 2),
-            ),
+          showLuoboToast(
+            context,
+            message: l10n.addedToLikedSongs,
+            tone: LuoboToastTone.success,
+            actionLabel: l10n.undo,
+            onAction: () {
+              subsonicService
+                  .unstar(id: widget.song.id)
+                  .then((_) {
+                    if (mounted) {
+                      setState(() => _isStarred = false);
+                    }
+                  })
+                  .catchError((Object _) {});
+            },
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('${l10n.error}: ${e.toString()}'),
-            duration: const Duration(seconds: 2),
-          ),
+        showLuoboToast(
+          context,
+          message: '${l10n.error}: ${e.toString()}',
+          tone: LuoboToastTone.error,
         );
       }
     }
@@ -961,130 +971,120 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       context,
       listen: false,
     );
+    final l10n = AppLocalizations.of(context)!;
 
-    showGlassBottomSheet(
+    // 设计稿/08 §5（规格见 `docs/歌曲列表弹窗对标飞牛技术方案.md` §4.3）：
+    // 无标题 + 保留把手；「新建歌单」行置顶（玫红圆角方 + 白＋）；
+    // 已有歌单显示封面缩略图 + 「N 首」；无歌单时显示空态（EmptyState）。
+    showLuoboSheet(
       context: context,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppTheme.darkSurface
-              : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LuoboSheetRow(
+            leading: Container(
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
+                color: LuoboAccent.accent,
+                borderRadius: BorderRadius.circular(11),
               ),
+              child: const Icon(AppIcons.plus, size: 16, color: Colors.white),
             ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Text(
-                    AppLocalizations.of(context)!.addToPlaylist,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (libraryProvider.playlists.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text(AppLocalizations.of(context)!.noPlaylists),
-              )
-            else
-              ...libraryProvider.playlists.map(
-                (playlist) => ListTile(
-                  leading: const Icon(Icons.queue_music_rounded),
-                  title: Text(playlist.name),
-                  subtitle: Text(
-                    AppLocalizations.of(
-                      context,
-                    )!
-                        .songsCount(playlist.songCount ?? 0),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-
-                    final subsonicService = Provider.of<SubsonicService>(
-                      context,
-                      listen: false,
-                    );
-                    final l10n = AppLocalizations.of(context)!;
-                    final messenger = ScaffoldMessenger.of(context);
-
-                    try {
-                      debugPrint(
-                        'Attempting to add song ${song.id} (${song.title}) to playlist ${playlist.id} (${playlist.name})',
-                      );
-
-                      await subsonicService.updatePlaylist(
-                        playlistId: playlist.id,
-                        songIdsToAdd: [song.id],
-                      );
-
-                      debugPrint('Successfully added song to playlist via API');
-
-                      await libraryProvider.loadPlaylists();
-
-                      debugPrint('Playlists refreshed');
-
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.addedToPlaylist(
-                                    song.title,
-                                    playlist.name,
-                                  ),
-                                ),
-                              ),
-                            ],
+            title: l10n.newPlaylist,
+            showChevron: false,
+            onTap: () {
+              Navigator.of(ctx).pop();
+              showCreatePlaylistDialog(context);
+            },
+          ),
+          if (libraryProvider.playlists.isEmpty)
+            const LuoboEmptyState(
+              message: '还没有歌单，先建一个吧~',
+            )
+          else
+            ...libraryProvider.playlists.map(
+              (playlist) => LuoboSheetRow(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: playlist.coverArt != null
+                        ? AlbumArtwork(
+                            coverArt: playlist.coverArt,
+                            size: 38,
+                            borderRadius: 7,
+                          )
+                        : Container(
+                            color: LuoboAccent.soft(0.12),
+                            child: const Icon(
+                              CupertinoIcons.music_note_list,
+                              size: 18,
+                              color: LuoboAccent.accent,
+                            ),
                           ),
-                          duration: const Duration(seconds: 2),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } catch (e) {
-                      debugPrint('Error adding song to playlist: $e');
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(Icons.error, color: Colors.white),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(l10n.errorAddingToPlaylist(e)),
-                              ),
-                            ],
-                          ),
-                          duration: const Duration(seconds: 3),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
+                  ),
                 ),
+                title: playlist.name,
+                subtitle: l10n.songsCount(playlist.songCount ?? 0),
+                showChevron: false,
+                onTap: () async {
+                  Navigator.pop(ctx);
+
+                  final subsonicService = Provider.of<SubsonicService>(
+                    context,
+                    listen: false,
+                  );
+
+                  try {
+                    await subsonicService.updatePlaylist(
+                      playlistId: playlist.id,
+                      songIdsToAdd: [song.id],
+                    );
+                    await libraryProvider.loadPlaylists();
+                    if (!mounted) return;
+
+                    // 轻提示（设计稿/08 §6）：可逆操作带「撤销」——刚加的歌
+                    // 在歌单末尾（下标 = 添加前的 songCount），按 index 移除。
+                    showLuoboToast(
+                      context,
+                      message: l10n.addedToPlaylist(
+                        song.title,
+                        playlist.name,
+                      ),
+                      tone: LuoboToastTone.success,
+                      actionLabel: l10n.undo,
+                      onAction: () {
+                        subsonicService
+                            .updatePlaylist(
+                              playlistId: playlist.id,
+                              songIndexesToRemove: [playlist.songCount ?? 0],
+                            )
+                            .then((_) => libraryProvider.loadPlaylists())
+                            .catchError((Object _) {
+                          // 撤销失败只记录，不再弹（服务器已变时索引可能错位）。
+                          debugPrint(
+                            'Undo add-to-playlist failed for ${playlist.id}',
+                          );
+                        });
+                      },
+                    );
+                  } catch (e) {
+                    debugPrint('Error adding song to playlist: $e');
+                    if (!mounted) return;
+                    showLuoboToast(
+                      context,
+                      message: l10n.errorAddingToPlaylist(e),
+                      tone: LuoboToastTone.error,
+                    );
+                  }
+                },
               ),
-            const SizedBox(height: 16),
-          ],
-        ),
+            ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

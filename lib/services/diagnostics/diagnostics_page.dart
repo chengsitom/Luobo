@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../widgets/luobo/luobo_toast.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -79,9 +80,11 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
         );
         if (!mounted) return;
         if (path != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.diagnosticsExported(path))),
-          );
+          showLuoboToast(
+      context,
+      message: l10n.diagnosticsExported(path),
+      tone: LuoboToastTone.info,
+    );
         }
         return;
       }
@@ -89,17 +92,21 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       final path = await DiagnosticsService.instance.export();
       if (!mounted) return;
       if (path != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.diagnosticsExported(path))),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.diagnosticsExported(path),
+      tone: LuoboToastTone.info,
+    );
       } else {
         _copyToClipboard();
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.diagnosticsExportFailed)),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.diagnosticsExportFailed,
+      tone: LuoboToastTone.info,
+    );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -110,8 +117,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final text = await DiagnosticsService.instance.readableText(maxLines: 2000);
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.diagnosticsCopied)),
+    showLuoboToast(
+      context,
+      message: l10n.diagnosticsCopied,
+      tone: LuoboToastTone.info,
     );
   }
 

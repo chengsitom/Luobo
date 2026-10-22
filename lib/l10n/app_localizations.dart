@@ -1414,6 +1414,12 @@ abstract class AppLocalizations {
   /// **'New Playlist'**
   String get newPlaylist;
 
+  /// Toast 'Undo' action (reversible operations, e.g. add to playlist)
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undo;
+
   /// No description provided for @playlistName.
   ///
   /// In en, this message translates to:

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -240,11 +241,11 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
         _isError = true;
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.failedToLoadChapters),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.failedToLoadChapters,
+      tone: LuoboToastTone.info,
+    );
     }
   }
 
@@ -324,11 +325,11 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       chaptersComplete: true, // _chapters 是 take:10000 的全量列表
     );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.failedToLoadChapters),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.failedToLoadChapters,
+      tone: LuoboToastTone.info,
+    );
     }
   }
 

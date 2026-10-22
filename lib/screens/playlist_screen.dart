@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
@@ -8,6 +9,7 @@ import '../services/offline_service.dart';
 import '../services/favorite_playlists_service.dart';
 import '../services/playback_context_tracker.dart';
 import '../theme/app_theme.dart';
+import '../widgets/luobo/sheet_shell.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
@@ -124,21 +126,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         );
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.songRemovedFromPlaylist),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.songRemovedFromPlaylist,
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.errorRemovingSong(e)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.errorRemovingSong(e),
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }
@@ -185,12 +185,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.errorReorderingSong(e)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.errorReorderingSong(e),
+      tone: LuoboToastTone.info,
+    );
       }
       _loadPlaylist();
     }
@@ -222,24 +221,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final count = _selectedIndices.length;
     final l10n = AppLocalizations.of(context)!;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showLuoboConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.removeSongs),
-        content: Text(
-          l10n.removeSongsConfirm(count),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.remove, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: l10n.removeSongs,
+      message: l10n.removeSongsConfirm(count),
+      confirmLabel: l10n.remove,
     );
 
     if (confirmed != true || !mounted) return;
@@ -271,23 +257,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         _isSelecting = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.songsRemovedFromPlaylist(count),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.songsRemovedFromPlaylist(count),
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.errorRemovingSongs(e)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.errorRemovingSongs(e),
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }
@@ -297,16 +279,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     await FavoritePlaylistsService().toggleFavorite(widget.playlistId);
     if (mounted) {
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            FavoritePlaylistsService().isFavorite(widget.playlistId)
+      showLuoboToast(
+      context,
+      message: FavoritePlaylistsService().isFavorite(widget.playlistId)
                 ? l10n.addedToFavorites
                 : l10n.removedFromFavorites,
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      tone: LuoboToastTone.info,
+    );
     }
   }
 
@@ -327,24 +306,20 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     offlineService.startBackgroundDownload(songs, subsonicService).then((_) {
       if (mounted) {
         setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.downloadedSongsFrom(songs.length, _playlist!.name),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.downloadedSongsFrom(songs.length, _playlist!.name),
+      tone: LuoboToastTone.info,
+    );
       }
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.downloadingSongsInBackground(songs.length)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.downloadingSongsInBackground(songs.length),
+      tone: LuoboToastTone.info,
+    );
     }
   }
 
@@ -759,27 +734,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                       ),
                     ),
                     confirmDismiss: (_) async {
-                      return await showDialog<bool>(
+                      return await showLuoboConfirmSheet(
                             context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: Text(l10n.removeFromPlaylist),
-                              content: Text(
-                                l10n.removeSongFromPlaylistConfirm(song.title),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: Text(l10n.cancel),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text(
-                                    'Remove',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                              ],
+                            title: l10n.removeFromPlaylist,
+                            message: l10n.removeSongFromPlaylistConfirm(
+                              song.title,
                             ),
+                            confirmLabel: l10n.remove,
                           ) ??
                           false;
                     },

@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -125,15 +126,11 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
       // 正常失败路径一致的提示，避免静默无反馈。
       debugPrint('[Gateway] switchProfile threw: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              authProvider.error ?? l10n.failedToConnectToServer,
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: authProvider.error ?? l10n.failedToConnectToServer,
+      tone: LuoboToastTone.error,
+    );
       }
       return;
     } finally {
@@ -152,15 +149,11 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
     final applied = authProvider.config?.serverUrl == profile.serverUrl &&
         authProvider.config?.username == profile.username;
     if (!applied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            authProvider.error ?? l10n.failedToConnectToServer,
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: authProvider.error ?? l10n.failedToConnectToServer,
+      tone: LuoboToastTone.error,
+    );
       return;
     }
     // 成功：若本页是被 push 进入的（防御），pop 回上一页避免叠层。
@@ -203,13 +196,11 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (success) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(l10n.qrConfigImported),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: l10n.qrConfigImported,
+      tone: LuoboToastTone.success,
+    );
       // 与表单登录一致：弹到根路由显示首页。
       Navigator.of(context).popUntil((route) => route.isFirst);
     } else {

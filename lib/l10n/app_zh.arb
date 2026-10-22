@@ -752,6 +752,10 @@
   "playlist": "歌单",
   "internetRadio": "网络电台",
   "newPlaylist": "新建歌单",
+  "undo": "撤销",
+  "@undo": {
+    "description": "轻提示「撤销」动作（可逆操作，如添加到歌单）"
+  },
   "playlistName": "歌单名称",
   "create": "创建",
   "deletePlaylist": "删除歌单",

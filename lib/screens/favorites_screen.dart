@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:provider/provider.dart';
 import '../widgets/glass_surface.dart';
 import '../models/models.dart';
@@ -191,21 +192,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         setState(() {
           _favoriteSongs.removeAt(index);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.removedFromFavorites),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: l10n.removedFromFavorites,
+      tone: LuoboToastTone.info,
+    );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.error}: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showLuoboToast(
+      context,
+      message: '${AppLocalizations.of(context)!.error}: $e',
+      tone: LuoboToastTone.info,
+    );
       }
     }
   }

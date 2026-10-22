@@ -956,6 +956,10 @@
   "playlist": "Playlist",
   "internetRadio": "Internet Radio",
   "newPlaylist": "New Playlist",
+  "undo": "Undo",
+  "@undo": {
+    "description": "Toast 'Undo' action (reversible operations, e.g. add to playlist)"
+  },
   "playlistName": "Playlist Name",
   "create": "Create",
   "deletePlaylist": "Delete Playlist",

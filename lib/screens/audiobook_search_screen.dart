@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -67,11 +68,11 @@ class _AudiobookSearchScreenState extends State<AudiobookSearchScreen> {
       chaptersComplete: true, // 章节列表由详情页全量传入
     );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.failedToLoadChapters),
-        ),
-      );
+      showLuoboToast(
+      context,
+      message: AppLocalizations.of(context)!.failedToLoadChapters,
+      tone: LuoboToastTone.info,
+    );
     }
   }
 

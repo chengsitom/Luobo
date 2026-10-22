@@ -685,6 +685,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get newPlaylist => '新建歌单';
 
   @override
+  String get undo => '撤销';
+
+  @override
   String get playlistName => '歌单名称';
 
   @override

@@ -5,6 +5,8 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_surface.dart';
+import '../widgets/luobo/create_playlist_dialog.dart';
+import '../widgets/luobo/sheet_shell.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'playlist_screen.dart';
@@ -96,45 +98,8 @@ class PlaylistsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showCreatePlaylistDialog(BuildContext context) async {
-    final controller = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(AppLocalizations.of(dialogContext)!.newPlaylist),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: AppLocalizations.of(dialogContext)!.playlistName,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(AppLocalizations.of(dialogContext)!.cancel),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (controller.text.trim().isNotEmpty) {
-                final libraryProvider = Provider.of<LibraryProvider>(
-                  dialogContext,
-                  listen: false,
-                );
-                await libraryProvider.createPlaylist(controller.text.trim());
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-              }
-            },
-            child: Text(AppLocalizations.of(dialogContext)!.create),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-  }
+  Future<void> _showCreatePlaylistDialog(BuildContext context) =>
+      showCreatePlaylistDialog(context);
 
   void _showPlaylistOptions(BuildContext context, Playlist playlist) {
     final libraryProvider = Provider.of<LibraryProvider>(
@@ -168,6 +133,15 @@ class PlaylistsScreen extends StatelessWidget {
                 leading: const Icon(CupertinoIcons.trash, color: Colors.red),
                 title: Text(AppLocalizations.of(context)!.deletePlaylist),
                 onTap: () async {
+                  final l10n = AppLocalizations.of(context)!;
+                  // 接入确认弹窗（设计稿/08 §4，原为直接删除无确认）。
+                  final confirmed = await showLuoboConfirmSheet(
+                    context: context,
+                    title: l10n.deletePlaylist,
+                    message: l10n.deletePlaylistConfirmation(playlist.name),
+                    confirmLabel: l10n.delete,
+                  );
+                  if (confirmed != true || !context.mounted) return;
                   Navigator.pop(context);
                   await libraryProvider.deletePlaylist(playlist.id);
                 },
