@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../theme/design_tokens.dart';
 import 'glass.dart';
@@ -25,8 +26,10 @@ class GlassPillNavItem {
 /// 因此三项严格等宽等距，专辑封面占一个等宽槽位（不是贴右边缘的小图标）。
 /// 宽度由外层约束到 [LuoboGlass.navWidth]（256dp，居中浮动）。
 ///
-/// - 选中态：玫红实心圆（[LuoboGlass.navBubbleSize]）+ 白色图标
-/// - 未选中：42% 黑 / 白描边图标
+/// - 选中态：玫红淡底圆（[LuoboGlass.navBubbleSize]）+ 玫红图标；未选中：`fg @ .75`
+/// - **深色**：胶囊用「浅色面纱」渐变（[LuoboGlass.navTintDark]）而不是黑纱 ——
+///   飞牛的深色胶囊比页面**更亮**，黑纱会像在页面上挖了个洞。
+/// - 点击**未选中**的前三项时给一次轻触感（飞牛的同款反馈）；点已选中项 / 封面槽不震。
 /// - 最右：当前专辑圆封面（点击进播放页）；无播放时传 `art: null` 即不渲染该槽。
 ///   进度环由调用方用 [LuoboNavArtRing] 包好再传进来 —— 这样进度每帧变化时
 ///   **只有那个环重建**，不会把整条毛玻璃底栏拖进每帧重建（§5 性能红线）。
@@ -55,11 +58,18 @@ class GlassPillNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
-    final unselected = c.fg.withValues(alpha: 0.42);
+    final unselected = c.fg.withValues(alpha: LuoboGlass.navUnselectedAlpha);
+    final selectedBubble = LuoboAccent.soft(
+      c.isDark ? LuoboGlass.navBubbleAlphaDark : LuoboGlass.navBubbleAlphaLight,
+    );
 
     return LuoboGlassSurface(
       borderRadius: LuoboRadius.pillR,
       strongBorder: strongBorder,
+      // 深色：浅色面纱渐变 + 稍强的描边（飞牛实测，见 token 注释）。
+      // 浅色沿用默认的白 .65 实色，与飞牛浅色 `#FBFBFB` 一致。
+      tintGradient: c.isDark ? LuoboGlass.navTintDark : null,
+      borderColor: c.isDark ? LuoboGlass.navBorderDark : null,
       child: SizedBox(
         height: LuoboGlass.navHeight,
         child: Row(
@@ -70,6 +80,7 @@ class GlassPillNav extends StatelessWidget {
                   item: items[i],
                   selected: i == currentIndex,
                   unselectedColor: unselected,
+                  selectedBubbleColor: selectedBubble,
                   onTap: () => onTap(i),
                 ),
               ),
@@ -194,12 +205,14 @@ class _NavSlot extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.unselectedColor,
+    required this.selectedBubbleColor,
     required this.onTap,
   });
 
   final GlassPillNavItem item;
   final bool selected;
   final Color unselectedColor;
+  final Color selectedBubbleColor;
   final VoidCallback onTap;
 
   @override
@@ -210,7 +223,11 @@ class _NavSlot extends StatelessWidget {
       label: item.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: () {
+          // 只在「未选中 → 选中」时给触感：重复点当前项、点封面槽都不震（对齐飞牛）。
+          if (!selected) HapticFeedback.lightImpact();
+          onTap();
+        },
         child: Center(
           child: Stack(
             alignment: Alignment.center,
@@ -222,7 +239,7 @@ class _NavSlot extends StatelessWidget {
                   decoration: BoxDecoration(
                     // 对标飞牛：选中态是「淡玫红圆底 + 玫红图标」，而非「饱和实心圆 +
                     // 白图标」（用户 2026-10-20：配色向飞牛看齐、审美更轻盈）。
-                    color: LuoboAccent.soft(LuoboGlass.navBubbleAlpha),
+                    color: selectedBubbleColor,
                     shape: BoxShape.circle,
                   ),
                 ),

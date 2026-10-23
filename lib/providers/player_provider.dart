@@ -115,6 +115,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   RadioStation? _currentRadioStation;
   bool _isPlayingRadio = false;
 
+  /// 当前队列是否由首页「漫游」入口建立。
+  ///
+  /// 迷你播放条据此把最右按钮切成「漫游标识」（不可点），否则是「歌曲列表」。
+  /// 语义 = **队列来源**：换一支队列就离开漫游；队列内切歌（`skipToIndex` /
+  /// 删除当前曲）传的是同一个队列实例，不算换源。电台 / 有声书一律退出漫游。
+  bool _isRoamingQueue = false;
+
   // ── 有声书状态（道理鱼）──────────────────────────────────────────────
   // 见 docs/有声书接入技术方案.md §8.1。_isPlayingAudiobook 是单一 gate：
   // 歌词短路 / scrobble / 统计 / 队列持久化 / 车载模式 / shuffle/repeat 全按它判断。
@@ -1159,6 +1166,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   RadioStation? get currentRadioStation => _currentRadioStation;
   bool get isPlayingRadio => _isPlayingRadio;
 
+  /// 当前播放是否处于首页「漫游」上下文（队列由漫游入口建立且未被别的队列替换）。
+  bool get isRoamingQueue => _isRoamingQueue;
+
   /// 是否正在播放有声书（§8.1）。单一 gate：歌词短路 / 统计隔离 /
   /// 队列持久化 / 车载守卫 / shuffle/repeat 全按此判断。
   bool get isPlayingAudiobook => _isPlayingAudiobook;
@@ -1909,6 +1919,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool audiobook = false,
     Audiobook? audiobookBook,
     int? resumePositionMs,
+    bool roaming = false,
   }) async {
     // 从有声书切到普通歌/另一本有声书：先保存上一本的进度（§9.2-2）。
     if (_isPlayingAudiobook && !audiobook) {
@@ -1937,6 +1948,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     try {
+      // 是否换了队列 —— 只有换源才重新判定「漫游」归属；队列内切歌
+      // （`skipToIndex` / 删除当前曲都传同一个 `_queue` 实例）不算。
+      var replacedQueue = false;
       if (playlist != null) {
         final isNewQueue = !identical(playlist, _queue);
         _queue = List.from(playlist);
@@ -1947,12 +1961,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _shuffleHistory.clear();
           if (_shuffleEnabled) _rebuildShuffleOrder();
         }
+        replacedQueue = isNewQueue;
       } else if (_queue.isEmpty || !_queue.any((s) => s.id == song.id)) {
         _queue = [song];
         _currentIndex = 0;
         _shuffleHistory.clear();
+        replacedQueue = true;
       } else {
         _currentIndex = _queue.indexWhere((s) => s.id == song.id);
+      }
+
+      // 漫游归属：有声书永远不算；换队列时按调用方声明的 `roaming` 定源
+      // （只有首页漫游入口传 true，其余播放路径默认 false → 自动退出漫游）。
+      if (audiobook) {
+        _isRoamingQueue = false;
+      } else if (replacedQueue) {
+        _isRoamingQueue = roaming;
       }
 
       _currentSong = song;
@@ -2440,6 +2464,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    // 电台不经过 playSong → 在这里显式退出漫游（先置位，后面的 notify 才会带上）。
+    _isRoamingQueue = false;
     _isLoading = true;
     notifyListeners();
 
@@ -3275,7 +3301,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     _autoDjService.setLocalPool(pool);
 
-    await playSong(queue.first, playlist: queue, startIndex: 0);
+    // `roaming: true` → 迷你播放条的最右按钮切成「漫游标识」。
+    // `forcePlay: true` → 万一洗牌后第一首正好是当前歌，也要真正换掉队列；
+    // 否则 `playSong` 的同曲快捷键会退化成暂停/继续，漫游队列根本没建立。
+    await playSong(
+      queue.first,
+      playlist: queue,
+      startIndex: 0,
+      forcePlay: true,
+      roaming: true,
+    );
     return true;
   }
 

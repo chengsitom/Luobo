@@ -25,6 +25,7 @@ class LuoboGlassSurface extends StatelessWidget {
     this.borderRadius,
     this.blur,
     this.tint,
+    this.tintGradient,
     this.borderColor,
     this.shadows,
     this.padding,
@@ -40,6 +41,10 @@ class LuoboGlassSurface extends StatelessWidget {
   final double? blur;
 
   final Color? tint;
+
+  /// 渐变 tint（与 [tint] 二选一）。深色底栏用竖向渐变模拟飞牛的「上薄下厚」面纱。
+  final Gradient? tintGradient;
+
   final Color? borderColor;
   final List<BoxShadow>? shadows;
   final EdgeInsetsGeometry? padding;
@@ -69,7 +74,8 @@ class LuoboGlassSurface extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: tint ?? c.glassTint,
+              color: tintGradient == null ? (tint ?? c.glassTint) : null,
+              gradient: tintGradient,
               borderRadius: br,
               border: Border.all(
                 color: border,

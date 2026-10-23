@@ -417,21 +417,55 @@ abstract final class LuoboGlass {
   static const double navWidth = 256;
 
   /// 底栏高度（飞牛实测 186px = 62dp）。
-  static const double navHeight = 56;
+  ///
+  /// 2026-10-23 起取飞牛实测值 62（此前是 56）：选中圈放大到 54dp 后，56 高的胶囊
+  /// 只剩 1dp 余量、圈会顶到上下边缘；飞牛的圈高 54 / 胶囊高 62 → 上下各留 **4dp**。
+  /// 封面槽的 52dp 进度环同样从「2dp 余量」回到飞牛的 **5dp 余量**。
+  static const double navHeight = 62;
 
   /// 底栏选中态圆底直径。
   ///
-  /// **对标飞牛**（2026-10-20 复测 `01-首页` 截图）：飞牛选中态是「**淡玫红圆底 +
-  /// 玫红图标**」的轻盈做法，背景圈实测直径 ~54dp、≈ 封面大小。Luobo 据此改为
-  /// 「淡底（[navBubbleAlpha]）+ 玫红图标」（图标集仍用 Lucide 线性，未改成飞牛的填充）。
+  /// **对标飞牛**（2026-10-20 / 2026-10-23 两次实测）：飞牛选中态是「**淡玫红圆底 +
+  /// 玫红图标**」的轻盈做法。2026-10-23 在纯色页面（`08-设置/设置根页-深色.jpg`）上
+  /// 量到红色圈体 bbox **168×162px @3x → 56×54dp**（抗锯齿取整），故取 **54dp** ——
+  /// 比右侧 45dp 的专辑封面**大一圈**，与飞牛的圈/封面比例一致（用户 2026-10-23：
+  /// 「选中时的纯色圆圈再大一点，也和飞牛音乐对齐」）。
   ///
-  /// 尺寸锚点是**右侧专辑封面槽（45dp）**：原先只「刚好包住图标」的 24dp 气泡和
-  /// 45dp 封面并排时视觉落差太大、不协调（用户 2026-10-20 反馈）。改为 **40dp** ——
-  /// 与封面可见圆盘（45dp）接近同一视觉量级，也对齐飞牛「选中圈 ≈ 封面」的比例。
-  static const double navBubbleSize = 40;
+  /// 演变：24dp（只包住图标）→ 40dp（与封面同量级）→ 54dp（飞牛绝对值）。
+  static const double navBubbleSize = 54;
 
-  /// 选中态淡玫红圆底的不透明度（对标飞牛的淡粉圈；双模式共用一档）。
-  static const double navBubbleAlpha = 0.16;
+  /// 选中态淡玫红圆底的不透明度。
+  ///
+  /// **按模式分档**（2026-10-23 深色巡检实测）：飞牛选中圈 ≈ 玫红叠在胶囊底色上——
+  /// 浅色反解 α ≈ 0.14（`#F5E0E5` 叠在 `#FBFBFB`）、深色反解 α ≈ 0.20
+  /// （`#552D36` 叠在 `#2D2D2F`）。深色下底色暗，同一 α 会明显更淡，故提一档。
+  static const double navBubbleAlphaLight = 0.14;
+  static const double navBubbleAlphaDark = 0.20;
+
+  /// 未选中图标的不透明度。
+  ///
+  /// 飞牛实测**深浅同档 ≈ 0.75**：浅色字形 `#3F3F3F` 叠在 `#FBFBFB` 上、
+  /// 深色 `#CACACA` 叠在 `#2D2D2F` 上，反解都是 `fg @ 0.75`。
+  /// 旧值 0.42 会让图标明显偏淡（深色下尤其像「禁用态」）。
+  static const double navUnselectedAlpha = 0.75;
+
+  /// 深色底栏的玻璃 tint：**浅色面纱**，而不是黑纱。
+  ///
+  /// 飞牛深色实测（`08-设置/设置根页-深色.jpg`，页面 `#1E1E20`）：胶囊自身是
+  /// **`#28282A`（顶）→ `#343436`（底）的竖向渐变** —— 比页面**更亮**。
+  /// 旧配方 `black .50` 会让胶囊比页面更暗，像在页面上挖了个洞。
+  /// 反解为叠在模糊层上的白 α：顶部 ≈ .045、底部 ≈ .10。
+  static const LinearGradient navTintDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0x0CFFFFFF), Color(0x1AFFFFFF)],
+  );
+
+  /// 深色底栏描边。
+  ///
+  /// 飞牛深色实测边缘 `#4B4B4D` 叠在 `#2D2D2F` 上 → `white @ .15`
+  /// （比默认深色玻璃描边 `.10` 更明显一档，用来托住浅色面纱的轮廓）。
+  static const Color navBorderDark = Color(0x26FFFFFF);
 
   /// 底栏图标字形大小（飞牛实测未选中图标 53px @3x ≈ **18dp**）。
   static const double navIconSize = 18;

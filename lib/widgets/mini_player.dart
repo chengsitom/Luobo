@@ -10,6 +10,7 @@ import '../models/radio_station.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/player_ui_settings_service.dart';
+import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../theme/app_theme.dart';
 import 'luobo/luobo_toast.dart';
@@ -18,6 +19,8 @@ import '../utils/screen_helper.dart';
 import '../services/transcoding_service.dart';
 import 'album_artwork.dart';
 import 'luobo/glass.dart';
+import 'glass_surface.dart';
+import '../screens/now_playing_screen.dart';
 
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTap;
@@ -42,6 +45,7 @@ class MiniPlayer extends StatelessWidget {
 
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
+        final colors = LuoboColors.of(context);
 
         final String title;
         final String? subtitle;
@@ -114,15 +118,17 @@ class MiniPlayer extends StatelessWidget {
                     width: double.infinity,
                     height: LuoboGlass.barHeight,
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.black.withValues(alpha: 0.45)
-                          : Colors.white.withValues(alpha: 0.62),
+                      // 与底栏（`GlassPillNav`）共用同一套玻璃配方 —— 两者在同一条带里
+                      // 互斥出现，深浅两态的 tint / 描边必须同源，否则切页会「变色」。
+                      // 深色：浅色面纱渐变（飞牛深色胶囊比页面更亮，见 token 注释）。
+                      color: isDark ? null : colors.glassTint,
+                      gradient: isDark ? LuoboGlass.navTintDark : null,
                       borderRadius: BorderRadius.circular(LuoboGlass.barRadius),
                       border: Border.all(
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.14)
-                            : Colors.white.withValues(alpha: 0.85),
-                        width: 0.8,
+                            ? LuoboGlass.navBorderDark
+                            : colors.glassBorder,
+                        width: LuoboGlass.borderWidth,
                       ),
                     ),
                     // ⚠️ 底部那条细进度线已删（§6.3）：条改成**胶囊**后贴底线会切过
@@ -452,15 +458,28 @@ class _MiniPlayerControls extends StatelessWidget {
 
   const _MiniPlayerControls({this.isRadio = false});
 
+  /// 最右「歌曲列表」→ 播放队列浮层。
+  ///
+  /// 用播放条自己的 context 弹：播放条挂在 `Scaffold.bottomNavigationBar` 上，
+  /// 它与 body 里的嵌套 Navigator 是**兄弟**子树 → 最近的 Navigator 就是根 Navigator，
+  /// 遮罩会盖住条带本身（这正是期望行为）。
+  void _openQueue(BuildContext context) {
+    showGlassBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const QueueSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = isDark ? Colors.white : Colors.black;
 
     return Selector<PlayerProvider, (bool, bool, bool)>(
-      selector: (_, p) => (p.isPlaying, p.hasNext, p.isPlayingAudiobook),
+      selector: (_, p) => (p.isPlaying, p.isPlayingAudiobook, p.isRoamingQueue),
       builder: (context, data, _) {
-        final (isPlaying, hasNext, isAudiobook) = data;
+        final (isPlaying, isAudiobook, isRoaming) = data;
         final provider = context.read<PlayerProvider>();
         final playerUiSettings = PlayerUiSettingsService();
 
@@ -562,15 +581,31 @@ class _MiniPlayerControls extends StatelessWidget {
                             },
                           ),
 
-                        if (!isRadio)
+                        // 最右（对齐飞牛）：漫游中是**漫游标识**、不可点；
+                        // 其余情况是「歌曲列表」，点开播放队列浮层。
+                        //
+                        // ⚠️ 播放条**不再放「下一首」**（用户 2026-10-23）：省下的
+                        // 宽度全给歌名，切歌走播放页 / 队列。
+                        if (!isRadio && isRoaming)
+                          SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: Icon(
+                              AppIcons.roam,
+                              size: ScreenHelper.miniPlayerIconSize(context),
+                              color: color,
+                            ),
+                          ),
+                        if (!isRadio && !isRoaming)
                           IconButton(
-                            onPressed: hasNext ? provider.skipNext : null,
+                            onPressed: () => _openQueue(context),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
-                                minWidth: 36, minHeight: 36),
-                            icon: Icon(Icons.skip_next_rounded,
-                                size: ScreenHelper.miniPlayerSkipIconSize(
-                                    context)),
+                                minWidth: 34, minHeight: 34),
+                            icon: Icon(
+                              AppIcons.viewList,
+                              size: ScreenHelper.miniPlayerIconSize(context),
+                            ),
                             color: color,
                           ),
                       ],
