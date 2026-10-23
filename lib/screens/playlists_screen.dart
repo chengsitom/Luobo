@@ -3,9 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_surface.dart';
 import '../widgets/luobo/create_playlist_dialog.dart';
+import '../widgets/luobo/playlist_settings.dart';
 import '../widgets/luobo/sheet_shell.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
@@ -72,7 +73,7 @@ class PlaylistsScreen extends StatelessWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 150),
+              padding: const EdgeInsets.only(bottom: 100),
               itemCount: libraryProvider.playlists.length,
               itemBuilder: (context, index) {
                 final playlist = libraryProvider.playlists[index];
@@ -80,6 +81,7 @@ class PlaylistsScreen extends StatelessWidget {
                   playlist: playlist,
                   onTap: () => _openPlaylist(context, playlist),
                   onLongPress: () => _showPlaylistOptions(context, playlist),
+                  onMore: () => _showPlaylistOptions(context, playlist),
                 );
               },
             ),
@@ -106,51 +108,24 @@ class PlaylistsScreen extends StatelessWidget {
       context,
       listen: false,
     );
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showGlassBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(CupertinoIcons.trash, color: Colors.red),
-                title: Text(AppLocalizations.of(context)!.deletePlaylist),
-                onTap: () async {
-                  final l10n = AppLocalizations.of(context)!;
-                  // 接入确认弹窗（设计稿/08 §4，原为直接删除无确认）。
-                  final confirmed = await showLuoboConfirmSheet(
-                    context: context,
-                    title: l10n.deletePlaylist,
-                    message: l10n.deletePlaylistConfirmation(playlist.name),
-                    confirmLabel: l10n.delete,
-                  );
-                  if (confirmed != true || !context.mounted) return;
-                  Navigator.pop(context);
-                  await libraryProvider.deletePlaylist(playlist.id);
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
+    // 歌单设置胶囊叠（C3 二期已抽公共 `showPlaylistSettingsSheet`，
+    // 见 lib/widgets/luobo/playlist_settings.dart）。
+    showPlaylistSettingsSheet(
+      context,
+      playlist: playlist,
+      onDelete: () async {
+        final l10n = AppLocalizations.of(context)!;
+        final confirmed = await showLuoboConfirmSheet(
+          context: context,
+          title: l10n.deletePlaylist,
+          message: l10n.deletePlaylistConfirmation(playlist.name),
+          confirmLabel: l10n.delete,
+        );
+        if (confirmed == true && context.mounted) {
+          await libraryProvider.deletePlaylist(playlist.id);
+        }
+      },
     );
   }
 }
@@ -160,7 +135,15 @@ class _PlaylistTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  const _PlaylistTile({required this.playlist, this.onTap, this.onLongPress});
+  /// 行尾 `···` 圆钮（歌单设置，C3 二期 §4.4；设计稿/10）。
+  final VoidCallback? onMore;
+
+  const _PlaylistTile({
+    required this.playlist,
+    this.onTap,
+    this.onLongPress,
+    this.onMore,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -200,10 +183,23 @@ class _PlaylistTile extends StatelessWidget {
             .songsCount(playlist.songCount ?? 0),
         style: theme.textTheme.bodySmall,
       ),
-      trailing: const Icon(
-        CupertinoIcons.chevron_right,
-        size: 18,
-        color: AppTheme.lightSecondaryText,
+      trailing: GestureDetector(
+        onTap: onMore,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppTheme.darkSurface
+                : AppTheme.lightBackground,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            AppIcons.moreV,
+            size: 16,
+            color: AppTheme.lightSecondaryText,
+          ),
+        ),
       ),
       onTap: onTap,
       onLongPress: onLongPress,

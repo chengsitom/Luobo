@@ -627,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             libraryProvider.playlists.isEmpty &&
                             libraryProvider.randomSongs.isEmpty &&
                             mixes.isEmpty) ...[
-                          const SizedBox(height: 48),
+                          const SizedBox(height: 100),
                           Center(
                             child: Column(
                               children: [
@@ -672,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
 
-                        const SizedBox(height: 150),
+                        const SizedBox(height: 100),
                       ],
                     ),
                   );

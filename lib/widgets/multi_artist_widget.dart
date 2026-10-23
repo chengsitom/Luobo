@@ -42,6 +42,10 @@ class MultiArtistWidget extends StatelessWidget {
   /// screen before pushing the artist screen).
   final VoidCallback? onBeforeNavigate;
 
+  /// 是否响应点击跳转（默认 true）。**歌曲列表行里传 false**——
+  /// 2026-10-22 用户反馈：点行播放时容易误触歌手名进入歌手页。
+  final bool enableTap;
+
   const MultiArtistWidget({
     super.key,
     this.artists,
@@ -49,6 +53,7 @@ class MultiArtistWidget extends StatelessWidget {
     this.artistIdFallback,
     this.style,
     this.onBeforeNavigate,
+    this.enableTap = true,
   });
 
   static bool get _isDesktop {
@@ -136,6 +141,16 @@ class MultiArtistWidget extends StatelessWidget {
     if (effectiveArtists.isEmpty) {
       return Text(
         AppLocalizations.of(context)!.unknownArtist,
+        style: style,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    // 列表行：不响应点击，只展示名字（避免误触进歌手页）。
+    if (!enableTap) {
+      return Text(
+        effectiveArtists.map((a) => a.name).join(', '),
         style: style,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

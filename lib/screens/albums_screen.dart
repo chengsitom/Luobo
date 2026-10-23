@@ -122,7 +122,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.albums)),
       body: _albums.isEmpty && _isLoading
           ? GridView.builder(
-              padding: const EdgeInsets.all(16).copyWith(bottom: 150),
+              padding: const EdgeInsets.all(16).copyWith(bottom: 100),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 180,
                 mainAxisSpacing: 16,
@@ -135,7 +135,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             )
           : GridView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.all(16).copyWith(bottom: 150),
+              padding: const EdgeInsets.all(16).copyWith(bottom: 100),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 180,
                 mainAxisSpacing: 16,

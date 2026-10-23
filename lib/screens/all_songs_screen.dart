@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import 'package:provider/provider.dart';
 import '../providers/library_provider.dart';
@@ -10,6 +11,8 @@ import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/luobo/anchored_menu.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
 
 class AllSongsScreen extends StatefulWidget {
@@ -26,6 +29,8 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   final ScrollController _scrollController = ScrollController();
   SongSortField _sortField = SongSortField.title;
   bool _sortAscending = true;
+
+  // 多选整屏接管（§4.5）：长按进入，行按 index 选中。
 
   /// 锚定菜单的锚点：AppBar 的排序钮 / 头部那行「排序」各一个
   /// （点哪个就锚在哪个上）。
@@ -156,6 +161,12 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   String _getSortLabel() =>
       _fieldLabel(AppLocalizations.of(context)!, _sortField);
 
+  /// 多选（fnos v1_0064：点击/长按后弹**全屏 sheet**选择，不是页面内模式）。
+  void _openMultiSelect() {
+    if (_sortedSongs.isEmpty) return;
+    showMultiSelectSheet(context, songs: _sortedSongs);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -235,22 +246,21 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      // 方向外显（原先被写进了文案，如「标题（A-Z）」）
-                                      if (_showsDirection(_sortField)) ...[
-                                        const SizedBox(width: 3),
-                                        Icon(
-                                          _sortAscending
-                                              ? AppIcons.arrowUp
-                                              : AppIcons.arrowDown,
-                                          size: 13,
-                                          color: AppTheme.appleMusicRed,
-                                        ),
-                                      ],
+                                      // 方向指示移除（用户 2026-10-22：排序按钮不需要箭头）。
                                     ],
                                   ),
                                 ),
                               ],
                             ),
+                          ),
+                          IconButton(
+                            onPressed: _openMultiSelect,
+                            icon: Icon(
+                              Icons.checklist_rounded,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                              size: 26,
+                            ),
+                            tooltip: l10n.selectSongs,
                           ),
                           IconButton(
                             onPressed: () => _playAll(shuffle: true),
@@ -324,11 +334,21 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                         padding: const EdgeInsets.only(bottom: 100),
                         itemCount: _sortedSongs.length,
                         itemBuilder: (context, index) {
-                          return SongTile(
-                            song: _sortedSongs[index],
-                            playlist: _sortedSongs,
-                            index: index,
-                            showAlbum: true,
+                          return Column(
+                            children: [
+                              SongTile(
+                                song: _sortedSongs[index],
+                                playlist: _sortedSongs,
+                                index: index,
+                                showAlbum: true,
+                                
+                                onLongPress: _openMultiSelect,
+                              ),
+                              // 行间通栏分隔线（fnos v1_0012 实测：0-719 全宽，
+                              // 行高 64dp）。
+                              if (index < _sortedSongs.length - 1)
+                                const LuoboSongDivider(),
+                            ],
                           );
                         },
                       ),

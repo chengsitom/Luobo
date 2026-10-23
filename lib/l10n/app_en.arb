@@ -168,6 +168,8 @@
   },
 
   "addedToQueue": "Added to queue",
+  "queuedAsNext": "Set as next to play",
+  "searchHistoryCleared": "Search history cleared",
   "@addedToQueue": {
     "description": "Snackbar shown after songs are added to the queue"
   },
@@ -979,8 +981,12 @@
     "description": "Toast 'Undo' action (reversible operations, e.g. add to playlist)"
   },
   "playlistName": "Playlist Name",
+  "playlistNameRule": "Name cannot contain / \\ : * ? < > |",
   "create": "Create",
   "deletePlaylist": "Delete Playlist",
+  "playlistSettings": "Playlist Settings",
+  "renamePlaylist": "Rename Playlist",
+  "saved": "Saved",
   "deletePlaylistConfirmation": "Are you sure you want to delete the playlist \"{name}\"?",
   "@deletePlaylistConfirmation": {
     "placeholders": {
@@ -1025,6 +1031,8 @@
   "@_SEARCH": {},
   "searchTitle": "Search",
   "searchPlaceholder": "Artists, Songs, Albums",
+  "searchHistory": "Search history",
+  "clearSearchHistory": "Clear search history",
   "tryDifferentSearch": "Try a different search",
   "noSuggestions": "No suggestions",
   "browseCategories": "Browse Categories",
@@ -2320,6 +2328,16 @@
   "save": "Save",
   "@save": { "description": "Button to save changes" },
   "done": "Done",
+  "selectedSongsCount": "{count} selected",
+  "@selectedSongsCount": {
+    "description": "Multi-select top bar count",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addedSongsToPlaylist": "Added {count} songs to {name}",
+  "@addedSongsToPlaylist": {
+    "description": "Batch add-to-playlist success toast",
+    "placeholders": { "count": { "type": "int" }, "name": { "type": "String" } }
+  },
   "@done": { "description": "Button to confirm a color picker dialog" },
   "pickColor": "Pick {label}",
   "@pickColor": { "description": "Title of the color picker dialog", "placeholders": { "label": { "type": "String" } } },

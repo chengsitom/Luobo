@@ -118,6 +118,8 @@
   },
 
   "addedToQueue": "已加入播放队列",
+  "queuedAsNext": "已设为下一首播放",
+  "searchHistoryCleared": "已清空搜索历史",
   "@addedToQueue": {
     "description": "Snackbar shown after songs are added to the queue"
   },
@@ -757,8 +759,12 @@
     "description": "轻提示「撤销」动作（可逆操作，如添加到歌单）"
   },
   "playlistName": "歌单名称",
+  "playlistNameRule": "名称不能包含 / \\ : * ? < > |",
   "create": "创建",
   "deletePlaylist": "删除歌单",
+  "playlistSettings": "歌单设置",
+  "renamePlaylist": "重命名歌单",
+  "saved": "已保存",
   "deletePlaylistConfirmation": "确定要删除歌单「{name}」吗？",
   "@deletePlaylistConfirmation": {
     "placeholders": {
@@ -802,6 +808,8 @@
   "@_SEARCH": {},
   "searchTitle": "搜索",
   "searchPlaceholder": "艺术家、歌曲、专辑",
+  "searchHistory": "搜索历史",
+  "clearSearchHistory": "清空搜索历史",
   "tryDifferentSearch": "尝试不同的搜索",
   "noSuggestions": "无建议",
   "browseCategories": "浏览分类",
@@ -2018,6 +2026,16 @@
   "themeUnsavedChangesBody": "你有未保存的更改。离开前要保存吗？",
   "discard": "丢弃",
   "done": "完成",
+  "selectedSongsCount": "已选 {count} 首",
+  "@selectedSongsCount": {
+    "description": "多选模式顶栏已选数量",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addedSongsToPlaylist": "已将 {count} 首添加到「{name}」",
+  "@addedSongsToPlaylist": {
+    "description": "批量添加到歌单成功提示",
+    "placeholders": { "count": { "type": "int" }, "name": { "type": "String" } }
+  },
   "pickColor": "选择{label}",
   "titleStyle": "标题样式",
   "artistStyle": "歌手样式",

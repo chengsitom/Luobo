@@ -64,6 +64,17 @@ class SongTile extends StatelessWidget {
   /// （由调用方弹确认 + 执行移除；`null` 时菜单不出该项）。
   final VoidCallback? onRemoveFromPlaylist;
 
+  /// 多选模式（§4.5）：为 true 时 leading 显示圆形选择框（替换播放中态覆盖层）、
+  /// 隐藏 `⋮`，onTap 由页面接管（切换选中），onLongPress 忽略。
+  final bool selectionMode;
+
+  /// 多选模式下的选中态（玫红实心✓）。
+  final bool selected;
+
+  /// 行内垂直 padding（默认 0：dense 双行基准即 64dp，与 fnos 实测一致；
+  /// ⚠️ 非 0 会**叠加**在 64 之上，别用来调行高）。
+  final double contentVerticalPadding;
+
   const SongTile({
     super.key,
     required this.song,
@@ -72,13 +83,16 @@ class SongTile extends StatelessWidget {
     this.showArtwork = true,
     this.showArtist = true,
     this.showAlbum = false,
-    this.showDuration = true,
+    this.showDuration = false,
     this.showTrackNumber = false,
     this.titleMaxLines = 1,
     this.onTap,
     this.onLongPress,
     this.menuContext = SongMenuContext.list,
     this.onRemoveFromPlaylist,
+    this.selectionMode = false,
+    this.selected = false,
+    this.contentVerticalPadding = 0,
   });
 
   /// Cached adaptive font sizes for the `artist • album` subtitle,
@@ -96,22 +110,33 @@ class SongTile extends StatelessWidget {
 
         return PressableScale(
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 4,
+            // fnos 静态图实测：行距 **64dp**（Material 双行默认 72 → dense 收紧）。
+            dense: true,
+            // fnos 实测：⋮ 距右缘 ≈26dp → 右侧内边距压到 8；标题起点
+            // = 16 + 封面 48 + 10 = 74dp（leading 间距 10）。
+            contentPadding: EdgeInsets.only(
+              left: 16,
+              right: 8,
+              top: contentVerticalPadding,
+              bottom: contentVerticalPadding,
             ),
+            horizontalTitleGap: 10,
             leading: _buildLeading(context, isCurrentSong),
             title: Text(
               song.title,
-              style: theme.textTheme.bodyLarge,
+              style: theme.textTheme.bodyLarge?.copyWith(fontSize: 15),
               maxLines: titleMaxLines,
               overflow: TextOverflow.ellipsis,
             ),
             subtitle:
                 showArtist || showAlbum ? _buildSubtitleWidget(theme) : null,
             trailing: _buildTrailing(context),
-            onTap: onTap ?? () => _playSong(context),
-            onLongPress: onLongPress ?? () => _showOptions(context),
+            onTap: selectionMode
+                ? (onTap ?? () {})
+                : (onTap ?? () => _playSong(context)),
+            onLongPress: selectionMode
+                ? null
+                : (onLongPress ?? () => _showOptions(context)),
           ),
         );
       },
@@ -119,6 +144,23 @@ class SongTile extends StatelessWidget {
   }
 
   Widget? _buildLeading(BuildContext context, bool isCurrentSong) {
+    if (selectionMode) {
+      // 多选模式（§4.5）：圆形选择框（20，选中玫红实心✓）+ 封面 42。
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildSelectionCheck(context),
+          const SizedBox(width: 10),
+          AlbumArtwork(
+            coverArt: Provider.of<LibraryProvider>(context, listen: false)
+                .effectiveCoverArt(song),
+            size: 48,
+            preserveAspectRatio: true,
+          ),
+        ],
+      );
+    }
+
     if (showTrackNumber && !showArtwork) {
       return SizedBox(
         width: 30,
@@ -168,40 +210,24 @@ class SongTile extends StatelessWidget {
                       context,
                       listen: false,
                     ).effectiveCoverArt(song),
-                    size: 50,
+                    size: 48,
                     preserveAspectRatio: true,
                   ),
                   if (isCurrentSong)
-                    // 播放中态：封面中央叠 26px 半透明白圆 + 黑 ▶（设计稿/08 §1，
-                    // 对标 fnos「封面内嵌播放按钮」）。状态由封面单一外显，
-                    // 标题不再用主色/加粗。⚠️ 与右下角质量徽章（_buildQualityTag）
-                    // 位置不同（中心 vs 角），互不遮挡。
-                    // ⚠️ 必须用 Positioned.fill：裸 Center 是 Stack 的**非定位**
-                    // 子节点，会撑满上级宽松约束把行撑成整行宽（真机复现，
-                    // 2026-10-22 修复——S1 重写时丢掉了原 Positioned.fill 包装）。
+                    // 播放中态：封面覆盖暗色遮罩 + **均衡器动画**（用户 2026-10-22：
+                    // 要动画不要播放 icon；恢复原 AnimatedEqualizer 方案）。
                     Positioned.fill(
-                      child: Center(
-                        child: Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.82),
-                            shape: BoxShape.circle,
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          // 三角形视觉重心偏左，右移 2px 使其在圆内居中。
-                          child: const Padding(
-                            padding: EdgeInsets.only(left: 2),
-                            child: Icon(
-                              Icons.play_arrow_rounded,
-                              size: 15,
-                              color: Colors.black,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(resolvedRadius),
+                        ),
+                        child: Center(
+                          child: Selector<PlayerProvider, bool>(
+                            selector: (ctx, p) => p.isPlaying,
+                            builder: (ctx, isPlaying, __) => AnimatedEqualizer(
+                              color: Colors.white,
+                              isPlaying: isPlaying,
                             ),
                           ),
                         ),
@@ -220,6 +246,26 @@ class SongTile extends StatelessWidget {
     }
 
     return null;
+  }
+
+  /// 多选圆形选择框（§4.5）：未选 = 灰圈；选中 = 玫红实心 + 白勾。
+  Widget _buildSelectionCheck(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? LuoboAccent.accent : Colors.transparent,
+        border: Border.all(
+          color: selected ? LuoboAccent.accent : c.fg3,
+          width: 1.8,
+        ),
+      ),
+      child: selected
+          ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
+          : null,
+    );
   }
 
   Widget _buildSubtitleWidget(ThemeData theme) {
@@ -267,6 +313,8 @@ class SongTile extends StatelessWidget {
         artistFallback: song.artist,
         artistIdFallback: song.artistId,
         style: theme.textTheme.bodySmall,
+        // 列表行里歌手名不响应点击（防误触进歌手页，2026-10-22）。
+        enableTap: false,
       );
     }
 
@@ -445,17 +493,6 @@ class SongTile extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (song.starred == true)
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Icon(
-              CupertinoIcons.heart_fill,
-              size: 14,
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.7),
-            ),
-          ),
         if (song.hasDolbyAtmos == true)
           const Padding(
             padding: EdgeInsets.only(right: 6),
@@ -466,13 +503,17 @@ class SongTile extends StatelessWidget {
             song.formattedDuration,
             style: Theme.of(context).textTheme.bodySmall,
           ),
-        const SizedBox(width: 8),
-        IconButton(
-          icon: const Icon(AppIcons.moreV),
-          iconSize: 20,
-          color: Theme.of(context).textTheme.bodySmall?.color,
-          onPressed: () => _showOptions(context),
-        ),
+        if (!selectionMode) ...[
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(AppIcons.moreV),
+            iconSize: 18,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            color: Theme.of(context).textTheme.bodySmall?.color,
+            onPressed: () => _showOptions(context),
+          ),
+        ],
       ],
     );
   }
@@ -562,6 +603,12 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                 label: l10n.playNext,
                 onTap: () {
                   playerProvider.addToQueueNext(song);
+                  // 状态提醒（fnos：下一首播放也有 Toast）。
+                  showLuoboToast(
+                    context,
+                    message: l10n.queuedAsNext,
+                    tone: LuoboToastTone.info,
+                  );
                   Navigator.pop(context);
                 },
               ),
@@ -570,6 +617,12 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                 label: l10n.addToPlaybackQueue,
                 onTap: () {
                   playerProvider.addToQueue(song);
+                  // 状态提醒：加入播放队列（原先静默）。
+                  showLuoboToast(
+                    context,
+                    message: l10n.addedToQueue,
+                    tone: LuoboToastTone.info,
+                  );
                   Navigator.pop(context);
                 },
               ),
@@ -612,7 +665,9 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                 },
         ),
         _buildDownloadTile(context),
-        if (!isPlayer)
+        // 收藏行只在**列表页/收藏页变体**出现（用户 2026-10-22：歌单内 ⋮
+        // 不应有「从喜欢的歌曲中移除」；收藏页的 ⋮ 需要它 → 保留）。
+        if (widget.menuContext == SongMenuContext.list)
           LuoboSheetRow(
             title:
                 _isStarred ? l10n.removeFromLikedSongs : l10n.addToLikedSongs,
@@ -820,15 +875,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             context,
             message: l10n.removedFromLikedSongs,
             tone: LuoboToastTone.info,
-            actionLabel: l10n.undo,
-            onAction: () {
-              subsonicService.star(id: widget.song.id).then((_) {
-                if (mounted) {
-                  setState(() => _isStarred = true);
-                }
-              }).catchError((Object _) {});
-            },
-          );
+                      );
         }
       } else {
         await subsonicService.star(id: widget.song.id);
@@ -840,15 +887,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             context,
             message: l10n.addedToLikedSongs,
             tone: LuoboToastTone.success,
-            actionLabel: l10n.undo,
-            onAction: () {
-              subsonicService.unstar(id: widget.song.id).then((_) {
-                if (mounted) {
-                  setState(() => _isStarred = false);
-                }
-              }).catchError((Object _) {});
-            },
-          );
+                      );
         }
       }
     } catch (e) {
@@ -971,12 +1010,17 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                   subtitle: l10n.songsCount(playlist.songCount ?? 0),
                   showChevron: false,
                   onTap: () async {
-                    Navigator.pop(ctx);
-
+                    // ⚠️ 修复（2026-10-22）：原实现把 `context`/`mounted` 指向
+                    // **⋮ 菜单 State**——菜单已 pop 后该 State 销毁，
+                    // Provider.of 抛错、`if (!mounted)` 恒真、toast 全静默，
+                    // 表现为「添加到歌单没生效」。同步取 provider 用 picker 的
+                    // ctx（还活着），弹提示用根导航 context。
                     final subsonicService = Provider.of<SubsonicService>(
-                      context,
+                      ctx,
                       listen: false,
                     );
+                    final navCtx = NavigationHelper.navigatorKey.currentContext;
+                    Navigator.pop(ctx);
 
                     try {
                       await subsonicService.updatePlaylist(
@@ -984,38 +1028,26 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                         songIdsToAdd: [song.id],
                       );
                       await libraryProvider.loadPlaylists();
-                      if (!mounted) return;
 
                       // 轻提示（设计稿/08 §6）：可逆操作带「撤销」——刚加的歌
                       // 在歌单末尾（下标 = 添加前的 songCount），按 index 移除。
+                      if (navCtx == null) return;
                       showLuoboToast(
-                        context,
+                        navCtx,
                         message: l10n.addedToPlaylist(
                           song.title,
                           playlist.name,
                         ),
                         tone: LuoboToastTone.success,
-                        actionLabel: l10n.undo,
-                        onAction: () {
-                          subsonicService
-                              .updatePlaylist(
-                                playlistId: playlist.id,
-                                songIndexesToRemove: [playlist.songCount ?? 0],
-                              )
-                              .then((_) => libraryProvider.loadPlaylists())
-                              .catchError((Object _) {
-                                // 撤销失败只记录，不再弹（服务器已变时索引可能错位）。
-                                debugPrint(
-                                  'Undo add-to-playlist failed for ${playlist.id}',
-                                );
-                              });
-                        },
+                        // 撤销已移除（2026-10-22）：
+                        // 服务端 songIndexToRemove 不一定支持 + 索引会因缓存错位；
+                        // fnos 的对应 Toast 也只有状态提示，无撤销。
                       );
                     } catch (e) {
                       debugPrint('Error adding song to playlist: $e');
-                      if (!mounted) return;
+                      if (navCtx == null) return;
                       showLuoboToast(
-                        context,
+                        navCtx,
                         message: l10n.errorAddingToPlaylist(e),
                         tone: LuoboToastTone.error,
                       );

@@ -6,13 +6,22 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
-import '../services/favorite_playlists_service.dart';
 import '../services/playback_context_tracker.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../utils/image_cache.dart';
+import '../widgets/luobo/playlist_settings.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:fluid_mesh_background/fluid_mesh_background.dart';
+import '../theme/app_icons.dart';
 import '../widgets/luobo/sheet_shell.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
+import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
-import '../utils/screen_helper.dart';
+import '../utils/song_sort.dart';
+import '../widgets/luobo/anchored_menu.dart';
 
 class PlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -32,9 +41,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Playlist? _playlist;
   bool _isLoading = true;
   bool _isDownloading = false;
-  bool _isSelecting = false;
   bool _isReordering = false;
-  final Set<int> _selectedIndices = {};
+
+  // 歌单内排序（fnos v6_0060「共 N 首」行右侧有排序入口；本地排序，不改服务端）。
+  SongSortField _sortField = SongSortField.title;
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -62,6 +73,75 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       }
     }
   }
+
+  /// 歌单详情头部（C6，设计稿/11）：流体封面取色 + 上下暗渐变 + 居中标题/
+  /// 「N 首 · 时长」+ 双白胶囊（▶播放 / ⤨随机）。随滚动上移消失（LuoboHeroAppBar）。
+  /// 歌单详情头部（fnos v6_0060 帧实测版式）：
+  /// **inset 封面卡**（左右 41dp、约 277×230dp，流体取色）→ 卡下居中标题 25 +
+  /// 「N 首」→ 双胶囊（116×48、间距 12、居中，主题取反：浅色黑/深色白）→
+  /// 「共 N 首」行（右：排序 + 多选）。整块随滚动上移，顶栏圆钮常驻。
+  /// 歌单详情头部（共享组件 LuoboHeroCardHeader；fnos 帧实测版式）。
+  Widget _buildHeroHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final coverArt = _playlist!.coverArt;
+    final coverUrl = coverArt != null
+        ? Provider.of<LibraryProvider>(context, listen: false)
+            .getCoverArtUrl(coverArt)
+        : null;
+
+    return LuoboHeroCardHeader(
+      title: _playlist!.name,
+      subtitle: l10n.songsCountWithDuration(
+        _playlist!.songs?.length ?? 0,
+        _playlist!.formattedDuration,
+      ),
+      countLabel: l10n.songsCount(_playlist!.songs?.length ?? 0),
+      card: FluidBackground(
+        imageProvider: (coverUrl == null || coverUrl.isEmpty)
+            ? null
+            : CachedNetworkImageProvider(
+                coverUrl,
+                cacheManager: coverCacheManager,
+                cacheKey: coverArtCacheKeyFromUrl(coverUrl),
+              ),
+        borderRadius: 16,
+        seed: FluidBackground.seedForIndex(_playlist!.id.hashCode % 7),
+      ),
+      onPlay: () => _playAll(),
+      onShuffle: () => _playAll(shuffle: true),
+      onSort: () => _showSortMenu(_sortAnchorHero),
+      sortAnchorKey: _sortAnchorHero,
+      onMultiSelect: _toggleSelectMode,
+    );
+  }
+
+
+  void _showPlaylistSettings() {
+    final l10n = AppLocalizations.of(context)!;
+    showPlaylistSettingsSheet(
+      context,
+      playlist: _playlist!,
+      onDownload: () {
+        if (!_isDownloading) _downloadPlaylist();
+      },
+      isDownloading: _isDownloading,
+      onDelete: () async {
+        final confirmed = await showLuoboConfirmSheet(
+          context: context,
+          title: l10n.deletePlaylist,
+          message: l10n.deletePlaylistConfirmation(_playlist!.name),
+          confirmLabel: l10n.delete,
+        );
+        if (confirmed == true && context.mounted) {
+          final libraryProvider =
+              Provider.of<LibraryProvider>(context, listen: false);
+          await libraryProvider.deletePlaylist(widget.playlistId);
+          if (context.mounted) Navigator.pop(context);
+        }
+      },
+    );
+  }
+
 
   void _playAll({bool shuffle = false}) {
     if (_playlist?.songs == null || _playlist!.songs!.isEmpty) return;
@@ -143,19 +223,21 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
+  /// 多选（fnos v1_0064：点击后弹**全屏 sheet**选择，不是页面内模式）。
   void _toggleSelectMode() {
-    setState(() {
-      _isSelecting = !_isSelecting;
-      _isReordering = false;
-      _selectedIndices.clear();
-    });
+    final songs = _displaySongs;
+    if (songs.isEmpty) return;
+    showMultiSelectSheet(
+      context,
+      songs: songs,
+      onRemove: _removeSongsByObjects,
+      removeLabel: AppLocalizations.of(context)!.removeFromPlaylist,
+    );
   }
 
   void _toggleReorderMode() {
     setState(() {
       _isReordering = !_isReordering;
-      _isSelecting = false;
-      _selectedIndices.clear();
     });
   }
 
@@ -195,99 +277,109 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
-  void _toggleSelection(int index) {
-    setState(() {
-      if (_selectedIndices.contains(index)) {
-        _selectedIndices.remove(index);
-      } else {
-        _selectedIndices.add(index);
-      }
-    });
-  }
-
-  void _toggleSelectAll() {
-    final songCount = _playlist?.songs?.length ?? 0;
-    setState(() {
-      if (_selectedIndices.length == songCount) {
-        _selectedIndices.clear();
-      } else {
-        _selectedIndices.addAll(List.generate(songCount, (i) => i));
-      }
-    });
-  }
-
-  Future<void> _removeSelected() async {
-    if (_selectedIndices.isEmpty) return;
-    final count = _selectedIndices.length;
+  /// 从当前歌单移除一批歌（全屏多选弹窗的「移除」回调）：确认 → 按 index 移除。
+  Future<void> _removeSongsByObjects(List<Song> songs) async {
+    final all = _playlist?.songs;
+    if (all == null || songs.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
+    final ids = songs.map((s) => s.id).toSet();
+    final indices = [
+      for (var i = 0; i < all.length; i++)
+        if (ids.contains(all[i].id)) i,
+    ]..sort((a, b) => b.compareTo(a));
+    if (indices.isEmpty) return;
 
     final confirmed = await showLuoboConfirmSheet(
       context: context,
       title: l10n.removeSongs,
-      message: l10n.removeSongsConfirm(count),
+      message: l10n.removeSongsConfirm(indices.length),
       confirmLabel: l10n.remove,
     );
-
     if (confirmed != true || !mounted) return;
 
     final subsonicService = Provider.of<SubsonicService>(
       context,
       listen: false,
     );
-
-    // Sort descending so we can remove from end first without shifting indices
-    final sortedIndices = _selectedIndices.toList()
-      ..sort((a, b) => b.compareTo(a));
-
     try {
       await subsonicService.updatePlaylist(
         playlistId: widget.playlistId,
-        songIndexesToRemove: sortedIndices,
+        songIndexesToRemove: indices,
       );
-      setState(() {
-        final updatedSongs = List<Song>.from(_playlist!.songs!);
-        for (final idx in sortedIndices) {
-          updatedSongs.removeAt(idx);
-        }
-        _playlist = _playlist!.copyWith(
-          songCount: updatedSongs.length,
-          songs: updatedSongs,
-        );
-        _selectedIndices.clear();
-        _isSelecting = false;
-      });
+      await _loadPlaylist();
       if (mounted) {
         showLuoboToast(
-      context,
-      message: l10n.songsRemovedFromPlaylist(count),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.songRemovedFromPlaylist,
+          tone: LuoboToastTone.success,
+        );
       }
     } catch (e) {
       if (mounted) {
         showLuoboToast(
-      context,
-      message: l10n.errorRemovingSongs(e),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.errorRemovingSong(e),
+          tone: LuoboToastTone.error,
+        );
       }
     }
   }
 
-  Future<void> _toggleFavorite() async {
-    if (_playlist == null) return;
-    await FavoritePlaylistsService().toggleFavorite(widget.playlistId);
-    if (mounted) {
-      final l10n = AppLocalizations.of(context)!;
-      showLuoboToast(
-      context,
-      message: FavoritePlaylistsService().isFavorite(widget.playlistId)
-                ? l10n.addedToFavorites
-                : l10n.removedFromFavorites,
-      tone: LuoboToastTone.info,
+  /// 普通列表分支的展示顺序（排序后）。
+  List<Song> get _displaySongs {
+    final songs = _playlist?.songs;
+    if (songs == null || songs.length < 2) return songs ?? [];
+    return sortSongs(songs, _sortField, ascending: _sortAscending);
+  }
+
+  /// 头图「共 N 首」行右侧排序入口的锚点（fnos v6_0060 有排序）。
+  final _sortAnchorHero = GlobalKey();
+
+  Future<void> _showSortMenu(GlobalKey anchor) async {
+    final l10n = AppLocalizations.of(context)!;
+    final field = await showLuoboAnchoredMenu<SongSortField>(
+      context: context,
+      anchorKey: anchor,
+      selected: _sortField,
+      items: [
+        for (final f in SongSortField.values)
+          LuoboAnchoredMenuItem(
+            value: f,
+            label: _fieldLabel(l10n, f),
+            trailing: (f == _sortField && songSortShowsDirection(f))
+                ? Icon(
+                    _sortAscending ? AppIcons.arrowUp : AppIcons.arrowDown,
+                    size: 15,
+                    color: LuoboAccent.accent,
+                  )
+                : null,
+          ),
+      ],
     );
+    if (field == null || !mounted) return;
+    setState(() {
+      if (_sortField == field) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortField = field;
+        _sortAscending = true;
+      }
+    });
+  }
+
+  String _fieldLabel(AppLocalizations l10n, SongSortField field) {
+    switch (field) {
+      case SongSortField.title:
+        return l10n.sortFieldTitle;
+      case SongSortField.artist:
+        return l10n.artists;
+      case SongSortField.album:
+        return l10n.albums;
+      case SongSortField.recentlyAdded:
+        return l10n.recentlyAdded;
     }
   }
+
 
   Future<void> _downloadPlaylist() async {
     final songs = _playlist?.songs;
@@ -345,9 +437,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         body: Center(child: Text(l10n.playlistNotFound)),
       );
     }
-
-    final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
-        AuthState.offlineMode;
 
     if (_isReordering) {
       return Scaffold(
@@ -434,7 +523,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             const Divider(),
             Expanded(
               child: ReorderableListView.builder(
-                padding: const EdgeInsets.only(bottom: 150),
+                padding: const EdgeInsets.only(bottom: 100),
                 itemCount: _playlist!.songs!.length,
                 buildDefaultDragHandles: false,
                 onReorder: _onSongReordered,
@@ -471,176 +560,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
 
     return Scaffold(
-      body: CustomScrollView(
+      body: Stack(
+        children: [
+          CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: ScreenHelper.isSmallScreen(context) ? 280 : 360,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.black.withValues(alpha: 0.5)
-                      : Colors.white.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.back,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ),
-              onPressed: () => Navigator.pop(context),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top + 40,
-                      left: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                      right: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                      bottom: ScreenHelper.isSmallScreen(context) ? 60 : 80,
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: _playlist!.coverArt != null
-                          ? AlbumArtwork(
-                              coverArt: _playlist!.coverArt,
-                              size: 150,
-                              borderRadius: 12,
-                            )
-                          : const Icon(
-                              CupertinoIcons.music_note_list,
-                              color: AppTheme.appleMusicRed,
-                              size: 64,
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              if (_isSelecting) ...[
-                IconButton(
-                  tooltip:
-                      _selectedIndices.length == (_playlist?.songs?.length ?? 0)
-                          ? l10n.deselectAll
-                          : l10n.selectAll,
-                  icon: Icon(
-                    _selectedIndices.length == (_playlist?.songs?.length ?? 0)
-                        ? CupertinoIcons.checkmark_square
-                        : CupertinoIcons.square,
-                  ),
-                  onPressed: _toggleSelectAll,
-                ),
-                IconButton(
-                  tooltip: l10n.removeSelected,
-                  icon: const Icon(CupertinoIcons.trash),
-                  color: _selectedIndices.isNotEmpty ? Colors.red : null,
-                  onPressed:
-                      _selectedIndices.isNotEmpty ? _removeSelected : null,
-                ),
-              ] else ...[
-                AnimatedBuilder(
-                  animation: FavoritePlaylistsService(),
-                  builder: (context, child) {
-                    final isFavorite = FavoritePlaylistsService()
-                        .isFavorite(widget.playlistId);
-                    return IconButton(
-                      tooltip: isFavorite
-                          ? l10n.removeFromFavorites
-                          : l10n.addToFavorites,
-                      icon: Icon(
-                        isFavorite
-                            ? CupertinoIcons.heart_fill
-                            : CupertinoIcons.heart,
-                        color: isFavorite ? Colors.red : null,
-                      ),
-                      onPressed: _toggleFavorite,
-                    );
-                  },
-                ),
-                IconButton(
-                  tooltip: l10n.reorderSongs,
-                  icon: const Icon(CupertinoIcons.arrow_up_arrow_down),
-                  onPressed:
-                      _playlist!.songs != null && _playlist!.songs!.length > 1
-                          ? _toggleReorderMode
-                          : null,
-                ),
-                IconButton(
-                  tooltip: l10n.selectSongs,
-                  icon: const Icon(CupertinoIcons.checkmark_circle),
-                  onPressed: _toggleSelectMode,
-                ),
-                if (!isOffline)
-                  IconButton(
-                    tooltip: l10n.downloadPlaylist,
-                    onPressed: _isDownloading ? null : _downloadPlaylist,
-                    icon: _isDownloading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(CupertinoIcons.cloud_download),
-                  ),
-              ],
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    _playlist!.name,
-                    style: theme.textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.songsCountWithDuration(
-                      _playlist!.songs?.length ?? 0,
-                      _playlist!.formattedDuration,
-                    ),
-                    style: theme.textTheme.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _PlayButton(
-                          icon: CupertinoIcons.play_fill,
-                          label: AppLocalizations.of(context)!.play,
-                          onTap: () => _playAll(),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _PlayButton(
-                          icon: CupertinoIcons.shuffle,
-                          label: AppLocalizations.of(context)!.shuffle,
-                          onTap: () => _playAll(shuffle: true),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ),
+          SliverToBoxAdapter(child: _buildHeroHeader(context)),
           const SliverToBoxAdapter(child: Divider()),
           if (_playlist!.songs?.isEmpty ?? true)
             SliverToBoxAdapter(
@@ -656,56 +580,18 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 ),
               ),
             )
-          else if (_isSelecting)
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final song = _playlist!.songs![index];
-                  final isSelected = _selectedIndices.contains(index);
-                  return CheckboxListTile(
-                    key: ValueKey('sel_${song.id}_$index'),
-                    value: isSelected,
-                    onChanged: (_) => _toggleSelection(index),
-                    activeColor: AppTheme.appleMusicRed,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: const EdgeInsets.only(
-                      left: 4,
-                      right: 16,
-                    ),
-                    title: Text(
-                      song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      song.artist ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    secondary: IconButton(
-                      icon: const Icon(CupertinoIcons.trash, size: 20),
-                      color: Colors.red,
-                      tooltip: l10n.removeFromPlaylist,
-                      onPressed: () async {
-                        setState(() => _selectedIndices.remove(index));
-                        await _removeSongFromPlaylist(index);
-                      },
-                    ),
-                  );
-                },
-                childCount: _playlist!.songs!.length,
-              ),
-            )
           else
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final song = _playlist!.songs![index];
+                  final songs = _displaySongs;
+                  final song = songs[index];
                   final tile = SongTile(
                     song: song,
-                    playlist: _playlist!.songs,
+                    playlist: songs,
                     index: index,
                     showArtist: true,
+                    
                     // ⋮ 菜单变体 C（设计稿/09）：歌单内 = 横排 + 收藏 + 从当前歌单移除。
                     menuContext: SongMenuContext.playlist,
                     onRemoveFromPlaylist: () {
@@ -721,10 +607,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                         startIndex: index,
                       );
                     },
-                    onLongPress: () {
-                      _toggleSelectMode();
-                      _toggleSelection(index);
-                    },
+                    onLongPress: _toggleSelectMode,
                   );
                   return Dismissible(
                     key: ValueKey('${song.id}_$index'),
@@ -750,13 +633,48 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                           false;
                     },
                     onDismissed: (_) => _removeSongFromPlaylist(index),
-                    child: tile,
+                    child: Column(
+                      children: [
+                        tile,
+                        // 行间分隔线（fnos v6_0060 实测：左右各缩 16dp，
+                        // 行高 64dp）。
+                        if (index < _playlist!.songs!.length - 1)
+                          const LuoboSongDivider(),
+                      ],
+                    ),
                   );
                 },
                 childCount: _playlist!.songs!.length,
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 150)),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      ),
+          // 悬浮顶栏（圆返回 + 圆⋮；滚动时常驻、无实色栏——帧实测）。
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    LuoboTopCircleButton(
+                      icon: AppIcons.back,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    LuoboTopCircleButton(
+                      icon: AppIcons.moreV,
+                      onTap: _showPlaylistSettings,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -352,6 +352,18 @@ abstract class AppLocalizations {
   /// **'Added to queue'**
   String get addedToQueue;
 
+  /// No description provided for @queuedAsNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as next to play'**
+  String get queuedAsNext;
+
+  /// No description provided for @searchHistoryCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Search history cleared'**
+  String get searchHistoryCleared;
+
   /// Song count shown in the detail page hero
   ///
   /// In en, this message translates to:
@@ -1486,6 +1498,12 @@ abstract class AppLocalizations {
   /// **'Playlist Name'**
   String get playlistName;
 
+  /// No description provided for @playlistNameRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Name cannot contain / \\ : * ? < > |'**
+  String get playlistNameRule;
+
   /// No description provided for @create.
   ///
   /// In en, this message translates to:
@@ -1497,6 +1515,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete Playlist'**
   String get deletePlaylist;
+
+  /// No description provided for @playlistSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Playlist Settings'**
+  String get playlistSettings;
+
+  /// No description provided for @renamePlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Playlist'**
+  String get renamePlaylist;
+
+  /// No description provided for @saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get saved;
 
   /// No description provided for @deletePlaylistConfirmation.
   ///
@@ -1539,6 +1575,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Artists, Songs, Albums'**
   String get searchPlaceholder;
+
+  /// No description provided for @searchHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Search history'**
+  String get searchHistory;
+
+  /// No description provided for @clearSearchHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search history'**
+  String get clearSearchHistory;
 
   /// No description provided for @tryDifferentSearch.
   ///
@@ -4173,6 +4221,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get done;
+
+  /// Multi-select top bar count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String selectedSongsCount(int count);
+
+  /// Batch add-to-playlist success toast
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} songs to {name}'**
+  String addedSongsToPlaylist(int count, String name);
 
   /// Title of the color picker dialog
   ///

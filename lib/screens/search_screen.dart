@@ -7,6 +7,8 @@ import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
@@ -21,6 +23,7 @@ import 'audiobook_list_screen.dart';
 import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../services/player_ui_settings_service.dart';
+import '../services/search_history_store.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -41,6 +44,10 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounceTimer;
   bool _liveSearch = true;
 
+  /// 搜索历史（fnos v5_0016：chips 流式换行 + 垃圾桶清空，本地持久化）。
+  final _historyStore = SearchHistoryStore();
+  List<String> _history = [];
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +55,12 @@ class _SearchScreenState extends State<SearchScreen> {
     PlayerUiSettingsService()
         .liveSearchNotifier
         .addListener(_onLiveSearchChanged);
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final list = await _historyStore.load();
+    if (mounted) setState(() => _history = list);
   }
 
   void _onLiveSearchChanged() {
@@ -163,6 +176,8 @@ class _SearchScreenState extends State<SearchScreen> {
           _searchResult = result;
           _isSearching = false;
         });
+        final list = await _historyStore.add(query);
+        if (mounted) setState(() => _history = list);
       }
     } catch (e) {
       if (mounted) {
@@ -403,8 +418,77 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
         ],
-        const SizedBox(height: 150),
+        const SizedBox(height: 100),
       ],
+    );
+  }
+
+  /// 搜索历史区块（fnos v5_0016）：标题 + 垃圾桶 + chips 流式换行。
+  Widget _buildHistorySection() {
+    if (_history.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
+    final c = LuoboColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                l10n.searchHistory,
+                style: LuoboType.body.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () async {
+                  await _historyStore.clear();
+                  if (!mounted) return;
+                  setState(() => _history = []);
+                  showLuoboToast(
+                    context,
+                    message: l10n.searchHistoryCleared,
+                    tone: LuoboToastTone.info,
+                  );
+                },
+                child: Icon(
+                  CupertinoIcons.trash,
+                  size: 18,
+                  color: c.fg2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final term in _history)
+                GestureDetector(
+                  onTap: () {
+                    _searchController.text = term;
+                    _searchController.selection = TextSelection.collapsed(
+                      offset: term.length,
+                    );
+                    setState(() => _showSuggestions = false);
+                    _search(term);
+                  },
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: c.card,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(term, style: LuoboType.body),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -460,6 +544,8 @@ class _SearchScreenState extends State<SearchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 搜索历史（fnos v5_0016：在浏览分类之上）。
+        _buildHistorySection(),
         SectionHeader(title: AppLocalizations.of(context)!.browseCategories),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -479,7 +565,7 @@ class _SearchScreenState extends State<SearchScreen> {
             },
           ),
         ),
-        const SizedBox(height: 150),
+        const SizedBox(height: 100),
       ],
     );
   }

@@ -353,7 +353,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   );
                 }, childCount: _songs.length),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 150)),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
         ],

@@ -18,6 +18,7 @@ class LuoboCapsuleButton extends StatelessWidget {
     this.onPressed,
     this.style = LuoboCapsuleStyle.normal,
     this.expand = true,
+    this.height = 44,
   });
 
   final String label;
@@ -26,6 +27,9 @@ class LuoboCapsuleButton extends StatelessWidget {
 
   /// 是否撑满宽度（默认 true）。
   final bool expand;
+
+  /// 高度（默认 44；fnos 胶囊叠实测 h≈50，调用方传入）。
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +57,7 @@ class LuoboCapsuleButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: LuoboRadius.pillR,
         child: SizedBox(
-          height: 44,
+          height: height,
           child: Center(
             child: Text(
               label,

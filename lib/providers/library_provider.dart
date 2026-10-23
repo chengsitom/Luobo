@@ -1273,6 +1273,12 @@ class LibraryProvider extends ChangeNotifier {
     await loadPlaylists();
   }
 
+  /// 歌单改名（C3 二期 §4.4「编辑 = 改名 only」：改封面后端不支持回写，不做）。
+  Future<void> renamePlaylist(String playlistId, String name) async {
+    await _subsonicService.updatePlaylist(playlistId: playlistId, name: name);
+    await loadPlaylists();
+  }
+
   Future<void> addSongToPlaylist(String playlistId, String songId) async {
     await _subsonicService.updatePlaylist(
       playlistId: playlistId,

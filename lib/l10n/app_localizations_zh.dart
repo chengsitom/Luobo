@@ -111,6 +111,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get addedToQueue => '已加入播放队列';
 
   @override
+  String get queuedAsNext => '已设为下一首播放';
+
+  @override
+  String get searchHistoryCleared => '已清空搜索历史';
+
+  @override
   String songCount(int count) {
     return '$count 首';
   }
@@ -725,10 +731,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playlistName => '歌单名称';
 
   @override
+  String get playlistNameRule => '名称不能包含 / \\ : * ? < > |';
+
+  @override
   String get create => '创建';
 
   @override
   String get deletePlaylist => '删除歌单';
+
+  @override
+  String get playlistSettings => '歌单设置';
+
+  @override
+  String get renamePlaylist => '重命名歌单';
+
+  @override
+  String get saved => '已保存';
 
   @override
   String deletePlaylistConfirmation(String name) {
@@ -760,6 +778,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchPlaceholder => '艺术家、歌曲、专辑';
+
+  @override
+  String get searchHistory => '搜索历史';
+
+  @override
+  String get clearSearchHistory => '清空搜索历史';
 
   @override
   String get tryDifferentSearch => '尝试不同的搜索';
@@ -2164,6 +2188,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get done => '完成';
+
+  @override
+  String selectedSongsCount(int count) {
+    return '已选 $count 首';
+  }
+
+  @override
+  String addedSongsToPlaylist(int count, String name) {
+    return '已将 $count 首添加到「$name」';
+  }
 
   @override
   String pickColor(String label) {

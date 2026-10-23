@@ -112,6 +112,12 @@ class AppLocalizationsVi extends AppLocalizations {
   String get addedToQueue => 'Added to queue';
 
   @override
+  String get queuedAsNext => 'Set as next to play';
+
+  @override
+  String get searchHistoryCleared => 'Search history cleared';
+
+  @override
   String songCount(int count) {
     return '$count Songs';
   }
@@ -733,10 +739,22 @@ class AppLocalizationsVi extends AppLocalizations {
   String get playlistName => 'Playlist Name';
 
   @override
+  String get playlistNameRule => 'Name cannot contain / \\ : * ? < > |';
+
+  @override
   String get create => 'Create';
 
   @override
   String get deletePlaylist => 'Delete Playlist';
+
+  @override
+  String get playlistSettings => 'Playlist Settings';
+
+  @override
+  String get renamePlaylist => 'Rename Playlist';
+
+  @override
+  String get saved => 'Saved';
 
   @override
   String deletePlaylistConfirmation(String name) {
@@ -768,6 +786,12 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get searchPlaceholder => 'Artists, Songs, Albums';
+
+  @override
+  String get searchHistory => 'Search history';
+
+  @override
+  String get clearSearchHistory => 'Clear search history';
 
   @override
   String get tryDifferentSearch => 'Try a different search';
@@ -2205,6 +2229,16 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get done => 'Done';
+
+  @override
+  String selectedSongsCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String addedSongsToPlaylist(int count, String name) {
+    return 'Added $count songs to $name';
+  }
 
   @override
   String pickColor(String label) {

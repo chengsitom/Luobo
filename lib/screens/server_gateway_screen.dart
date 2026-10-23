@@ -404,7 +404,7 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
           ),
         ),
       ),
-      const SizedBox(height: 32),
+      const SizedBox(height: 100),
       Text(
         l10n.appName,
         textAlign: TextAlign.center,
@@ -420,7 +420,7 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
           color: AppTheme.lightSecondaryText,
         ),
       ),
-      const SizedBox(height: 32),
+      const SizedBox(height: 100),
       SizedBox(
         height: 50,
         child: ElevatedButton(

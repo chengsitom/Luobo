@@ -562,7 +562,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 150)),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
   }
@@ -591,7 +591,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 150)),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
   }

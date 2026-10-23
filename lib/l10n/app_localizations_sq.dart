@@ -112,6 +112,12 @@ class AppLocalizationsSq extends AppLocalizations {
   String get addedToQueue => 'Added to queue';
 
   @override
+  String get queuedAsNext => 'Set as next to play';
+
+  @override
+  String get searchHistoryCleared => 'Search history cleared';
+
+  @override
   String songCount(int count) {
     return '$count Songs';
   }
@@ -736,10 +742,22 @@ class AppLocalizationsSq extends AppLocalizations {
   String get playlistName => 'Emri i listës t\'kngve';
 
   @override
+  String get playlistNameRule => 'Name cannot contain / \\ : * ? < > |';
+
+  @override
   String get create => 'Krijo';
 
   @override
   String get deletePlaylist => 'Fshije listën t\'kngve';
+
+  @override
+  String get playlistSettings => 'Playlist Settings';
+
+  @override
+  String get renamePlaylist => 'Rename Playlist';
+
+  @override
+  String get saved => 'Saved';
 
   @override
   String deletePlaylistConfirmation(String name) {
@@ -771,6 +789,12 @@ class AppLocalizationsSq extends AppLocalizations {
 
   @override
   String get searchPlaceholder => 'Artistët, Kangët, Albumet';
+
+  @override
+  String get searchHistory => 'Search history';
+
+  @override
+  String get clearSearchHistory => 'Clear search history';
 
   @override
   String get tryDifferentSearch => 'Provo nji kërkim tjetër';
@@ -2211,6 +2235,16 @@ class AppLocalizationsSq extends AppLocalizations {
 
   @override
   String get done => 'Done';
+
+  @override
+  String selectedSongsCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String addedSongsToPlaylist(int count, String name) {
+    return 'Added $count songs to $name';
+  }
 
   @override
   String pickColor(String label) {

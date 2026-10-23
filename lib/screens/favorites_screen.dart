@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
-import '../widgets/luobo/luobo_toast.dart';
+import 'package:fluid_mesh_background/fluid_mesh_background.dart';
 import 'package:provider/provider.dart';
-import '../widgets/glass_surface.dart';
+
+import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../services/subsonic_service.dart';
 import '../services/playback_context_tracker.dart';
-import '../widgets/widgets.dart';
-import '../l10n/app_localizations.dart';
+import '../services/subsonic_service.dart';
+import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
+import '../utils/song_sort.dart';
+import '../widgets/luobo/anchored_menu.dart';
+import '../widgets/luobo/empty_state.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/luobo_toast.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
+import '../widgets/song_tile.dart';
 
-/// 收藏页 —— **只列收藏的歌曲**。
+/// 收藏页 —— **只列收藏的歌曲**（2026-10-08 拍板：砍掉「专辑」tab）。
 ///
-/// 2026-10-08 拍板：**砍掉「专辑」tab**（连带 `LikedAlbumsScreen` 页面与音乐库
-/// 「喜欢的专辑」入口）。理由是用户找不到入口、且收藏专辑没有使用价值。
-/// 于是「收藏」的语义收窄为「收藏歌曲」（`starred.songs`），首页那张「收藏」卡的
-/// 计数与这里从此同义。
+/// 2026-10-22：整页重构为**与歌单详情同款**（用户：「收藏页面和歌单应该是一样的
+/// 样式」）——共享 `LuoboHeroCardHeader`（inset 流体卡 + 居中标题 + 双胶囊 +
+/// 共 N 首/排序/多选）+ 同款歌曲行与分隔线（`LuoboSongDivider`，左端 76）。
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -25,6 +33,11 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   List<Song> _favoriteSongs = [];
   bool _isLoading = true;
+
+  // 排序（与歌单详情同款：标题/歌手/最近添加 + 方向）。
+  SongSortField _sortField = SongSortField.title;
+  bool _sortAscending = true;
+  final _sortAnchor = GlobalKey();
 
   @override
   void initState() {
@@ -55,55 +68,208 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
+  List<Song> get _displaySongs {
+    if (_favoriteSongs.length < 2) return _favoriteSongs;
+    return sortSongs(_favoriteSongs, _sortField, ascending: _sortAscending);
+  }
+
+  void _playAll({bool shuffle = false}) {
+    if (_favoriteSongs.isEmpty) return;
+    var songs = List<Song>.from(_displaySongs);
+    if (shuffle) songs.shuffle();
+    Provider.of<PlayerProvider>(context, listen: false)
+        .playSong(songs.first, playlist: songs, startIndex: 0);
+    _recordPlayback();
+  }
+
+  Future<void> _showSortMenu(GlobalKey anchor) async {
+    final l10n = AppLocalizations.of(context)!;
+    final field = await showLuoboAnchoredMenu<SongSortField>(
+      context: context,
+      anchorKey: anchor,
+      selected: _sortField,
+      items: [
+        for (final f in SongSortField.values)
+          LuoboAnchoredMenuItem(
+            value: f,
+            label: _fieldLabel(l10n, f),
+            trailing: (f == _sortField && songSortShowsDirection(f))
+                ? Icon(
+                    _sortAscending ? AppIcons.arrowUp : AppIcons.arrowDown,
+                    size: 15,
+                    color: LuoboAccent.accent,
+                  )
+                : null,
+          ),
+      ],
+    );
+    if (field == null || !mounted) return;
+    setState(() {
+      if (_sortField == field) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortField = field;
+        _sortAscending = true;
+      }
+    });
+  }
+
+  String _fieldLabel(AppLocalizations l10n, SongSortField field) {
+    switch (field) {
+      case SongSortField.title:
+        return l10n.sortFieldTitle;
+      case SongSortField.artist:
+        return l10n.artists;
+      case SongSortField.album:
+        return l10n.albums;
+      case SongSortField.recentlyAdded:
+        return l10n.recentlyAdded;
+    }
+  }
+
+  /// 多选（fnos：全屏弹窗；收藏的「移除」= 取消收藏）。
+  void _openMultiSelect() {
+    final songs = _displaySongs;
+    if (songs.isEmpty) return;
+    showMultiSelectSheet(
+      context,
+      songs: songs,
+      onRemove: _unstarSongs,
+      removeLabel: AppLocalizations.of(context)!.removeFromFavorites,
+    );
+  }
+
+  Future<void> _unstarSongs(List<Song> songs) async {
+    final libraryProvider = Provider.of<LibraryProvider>(
+      context,
+      listen: false,
+    );
+    final l10n = AppLocalizations.of(context)!;
+    var ok = 0;
+    for (final song in songs) {
+      try {
+        await libraryProvider.unstar(songId: song.id);
+        ok++;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      final ids = songs.map((s) => s.id).toSet();
+      _favoriteSongs.removeWhere((s) => ids.contains(s.id));
+    });
+    showLuoboToast(
+      context,
+      message: l10n.removedFromFavorites,
+      tone: ok > 0 ? LuoboToastTone.success : LuoboToastTone.error,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.favorites)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildSongsList(),
+          : Stack(
+              children: [
+                CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: _buildHeader(l10n)),
+                    if (_favoriteSongs.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: LuoboEmptyState(message: l10n.noFavoriteSongs),
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final songs = _displaySongs;
+                            final song = songs[index];
+                            return Column(
+                              children: [
+                                SongTile(
+                                  song: song,
+                                  playlist: songs,
+                                  index: index,
+                                  showArtist: true,
+                                  // 逐首播放也记录「最近播放的收藏列表」。
+                                  onTap: () {
+                                    _recordPlayback();
+                                    Provider.of<PlayerProvider>(
+                                      context,
+                                      listen: false,
+                                    ).playSong(
+                                      song,
+                                      playlist: songs,
+                                      startIndex: index,
+                                    );
+                                  },
+                                ),
+                                if (index < songs.length - 1)
+                                  const LuoboSongDivider(),
+                              ],
+                            );
+                          },
+                          childCount: _favoriteSongs.length,
+                        ),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ),
+                // 悬浮顶栏（圆返回；滚动常驻、无实色栏）。
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          LuoboTopCircleButton(
+                            icon: AppIcons.back,
+                            onTap: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
-  Widget _buildSongsList() {
-    if (_favoriteSongs.isEmpty) {
-      final l10n = AppLocalizations.of(context)!;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.favorite_border, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(l10n.noFavoriteSongs),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 150),
-      itemCount: _favoriteSongs.length,
-      itemBuilder: (context, index) {
-        final song = _favoriteSongs[index];
-        return SongTile(
-          song: song,
-          playlist: _favoriteSongs,
-          index: index,
-          showAlbum: true,
-          // 逐首播放也记录「最近播放的收藏列表」。
-          onTap: () {
-            _recordPlayback();
-            Provider.of<PlayerProvider>(context, listen: false).playSong(
-              song,
-              playlist: _favoriteSongs,
-              startIndex: index,
-            );
-          },
-          onLongPress: () =>
-              _showRemoveFromFavoritesDialog(context, song, index),
-        );
-      },
+  Widget _buildHeader(AppLocalizations l10n) {
+    return LuoboHeroCardHeader(
+      title: l10n.favorites,
+      subtitle: l10n.songsCount(_favoriteSongs.length),
+      countLabel: l10n.songsCount(_favoriteSongs.length),
+      // 收藏无封面 → 流体用暖色盘 + 中央心形（fnos 收藏页同构：渐变+心形）。
+      card: Stack(
+        fit: StackFit.expand,
+        children: [
+          const FluidBackground(
+            colors: [Color(0xFFFF7A3C), Color(0xFFF93D4E), Color(0xFFFFB03A)],
+            borderRadius: 16,
+            seed: 1.2,
+          ),
+          Center(
+            child: Icon(
+              AppIcons.heartFilled,
+              size: 72,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+      onPlay: () => _playAll(),
+      onShuffle: () => _playAll(shuffle: true),
+      onSort: () => _showSortMenu(_sortAnchor),
+      sortAnchorKey: _sortAnchor,
+      onMultiSelect: _openMultiSelect,
     );
   }
 
@@ -129,83 +295,5 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       }
     }
     return out;
-  }
-
-  Future<void> _showRemoveFromFavoritesDialog(
-    BuildContext context,
-    Song song,
-    int index,
-  ) async {
-    showGlassBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.white30,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.heart_broken, color: Colors.red),
-                title: Text(
-                  AppLocalizations.of(context)!.removeFromFavorites,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _removeFromFavorites(song, index);
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _removeFromFavorites(Song song, int index) async {
-    // ⚠️ 必须走 `LibraryProvider.unstar`（它内部会 `loadStarred()` 刷新 `_starred`）：
-    // 直连 `subsonicService.unstar` 时 provider 缓存不刷新，首页「收藏」卡的计数与
-    // 随机取色会一直停在旧值，直到冷启动。
-    final libraryProvider = Provider.of<LibraryProvider>(
-      context,
-      listen: false,
-    );
-
-    try {
-      await libraryProvider.unstar(songId: song.id);
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        setState(() {
-          _favoriteSongs.removeAt(index);
-        });
-        showLuoboToast(
-      context,
-      message: l10n.removedFromFavorites,
-      tone: LuoboToastTone.info,
-    );
-      }
-    } catch (e) {
-      if (mounted) {
-        showLuoboToast(
-      context,
-      message: '${AppLocalizations.of(context)!.error}: $e',
-      tone: LuoboToastTone.info,
-    );
-      }
-    }
   }
 }
