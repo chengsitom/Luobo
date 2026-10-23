@@ -964,7 +964,7 @@ abstract class AppLocalizations {
   /// **'Sort by'**
   String get sortBy;
 
-  /// Sort by name option
+  /// List sort menu label
   ///
   /// In en, this message translates to:
   /// **'Name'**
@@ -5607,6 +5607,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Title'**
   String get sortFieldTitle;
+
+  /// Artist detail subtitle: song and album counts
+  ///
+  /// In en, this message translates to:
+  /// **'{songCount} songs · {albumCount} albums'**
+  String artistStats(int songCount, int albumCount);
+
+  /// List sort menu label
+  ///
+  /// In en, this message translates to:
+  /// **'Songs'**
+  String get sortBySongCount;
+
+  /// List sort menu label
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get sortByAlbumCount;
+
+  /// List header total, fnos style
+  ///
+  /// In en, this message translates to:
+  /// **'共 {count} 首'**
+  String songsTotal(int count);
+
+  /// Artist list header total
+  ///
+  /// In en, this message translates to:
+  /// **'共 {count} 位歌手'**
+  String artistsTotal(int count);
+
+  /// Album list header total
+  ///
+  /// In en, this message translates to:
+  /// **'共 {count} 张专辑'**
+  String albumsTotal(int count);
+
+  /// Playlist list header total
+  ///
+  /// In en, this message translates to:
+  /// **'共 {count} 个歌单'**
+  String playlistsTotal(int count);
+
+  /// Year label under an album cover (zh renders as 2007 年)
+  ///
+  /// In en, this message translates to:
+  /// **'{year}'**
+  String albumYear(int year);
 }
 
 class _AppLocalizationsDelegate

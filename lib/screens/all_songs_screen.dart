@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 
 import 'package:provider/provider.dart';
 import '../providers/library_provider.dart';
-import '../providers/player_provider.dart';
 import '../models/models.dart';
+import '../utils/navigation_helper.dart';
 import '../utils/song_sort.dart';
 import '../widgets/widgets.dart';
 import '../theme/app_icons.dart';
-import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/luobo/anchored_menu.dart';
 import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
+import 'search_screen.dart';
 
 class AllSongsScreen extends StatefulWidget {
   const AllSongsScreen({super.key});
@@ -32,9 +32,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
 
   // 多选整屏接管（§4.5）：长按进入，行按 index 选中。
 
-  /// 锚定菜单的锚点：AppBar 的排序钮 / 头部那行「排序」各一个
-  /// （点哪个就锚在哪个上）。
-  final _sortAnchorAppBar = GlobalKey();
+  /// 锚定菜单的锚点：「共 N 首」行里的排序入口。
   final _sortAnchorHeader = GlobalKey();
   LibraryProvider? _libraryProvider;
 
@@ -145,22 +143,6 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     _sortSongs();
   }
 
-  void _playAll({bool shuffle = false}) {
-    if (_sortedSongs.isEmpty) return;
-
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-
-    List<Song> playlist = List.from(_sortedSongs);
-    if (shuffle) {
-      playlist.shuffle();
-    }
-
-    playerProvider.playSong(playlist.first, playlist: playlist, startIndex: 0);
-  }
-
-  String _getSortLabel() =>
-      _fieldLabel(AppLocalizations.of(context)!, _sortField);
-
   /// 多选（fnos v1_0064：点击/长按后弹**全屏 sheet**选择，不是页面内模式）。
   void _openMultiSelect() {
     if (_sortedSongs.isEmpty) return;
@@ -169,20 +151,17 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.allSongs),
+      // 与收藏页同款：透明顶栏 + 悬浮圆钮（无实色栏、无标题）。
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
         actions: [
-          if (_sortedSongs.isNotEmpty)
-            IconButton(
-              key: _sortAnchorAppBar,
-              icon: const Icon(Icons.sort_rounded),
-              onPressed: () => _showSortOptions(_sortAnchorAppBar),
-              tooltip: l10n.sortBy,
-            ),
+          LuoboTopSearchButton(
+            onTap: () =>
+                NavigationHelper.push(context, const SearchScreen()),
+          ),
         ],
       ),
       body: _isLoading
@@ -208,121 +187,42 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
               : Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        listTopInset(context) + 8,
+                        16,
+                        8,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.songsCount(_sortedSongs.length),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color:
-                                        isDark ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                GestureDetector(
-                                  key: _sortAnchorHeader,
-                                  onTap: () =>
-                                      _showSortOptions(_sortAnchorHeader),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.sort_rounded,
-                                        size: 14,
-                                        color: AppTheme.appleMusicRed,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _getSortLabel(),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.appleMusicRed,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      // 方向指示移除（用户 2026-10-22：排序按钮不需要箭头）。
-                                    ],
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              l10n.songsTotal(_sortedSongs.length),
+                              style: LuoboType.body.copyWith(
+                                fontSize: 14,
+                                color: LuoboColors.of(context).fg2,
+                              ),
                             ),
                           ),
-                          IconButton(
-                            onPressed: _openMultiSelect,
-                            icon: Icon(
+                          // fnos：计数行右侧只有「排序 + 多选」两个图标。
+                          GestureDetector(
+                            key: _sortAnchorHeader,
+                            onTap: () =>
+                                _showSortOptions(_sortAnchorHeader),
+                            child: Icon(
+                              Icons.sort_rounded,
+                              size: 22,
+                              color: LuoboColors.of(context).fg2,
+                            ),
+                          ),
+                          const SizedBox(width: 18),
+                          GestureDetector(
+                            onTap: _openMultiSelect,
+                            child: Icon(
                               Icons.checklist_rounded,
-                              color: isDark ? Colors.white70 : Colors.black54,
-                              size: 26,
+                              size: 22,
+                              color: LuoboColors.of(context).fg2,
                             ),
-                            tooltip: l10n.selectSongs,
-                          ),
-                          IconButton(
-                            onPressed: () => _playAll(shuffle: true),
-                            icon: Icon(
-                              Icons.shuffle_rounded,
-                              color: isDark ? Colors.white70 : Colors.black54,
-                              size: 28,
-                            ),
-                            tooltip: l10n.shuffle,
-                          ),
-                          const SizedBox(width: 8),
-                          Consumer<PlayerProvider>(
-                            builder: (context, playerProvider, _) {
-                              final isCurrentPlaylist =
-                                  playerProvider.queue.isNotEmpty &&
-                                      playerProvider.queue.any(
-                                        (song) => _sortedSongs
-                                            .any((s) => s.id == song.id),
-                                      );
-                              final isPlaying =
-                                  isCurrentPlaylist && playerProvider.isPlaying;
-
-                              return GestureDetector(
-                                onTap: () {
-                                  if (isCurrentPlaylist &&
-                                      playerProvider.currentSong != null) {
-                                    if (playerProvider.isPlaying) {
-                                      playerProvider.pause();
-                                    } else {
-                                      playerProvider.play();
-                                    }
-                                  } else {
-                                    _playAll();
-                                  }
-                                },
-                                child: Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.appleMusicRed,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            AppTheme.appleMusicRed.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    isPlaying
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                              );
-                            },
                           ),
                         ],
                       ),

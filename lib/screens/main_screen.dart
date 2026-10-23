@@ -18,6 +18,7 @@ import '../widgets/luobo/glass_pill_nav.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'home_v2_screen.dart';
+import 'library_hub_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
 import 'settings_root_screen.dart';
@@ -40,14 +41,16 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = const [
     HomeV2Screen(), // 首页重构：v2 新首页（旧 HomeScreen 保留未删，回退改回 HomeScreen()）
     LibraryScreen(),
-    SearchScreen(),
+    // 桌面端搜索是常驻 tab → 不自动聚焦（否则启动即抢焦点）。
+    SearchScreen(autoFocus: false),
   ];
 
   /// 移动端底栏（C2 改造）：首页 / 音乐库 / **设置**。
   /// 搜索不再占 tab，改由首页 + 音乐库的右上角圆钮进入。
   final List<Widget> _mobileScreens = const [
     HomeV2Screen(),
-    LibraryScreen(),
+    // 2026-10-23：音乐库改入口页（旧 TabBar 版 LibraryScreen 保留作回退）。
+    LibraryHubScreen(),
     SettingsRootScreen(),
   ];
 

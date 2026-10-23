@@ -2969,4 +2969,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sortFieldTitle => '标题';
+
+  @override
+  String artistStats(int songCount, int albumCount) {
+    return '$songCount 首歌 · $albumCount 张专辑';
+  }
+
+  @override
+  String get sortBySongCount => '歌曲数';
+
+  @override
+  String get sortByAlbumCount => '专辑数';
+
+  @override
+  String songsTotal(int count) {
+    return '共 $count 首';
+  }
+
+  @override
+  String artistsTotal(int count) {
+    return '共 $count 位歌手';
+  }
+
+  @override
+  String albumsTotal(int count) {
+    return '共 $count 张专辑';
+  }
+
+  @override
+  String playlistsTotal(int count) {
+    return '共 $count 个歌单';
+  }
+
+  @override
+  String albumYear(int year) {
+    return '$year 年';
+  }
 }

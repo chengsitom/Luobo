@@ -3072,4 +3072,40 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get sortFieldTitle => 'Title';
+
+  @override
+  String artistStats(int songCount, int albumCount) {
+    return '$songCount songs · $albumCount albums';
+  }
+
+  @override
+  String get sortBySongCount => 'Songs';
+
+  @override
+  String get sortByAlbumCount => 'Albums';
+
+  @override
+  String songsTotal(int count) {
+    return '共 $count 首';
+  }
+
+  @override
+  String artistsTotal(int count) {
+    return '共 $count 位歌手';
+  }
+
+  @override
+  String albumsTotal(int count) {
+    return '共 $count 张专辑';
+  }
+
+  @override
+  String playlistsTotal(int count) {
+    return '共 $count 个歌单';
+  }
+
+  @override
+  String albumYear(int year) {
+    return '$year';
+  }
 }

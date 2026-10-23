@@ -9,6 +9,7 @@ import '../utils/duration_format.dart';
 import '../widgets/audiobook_cover.dart';
 import '../widgets/load_error_view.dart';
 import '../widgets/section_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import 'audiobook_detail_screen.dart';
 
 /// 有声书列表页（道理鱼）。
@@ -100,7 +101,8 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.audiobooks)),
+      extendBodyBehindAppBar: true,
+      appBar: const LuoboListTopBar(),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(isDark, l10n),
@@ -133,6 +135,10 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
+        // 顶部留白放进滚动内容里 → 列表从悬浮圆钮下方流过（与收藏页一致）。
+        SliverToBoxAdapter(
+          child: SizedBox(height: listTopInset(context)),
+        ),
         if (_recent != null)
           SliverToBoxAdapter(child: _buildContinueShelf(l10n)),
         SliverPadding(

@@ -10,6 +10,10 @@ import '../widgets/luobo/playlist_settings.dart';
 import '../widgets/luobo/sheet_shell.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/song_divider.dart';
 import 'playlist_screen.dart';
 import 'ai_playlist_screen.dart';
 
@@ -23,20 +27,21 @@ class PlaylistsScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.playlists),
+      // 与收藏页同款：透明顶栏 + 悬浮圆钮（无实色栏、无标题）。
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
         actions: [
-          IconButton(
-            icon: const Icon(Icons.auto_awesome),
-            tooltip: 'AI 智能歌单',
-            onPressed: () => Navigator.push(
+          LuoboTopCircleButton(
+            icon: Icons.auto_awesome,
+            onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AiPlaylistScreen()),
             ),
           ),
-          IconButton(
-            icon: const Icon(CupertinoIcons.add),
-            onPressed: () => _showCreatePlaylistDialog(context),
+          const SizedBox(width: 8),
+          LuoboTopCircleButton(
+            icon: AppIcons.plus,
+            onTap: () => _showCreatePlaylistDialog(context),
           ),
         ],
       ),
@@ -73,15 +78,31 @@ class PlaylistsScreen extends StatelessWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 100),
-              itemCount: libraryProvider.playlists.length,
+              padding: EdgeInsets.only(
+                top: listTopInset(context),
+                bottom: 100,
+              ),
+              itemCount: libraryProvider.playlists.length + 1,
               itemBuilder: (context, index) {
-                final playlist = libraryProvider.playlists[index];
-                return _PlaylistTile(
-                  playlist: playlist,
-                  onTap: () => _openPlaylist(context, playlist),
-                  onLongPress: () => _showPlaylistOptions(context, playlist),
-                  onMore: () => _showPlaylistOptions(context, playlist),
+                if (index == 0) {
+                  return _PlaylistCountRow(
+                    count: libraryProvider.playlists.length,
+                  );
+                }
+                final i = index - 1;
+                final playlist = libraryProvider.playlists[i];
+                return Column(
+                  children: [
+                    _PlaylistTile(
+                      playlist: playlist,
+                      onTap: () => _openPlaylist(context, playlist),
+                      onLongPress: () =>
+                          _showPlaylistOptions(context, playlist),
+                      onMore: () => _showPlaylistOptions(context, playlist),
+                    ),
+                    if (i < libraryProvider.playlists.length - 1)
+                      const LuoboSongDivider(),
+                  ],
                 );
               },
             ),
@@ -147,62 +168,98 @@ class _PlaylistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = LuoboColors.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: playlist.coverArt != null
-            ? AlbumArtwork(
-                coverArt: playlist.coverArt,
-                size: 56,
-                borderRadius: 8,
-              )
-            : const Icon(
-                CupertinoIcons.music_note_list,
-                color: AppTheme.appleMusicRed,
-                size: 28,
-              ),
-      ),
-      title: Text(
-        playlist.name,
-        style: theme.textTheme.bodyLarge,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        AppLocalizations.of(
-          context,
-        )!
-            .songsCount(playlist.songCount ?? 0),
-        style: theme.textTheme.bodySmall,
-      ),
-      trailing: GestureDetector(
-        onTap: onMore,
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppTheme.darkSurface
-                : AppTheme.lightBackground,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            AppIcons.moreV,
-            size: 16,
-            color: AppTheme.lightSecondaryText,
-          ),
-        ),
-      ),
+    return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: playlist.coverArt != null
+                    ? AlbumArtwork(
+                        coverArt: playlist.coverArt,
+                        size: 48,
+                        borderRadius: 6,
+                      )
+                    : Icon(
+                        CupertinoIcons.music_note_list,
+                        color: c.fg3,
+                        size: 22,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      playlist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.body.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: c.fg,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.songCount(playlist.songCount ?? 0),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.caption.copyWith(color: c.fg2),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: onMore,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Icon(AppIcons.moreV, size: 18, color: c.fg2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 歌单列表计数行（44dp，「共 N 个歌单」）。
+class _PlaylistCountRow extends StatelessWidget {
+  final int count;
+
+  const _PlaylistCountRow({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return Container(
+      height: 44,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 16),
+      child: Text(
+        AppLocalizations.of(context)!.playlistsTotal(count),
+        style: LuoboType.body.copyWith(fontSize: 14, color: c.fg2),
+      ),
     );
   }
 }

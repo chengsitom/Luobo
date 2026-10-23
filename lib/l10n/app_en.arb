@@ -2847,7 +2847,25 @@
   "useLocalFilesConfirmBody": "This disconnects the current server and uses music files stored on this device instead.",
   "@useLocalFilesConfirmBody": { "description": "Confirm dialog body explaining that the server connection is dropped" },
   "sortFieldTitle": "Title",
-  "@sortFieldTitle": { "description": "Sort field label: song title. Direction is shown by a separate arrow, not baked into the label (unlike the legacy sortTitleAz/Za keys)." }
+  "@sortFieldTitle": { "description": "Sort field label: song title. Direction is shown by a separate arrow, not baked into the label (unlike the legacy sortTitleAz/Za keys)." },
+  "artistStats": "{songCount} songs · {albumCount} albums",
+  "@artistStats": { "description": "Artist detail subtitle: song and album counts", "placeholders": { "songCount": { "type": "int" }, "albumCount": { "type": "int" } } },
+  "sortByName": "Name",
+  "@sortByName": { "description": "List sort menu label" },
+  "sortBySongCount": "Songs",
+  "@sortBySongCount": { "description": "List sort menu label" },
+  "sortByAlbumCount": "Albums",
+  "@sortByAlbumCount": { "description": "List sort menu label" },
+  "songsTotal": "共 {count} 首",
+  "@songsTotal": { "description": "List header total, fnos style", "placeholders": { "count": { "type": "int" } } },
+  "artistsTotal": "共 {count} 位歌手",
+  "@artistsTotal": { "description": "Artist list header total", "placeholders": { "count": { "type": "int" } } },
+  "albumsTotal": "共 {count} 张专辑",
+  "@albumsTotal": { "description": "Album list header total", "placeholders": { "count": { "type": "int" } } },
+  "playlistsTotal": "共 {count} 个歌单",
+  "@playlistsTotal": { "description": "Playlist list header total", "placeholders": { "count": { "type": "int" } } },
+  "albumYear": "{year}",
+  "@albumYear": { "description": "Year label under an album cover (zh renders as 2007 年)", "placeholders": { "year": { "type": "int" } } }
 }
 
 

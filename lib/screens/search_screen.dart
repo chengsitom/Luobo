@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -13,20 +12,15 @@ import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import 'artist_screen.dart';
-import 'genres_screen.dart';
-import 'new_releases_screen.dart';
-import 'made_for_you_screen.dart';
-import 'top_rated_screen.dart';
-import 'favorites_screen.dart';
-import 'radio_screen.dart';
-import 'audiobook_list_screen.dart';
-import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/search_history_store.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  /// 进入即聚焦（弹键盘）。桌面端把它当 tab 常驻时传 false，避免启动抢焦点。
+  final bool autoFocus;
+
+  const SearchScreen({super.key, this.autoFocus = true});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -56,6 +50,11 @@ class _SearchScreenState extends State<SearchScreen> {
         .liveSearchNotifier
         .addListener(_onLiveSearchChanged);
     _loadHistory();
+    if (widget.autoFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -149,7 +148,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  Future<void> _search(String query) async {
+  Future<void> _search(String query, {bool recordHistory = false}) async {
     if (query.trim().isEmpty) {
       setState(() {
         _searchResult = null;
@@ -165,19 +164,25 @@ class _SearchScreenState extends State<SearchScreen> {
       _showSuggestions = false;
     });
 
+    final libraryProvider = Provider.of<LibraryProvider>(
+      context,
+      listen: false,
+    );
+
+    // 只有**明确提交**（回车/搜索）才写历史：实时搜索的防抖中间态不再入库，
+    // 否则「周 / 周杰 / 周杰伦」会各存一条（用户 2026-10-23 反馈的乱历史）。
+    if (recordHistory) {
+      final list = await _historyStore.add(query);
+      if (mounted) setState(() => _history = list);
+    }
+
     try {
-      final libraryProvider = Provider.of<LibraryProvider>(
-        context,
-        listen: false,
-      );
       final result = await libraryProvider.search(query);
       if (mounted && _query == query) {
         setState(() {
           _searchResult = result;
           _isSearching = false;
         });
-        final list = await _historyStore.add(query);
-        if (mounted) setState(() => _history = list);
       }
     } catch (e) {
       if (mounted) {
@@ -262,7 +267,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               onChanged: _onSearchChanged,
                               onSubmitted: (value) {
                                 setState(() => _showSuggestions = false);
-                                _search(value);
+                                _search(value, recordHistory: true);
                               },
                             ),
                           ),
@@ -353,7 +358,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                 )
               else
-                SliverToBoxAdapter(child: _buildBrowseCategories()),
+                SliverToBoxAdapter(child: _buildHistorySection()),
             ],
           ),
           if (_showSuggestions && _searchController.text.isNotEmpty)
@@ -474,6 +479,9 @@ class _SearchScreenState extends State<SearchScreen> {
                     setState(() => _showSuggestions = false);
                     _search(term);
                   },
+                  // ⚠️ 不要用 Container(alignment:)：Align 会吃满整行宽度，
+                  // 每个 chip 都会独占一行。Center(widthFactor: 1) 才能按文字
+                  // 宽度自适应、恢复流式换行。
                   child: Container(
                     height: 44,
                     padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -481,92 +489,16 @@ class _SearchScreenState extends State<SearchScreen> {
                       color: c.card,
                       borderRadius: BorderRadius.circular(22),
                     ),
-                    alignment: Alignment.center,
-                    child: Text(term, style: LuoboType.body),
+                    child: Center(
+                      widthFactor: 1,
+                      child: Text(term, style: LuoboType.body),
+                    ),
                   ),
                 ),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildBrowseCategories() {
-    // 道理鱼下电台入口 → 有声书（§7.1；listen 监听切服务器即时刷新）。
-    final isDaoliyu =
-        Provider.of<AuthProvider>(context).config?.serverFamily == 'daoliyu';
-    final categories = [
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryMadeForYou,
-        Icons.person_outline_rounded,
-        [Colors.purple, Colors.pink],
-        () => NavigationHelper.push(context, const MadeForYouScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryNewReleases,
-        Icons.album_rounded,
-        [Colors.orange, Colors.red],
-        () => NavigationHelper.push(context, const NewReleasesScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryTopRated,
-        Icons.star_rounded,
-        [Colors.amber, Colors.orange],
-        () => NavigationHelper.push(context, const TopRatedScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryGenres,
-        Icons.library_music_rounded,
-        [Colors.green, Colors.teal],
-        () => NavigationHelper.push(context, const GenresScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryFavorites,
-        Icons.favorite_rounded,
-        [Colors.red, Colors.pink],
-        () => NavigationHelper.push(context, const FavoritesScreen()),
-      ),
-      if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux)
-        _CategoryItem(
-          isDaoliyu
-              ? AppLocalizations.of(context)!.audiobooks
-              : AppLocalizations.of(context)!.categoryRadio,
-          isDaoliyu ? Icons.menu_book_rounded : Icons.radio_rounded,
-          [Colors.blue, Colors.indigo],
-          () => NavigationHelper.push(
-            context,
-            isDaoliyu ? const AudiobookListScreen() : const RadioScreen(),
-          ),
-        ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 搜索历史（fnos v5_0016：在浏览分类之上）。
-        _buildHistorySection(),
-        SectionHeader(title: AppLocalizations.of(context)!.browseCategories),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 200,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.6,
-            ),
-            itemCount: categories.length,
-            itemBuilder: (context, index) {
-              final category = categories[index];
-              return _CategoryCard(category: category);
-            },
-          ),
-        ),
-        const SizedBox(height: 100),
-      ],
     );
   }
 
@@ -753,58 +685,3 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-class _CategoryItem {
-  final String title;
-  final IconData icon;
-  final List<Color> colors;
-  final VoidCallback onTap;
-
-  _CategoryItem(this.title, this.icon, this.colors, this.onTap);
-}
-
-class _CategoryCard extends StatelessWidget {
-  final _CategoryItem category;
-
-  const _CategoryCard({required this.category});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: category.colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: category.onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(category.icon, color: Colors.white, size: 24),
-                const Spacer(),
-                Text(
-                  category.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
