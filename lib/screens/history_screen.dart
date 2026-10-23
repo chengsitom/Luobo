@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:fluid_mesh_background/fluid_mesh_background.dart';
 import 'package:provider/provider.dart';
-import '../models/song.dart';
-import '../services/recommendation_service.dart';
-import '../providers/library_provider.dart';
-import '../theme/app_theme.dart';
-import '../widgets/widgets.dart';
+
 import '../l10n/app_localizations.dart';
+import '../models/song.dart';
+import '../providers/providers.dart';
+import '../services/recommendation_service.dart';
+import '../theme/app_icons.dart';
+import '../widgets/luobo/empty_state.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
+import '../widgets/song_tile.dart';
 import 'listening_report_screen.dart';
 
+/// 最近播放（播放历史）页。
+///
+/// 2026-10-23：套用**与歌单详情/收藏页同款**的 hero 头（用户：「最近播放页
+/// 套用同一套 hero 头，和歌单/收藏一致」）——共享 `LuoboHeroCardHeader`
+/// （inset 流体卡 + 居中标题 + 双胶囊 + 共 N 首/多选）+ 同款歌曲行与分隔线。
+/// 顺序即播放时间倒序，不做本地排序（排序会破坏「最近」语义）。
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -100,75 +112,127 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _playAll({bool shuffle = false}) {
+    if (_recentSongs.isEmpty) return;
+    final songs = List<Song>.from(_recentSongs);
+    if (shuffle) songs.shuffle();
+    Provider.of<PlayerProvider>(context, listen: false)
+        .playSong(songs.first, playlist: songs, startIndex: 0);
+  }
+
+  void _openMultiSelect() {
+    if (_recentSongs.isEmpty) return;
+    showMultiSelectSheet(context, songs: _recentSongs);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.listeningHistory),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ListeningReportScreen(),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: _buildHeader(l10n)),
+                    if (_recentSongs.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: LuoboEmptyState(
+                          message: l10n.noListeningHistory,
+                          icon: AppIcons.history,
+                        ),
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final songs = _recentSongs;
+                            return Column(
+                              children: [
+                                SongTile(
+                                  song: songs[index],
+                                  playlist: songs,
+                                  index: index,
+                                  // 历史记录不管理收藏（无「从喜欢的歌曲中移除」）。
+                                  menuContext: SongMenuContext.history,
+                                ),
+                                if (index < songs.length - 1)
+                                  const LuoboSongDivider(),
+                              ],
+                            );
+                          },
+                          childCount: _recentSongs.length,
+                        ),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
                 ),
-              );
-            },
-            icon: const Icon(Icons.bar_chart_rounded),
-            tooltip: '听歌报告',
+                // 悬浮顶栏（圆返回 + 听歌报告；滚动常驻、无实色栏）。
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          LuoboTopCircleButton(
+                            icon: AppIcons.back,
+                            onTap: () => Navigator.pop(context),
+                          ),
+                          const Spacer(),
+                          LuoboTopCircleButton(
+                            icon: Icons.bar_chart_rounded,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ListeningReportScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildHeader(AppLocalizations l10n) {
+    return LuoboHeroCardHeader(
+      title: l10n.listeningHistory,
+      subtitle: l10n.songsCount(_recentSongs.length),
+      countLabel: l10n.songsCount(_recentSongs.length),
+      // 无封面 → 冷色流体 + 中央时钟（与收藏页「暖色流体 + 心形」同构）。
+      card: Stack(
+        fit: StackFit.expand,
+        children: [
+          const FluidBackground(
+            colors: [Color(0xFF3D6BFF), Color(0xFF7A4DFF), Color(0xFF2FBBDD)],
+            borderRadius: 16,
+            seed: 2.4,
+          ),
+          Center(
+            child: Icon(
+              AppIcons.history,
+              size: 72,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _recentSongs.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.history_rounded,
-                        size: 64,
-                        color: isDark
-                            ? AppTheme.darkSecondaryText
-                            : AppTheme.lightSecondaryText,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppLocalizations.of(context)!.noListeningHistory,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          color: isDark
-                              ? AppTheme.darkSecondaryText
-                              : AppTheme.lightSecondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        AppLocalizations.of(context)!.listeningHistoryHint,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark
-                              ? AppTheme.darkSecondaryText
-                              : AppTheme.lightSecondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _recentSongs.length,
-                  itemBuilder: (context, index) {
-                    return SongTile(
-                      song: _recentSongs[index],
-                      playlist: _recentSongs,
-                      index: index,
-                      showAlbum: true,
-                    );
-                  },
-                ),
+      onPlay: () => _playAll(),
+      onShuffle: () => _playAll(shuffle: true),
+      onMultiSelect: _openMultiSelect,
     );
   }
 }

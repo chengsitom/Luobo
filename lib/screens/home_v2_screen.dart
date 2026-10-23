@@ -297,7 +297,7 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
               ),
               const SizedBox(width: 8),
               GlassCircleButton(
-                icon: AppIcons.refresh,
+                icon: AppIcons.history,
                 tooltip: AppLocalizations.of(context)!.recentlyPlayed,
                 onPressed: () =>
                     NavigationHelper.push(context, const HistoryScreen()),
@@ -377,7 +377,12 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                       hPad,
                     ),
                     const SizedBox(height: 16),
-                    _buildRecentlyPlayed(context, libraryProvider, hPad),
+                    _buildRecentlyPlayed(
+                      context,
+                      libraryProvider,
+                      recommendationService,
+                      hPad,
+                    ),
                     const SizedBox(height: 16),
                     _buildPlaylists(context, libraryProvider, hPad),
                     const SizedBox(height: 16),
@@ -748,10 +753,15 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   Widget _buildRecentlyPlayed(
     BuildContext context,
     LibraryProvider libraryProvider,
+    RecommendationService recommendationService,
     double hPad,
   ) {
     final l10n = AppLocalizations.of(context)!;
-    final albums = libraryProvider.recentAlbums;
+    // ⚠️ 修复（2026-10-22 用户反馈「最近播放不实时更新」）：原实现用
+    // `libraryProvider.recentAlbums`，它其实是 `_cachedAllAlbums.take(20)`
+    // （曲库列表头部，不是播放历史），只在初始化/刷新时赋值 → 永远不变。
+    // 现改为从 **真实播放历史**（recentlyPlayed 歌曲 ID，最新在前）推导专辑。
+    final albums = _recentAlbumsFromHistory(libraryProvider, recommendationService);
     if (albums.isEmpty) return const SizedBox.shrink();
 
     return HorizontalScrollSection(
@@ -759,8 +769,7 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
       padding: EdgeInsets.symmetric(horizontal: hPad),
       cardSize: 150,
       children: [
-        // 最近播放的专辑（服务端 recentAlbums 顺序）。
-        for (final album in albums.take(10))
+        for (final album in albums)
           AlbumCard(
             album: album,
             size: 150,
@@ -773,12 +782,37 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     );
   }
 
-  /// 「你的歌单」小节 —— 与顶部大卡同一套排版（2026-10-09 用户要求「同步改」）。
-  ///
-  /// 卡面主体是**歌单名首字字母牌**而不是封面：一个歌单里有很多首歌，单张封面代表不了它
-  /// （用户明确否掉封面）；用法对标 Apple Music「Made For You」Mix 卡 —— 渐变 + 大号
-  /// 半透明图形 + 大号粗体标题，而不是单张封面。取色仍走 `_playlistCovers`
-  /// （每次回到首页随机抽该歌单里一首歌的封面**当取色源**，卡面不显示封面图）。
+  /// 由播放历史推导「最近播放的专辑」：按播放顺序去重取前 10 张。
+  List<Album> _recentAlbumsFromHistory(
+    LibraryProvider libraryProvider,
+    RecommendationService recommendationService,
+  ) {
+    final pool = libraryProvider.cachedAllSongs;
+    if (pool.isEmpty) return const [];
+    final byId = {for (final s in pool) s.id: s};
+    final seen = <String>{};
+    final out = <Album>[];
+    for (final id in recommendationService.recentlyPlayed) {
+      final song = byId[id];
+      if (song == null) continue;
+      final albumId = song.albumId;
+      if (albumId == null || albumId.isEmpty) continue;
+      if (!seen.add(albumId)) continue;
+      out.add(
+        Album(
+          id: albumId,
+          name: song.album ?? '',
+          artist: song.artist,
+          artistId: song.artistId,
+          coverArt: song.coverArt,
+        ),
+      );
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
+
   Widget _buildPlaylists(
     BuildContext context,
     LibraryProvider libraryProvider,

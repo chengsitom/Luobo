@@ -7,9 +7,12 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_icons.dart';
 import '../widgets/widgets.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
-import '../utils/screen_helper.dart';
 import '../services/offline_service.dart';
 
 class AlbumScreen extends StatefulWidget {
@@ -69,6 +72,12 @@ class _AlbumScreenState extends State<AlbumScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// 多选（fnos：全屏弹窗）。
+  void _openMultiSelect() {
+    if (_songs.isEmpty) return;
+    showMultiSelectSheet(context, songs: _songs);
   }
 
   void _playAll({bool shuffle = false}) {
@@ -187,12 +196,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
       );
     }
 
-    final totalDuration = _songs.fold<int>(
-      0,
-      (sum, song) => sum + (song.duration ?? 0),
-    );
-    final hours = totalDuration ~/ 3600;
-    final minutes = (totalDuration % 3600) ~/ 60;
 
     final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
         AuthState.offlineMode;
@@ -202,132 +205,28 @@ class _AlbumScreenState extends State<AlbumScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              SliverAppBar(
-                pinned: true,
-                expandedHeight: ScreenHelper.isSmallScreen(context) ? 280 : 360,
-                leading: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.black.withValues(alpha: 0.5)
-                          : Colors.white.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      CupertinoIcons.back,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: MediaQuery.of(context).padding.top + 40,
-                          left: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                          right: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                          bottom: ScreenHelper.isSmallScreen(context) ? 60 : 80,
-                        ),
-                        child: AlbumArtwork(
-                          coverArt: _album!.coverArt,
-                          size: ScreenHelper.isSmallScreen(context) ? 200 : 280,
-                          borderRadius: 10,
-                          preserveAspectRatio: true,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  if (!isOffline)
-                    IconButton(
-                      tooltip: AppLocalizations.of(context)!.downloadAlbum,
-                      onPressed: _isDownloading ? null : _downloadAlbum,
-                      icon: _isDownloading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(CupertinoIcons.cloud_download),
-                    ),
-                ],
-              ),
+              // 头部（fnos 专辑详情：**保留专辑封面**；与歌单/收藏同款骨架）。
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        _album!.name,
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          fontSize:
-                              ScreenHelper.isSmallScreen(context) ? 22 : null,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      MultiArtistWidget(
-                        artists: _album!.artistParticipants,
-                        artistFallback: _album!.artist ??
-                            AppLocalizations.of(context)!.unknownArtist,
-                        artistIdFallback: _album!.artistId,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: AppTheme.appleMusicRed,
-                          fontSize:
-                              ScreenHelper.isSmallScreen(context) ? 16 : null,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          if (_album!.genre != null)
-                            _album!.genre!.toUpperCase(),
-                          if (_album!.year != null) _album!.year.toString(),
-                          if (hours > 0)
-                            AppLocalizations.of(
-                              context,
-                            )!
-                                .durationHoursMinutes(hours, minutes)
-                          else
-                            AppLocalizations.of(context)!
-                                .durationMinutesOnly(minutes),
-                        ].join(' • '),
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PlayButton(
-                              icon: CupertinoIcons.play_fill,
-                              label: AppLocalizations.of(context)!.play,
-                              onTap: () => _playAll(),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _PlayButton(
-                              icon: CupertinoIcons.shuffle,
-                              label: AppLocalizations.of(context)!.shuffle,
-                              onTap: () => _playAll(shuffle: true),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                    ],
+                child: LuoboHeroCardHeader(
+                  title: _album!.name,
+                  subtitle: [
+                    _album!.artist ?? AppLocalizations.of(context)!.unknownArtist,
+                    if (_album!.year != null) _album!.year.toString(),
+                  ].join(' · '),
+                  countLabel: AppLocalizations.of(context)!.songsCount(
+                    _songs.length,
                   ),
+                  card: Center(
+                    child: AlbumArtwork(
+                      coverArt: _album!.coverArt,
+                      size: 230,
+                      borderRadius: 12,
+                      preserveAspectRatio: true,
+                    ),
+                  ),
+                  onPlay: () => _playAll(),
+                  onShuffle: () => _playAll(shuffle: true),
+                  onMultiSelect: _openMultiSelect,
                 ),
               ),
               SliverList(
@@ -345,10 +244,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                       ),
                       // 序号行分隔线：左缩 42 对到歌名（设计稿/08 §3）。
                       if (index < _songs.length - 1)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 42),
-                          child: Divider(height: 1, thickness: 0.5),
-                        ),
+                        const LuoboSongDivider(indent: 42),
                     ],
                   );
                 }, childCount: _songs.length),
@@ -356,52 +252,33 @@ class _AlbumScreenState extends State<AlbumScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _PlayButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = Theme.of(context).colorScheme.primary;
-
-    return Material(
-      color: accent.withValues(alpha: isDark ? 0.15 : 0.1),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: accent, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+          // 悬浮顶栏（圆返回 + 下载；滚动常驻、无实色栏，同歌单/收藏）。
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    LuoboTopCircleButton(
+                      icon: AppIcons.back,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    if (!isOffline)
+                      LuoboTopCircleButton(
+                        icon: Icons.download_rounded,
+                        onTap: _isDownloading ? () {} : _downloadAlbum,
+                      ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

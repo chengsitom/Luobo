@@ -42,6 +42,11 @@ enum SongMenuContext {
 
   /// 歌单详情页内：同 [list]，多「从当前歌单移除」。
   playlist,
+
+  /// 播放历史 / 最近播放页内：同 [list]，**无「收藏」行**
+  /// （用户 2026-10-23：历史是收听记录，不该出现「从喜欢的歌曲中移除」；
+  /// 与歌单变体的处理一致——收藏管理只留在收藏页/列表页）。
+  history,
 }
 
 class SongTile extends StatelessWidget {
@@ -666,7 +671,8 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         ),
         _buildDownloadTile(context),
         // 收藏行只在**列表页/收藏页变体**出现（用户 2026-10-22：歌单内 ⋮
-        // 不应有「从喜欢的歌曲中移除」；收藏页的 ⋮ 需要它 → 保留）。
+        // 不应有「从喜欢的歌曲中移除」；收藏页的 ⋮ 需要它 → 保留。
+        // 2026-10-23：播放历史同样不出该行）。
         if (widget.menuContext == SongMenuContext.list)
           LuoboSheetRow(
             title:
@@ -875,7 +881,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             context,
             message: l10n.removedFromLikedSongs,
             tone: LuoboToastTone.info,
-                      );
+          );
         }
       } else {
         await subsonicService.star(id: widget.song.id);
@@ -887,7 +893,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             context,
             message: l10n.addedToLikedSongs,
             tone: LuoboToastTone.success,
-                      );
+          );
         }
       }
     } catch (e) {

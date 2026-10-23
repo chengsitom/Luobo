@@ -114,6 +114,9 @@ abstract final class AppIcons {
   static const IconData edit = CupertinoIcons.pencil;
   static const IconData share = CupertinoIcons.share;
   static const IconData refresh = CupertinoIcons.refresh;
+
+  /// 最近播放（历史）入口。
+  static const IconData history = CupertinoIcons.clock;
   static const IconData eye = CupertinoIcons.eye;
   static const IconData eyeOff = CupertinoIcons.eye_slash;
 
