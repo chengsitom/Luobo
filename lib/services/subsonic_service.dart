@@ -52,10 +52,6 @@ class SubsonicService {
   final Map<String, _DaoliyuCoverTicket> _albumCoverTickets = {};
   final Set<String> _coverTicketInFlight = {};
 
-  /// 道理鱼艺人封面路径缓存（artistId → `coverArtPath`），由
-  /// `GET /api/library/artists` 一次性拉取。
-  final Map<String, String> _artistCoverPaths = {};
-  bool _artistCoversInFlight = false;
 
   /// 进行中的 loginToApi Future：并发去重，多个 _apiGet 同时触发时只发一次登录。
   Future<bool>? _loginInFlight;
@@ -90,7 +86,6 @@ class SubsonicService {
     _loginInFlight = null; // 丢弃进行中的登录（旧服务器凭据/地址已失效）
     _albumCoverTickets.clear();
     _coverTicketInFlight.clear();
-    _artistCoverPaths.clear();
     _setActiveBaseUrl(null);
     if (config.isJellyfin) {
       _jellyfin ??= JellyfinService();
@@ -443,8 +438,6 @@ class SubsonicService {
       _apiUserId = user?['id'] as String?;
       _apiLoginFailed = false;
       Log.i('Daoliyu', 'API login OK (user=${_apiUserId})');
-      // 预取封面票据（不阻塞登录；失败会由 daoliyuCoverUrl 再触发）。
-      prefetchDaoliyuArtistCovers().ignore();
       return true;
     } on DioException catch (e) {
       // 401 = 凭据无效 → 永久失败；其它（网络/超时/5xx）→ 可重试。
@@ -779,6 +772,10 @@ class SubsonicService {
 
   /// 同步取专辑封面 URL（build 期可用）：票据未就绪时返回 null 并后台申请，
   /// 调用方回退到 Subsonic 兼容层 `album:<id>`（行为与改动前一致）。
+  ///
+  /// ⚠️ 预留接口：艺人封面已证明可直接用 Subsonic `artist:<id>`
+  /// （抓包 `sub_getArtists` 里 artist 条目自带 `coverArt: "artist:art_..."`），
+  /// 本条仅在将来「专辑封面改成原生长缓存」时接线。
   String? daoliyuAlbumCoverUrl(String albumId, {int size = 300}) {
     if (!isDaoliyu) return null;
     final base = activeBaseUrl;
@@ -793,40 +790,6 @@ class SubsonicService {
     }
     final sep = ticket.url.contains('?') ? '&' : '?';
     return '$base${ticket.url}${sep}size=$size';
-  }
-
-  /// 预取道理鱼艺人封面路径（`GET /api/library/artists` 的 `coverArtPath`）。
-  ///
-  /// 登录后调用一次；失败不影响任何功能（艺人头像回退专辑封面/拼贴）。
-  Future<void> prefetchDaoliyuArtistCovers() async {
-    if (!isDaoliyu || _artistCoversInFlight) return;
-    _artistCoversInFlight = true;
-    try {
-      final data = await _apiGet('/api/library/artists?take=1000');
-      final parsed = parseArtistCoverPaths(data);
-      if (parsed.isNotEmpty) {
-        _artistCoverPaths
-          ..clear()
-          ..addAll(parsed);
-      }
-    } finally {
-      _artistCoversInFlight = false;
-    }
-  }
-
-  /// 道理鱼艺人封面 URL（路径式 `/api/cover?path=`）。
-  /// 未预取到该艺人时返回 null（调用方回退），并后台补一次。
-  String? daoliyuArtistCoverUrl(String artistId, {int size = 300}) {
-    if (!isDaoliyu) return null;
-    final base = activeBaseUrl;
-    if (base.isEmpty) return null;
-    final path = _artistCoverPaths[artistId];
-    if (path == null || path.isEmpty) {
-      // ignore: discarded_futures
-      prefetchDaoliyuArtistCovers();
-      return null;
-    }
-    return '$base/api/cover?path=${Uri.encodeComponent(path)}&size=$size';
   }
 
   /// 解析 `POST /api/library/cover-ticket` 响应（纯函数，便于单测）。
@@ -852,32 +815,6 @@ class SubsonicService {
       expires = now.add(const Duration(seconds: 30));
     }
     return _DaoliyuCoverTicket(url: url, ticket: ticket, expiresAt: expires);
-  }
-
-  /// 解析 `GET /api/library/artists` 响应里的 `coverArtPath`
-  /// （artistId → path）。纯函数，便于单测。
-  static Map<String, String> parseArtistCoverPaths(
-    Map<String, dynamic>? data,
-  ) {
-    final out = <String, String>{};
-    final items = data?['items'];
-    if (items is! List) return out;
-    for (final item in items) {
-      if (item is! Map) continue;
-      final id = item['id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      var path = item['coverArtPath']?.toString();
-      if (path == null || path.isEmpty) {
-        final url = item['coverArtUrl']?.toString() ??
-            item['coverArt']?.toString();
-        if (url != null && url.contains('path=')) {
-          final raw = Uri.tryParse(url)?.queryParameters['path'];
-          if (raw != null && raw.isNotEmpty) path = raw;
-        }
-      }
-      if (path != null && path.isNotEmpty) out[id] = path;
-    }
-    return out;
   }
 
   String getCoverArtUrl(String? coverArt, {int size = 600}) {

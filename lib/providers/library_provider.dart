@@ -231,28 +231,25 @@ class LibraryProvider extends ChangeNotifier {
   /// 3. 专辑封面单图 → 4. 2×2 专辑封面拼贴 → 5. 渐变首字母占位。
   /// 组件按 `ArtistCover` 的字段择一渲染，保证无任何图源时页面也不素。
   ArtistCover resolveArtistCover(Artist artist) {
-    // 级 0（道理鱼）：`/api/library/artists` 自带 `coverArtPath` →
-    // `/api/cover?path=...`，这是**艺人本人图**。路径由服务在登录后
-    // 预取一次（`prefetchDaoliyuArtistCovers`）；未就绪时返回 null，
-    // 回退下方链路并在后台补拉（无回归）。
+    // 级 1/2：外部直链（artistImageUrl，last.fm/deezer）或服务端 coverArt id。
     String? primaryUrl;
-    final nativeArtistCover = _subsonicService.daoliyuArtistCoverUrl(
-      artist.id,
-      size: 300,
-    );
-    if (nativeArtistCover != null && nativeArtistCover.isNotEmpty) {
-      primaryUrl = nativeArtistCover;
+    final directUrl = artist.artistImageUrl;
+    if (directUrl != null && directUrl.isNotEmpty) {
+      primaryUrl = directUrl;
     } else {
-      // 级 1/2：外部直链（artistImageUrl，last.fm/deezer）或服务端 coverArt id。
-      final directUrl = artist.artistImageUrl;
-      if (directUrl != null && directUrl.isNotEmpty) {
-        primaryUrl = directUrl;
-      } else {
-        final coverArt = artist.coverArt;
-        if (coverArt != null && coverArt.isNotEmpty) {
-          primaryUrl = getCoverArtUrl(coverArt);
-        }
+      final coverArt = artist.coverArt;
+      if (coverArt != null && coverArt.isNotEmpty) {
+        primaryUrl = getCoverArtUrl(coverArt);
       }
+    }
+    // 级 2.5（道理鱼）：Subsonic 兼容层的 artist 条目自带
+    // `coverArt: "artist:art_..."`（实测抓包），没有 coverArt 时按 id 合成同款，
+    // 走 `/rest/getCoverArt?id=artist:<id>` —— 1 天缓存、u/p 认证，
+    // **不需要** JWT / cover-ticket。
+    if ((primaryUrl == null || primaryUrl.isEmpty) &&
+        _subsonicService.isDaoliyu &&
+        artist.id.isNotEmpty) {
+      primaryUrl = getCoverArtUrl('artist:${artist.id}');
     }
     // 级 3：专辑封面单图 —— 直链常有防盗链/网络失败，作为降级目标
     // （fallback）；没有 primary 时直接作为主图。
