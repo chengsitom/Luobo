@@ -47,10 +47,15 @@ class SubsonicService {
   /// 最近一次 loginToApi 拿到的 userId（道理鱼 /api/auth/login 响应 user.id）。
   String? _apiUserId;
 
-  /// 道理鱼封面票据（`/api/library/cover-tickets`，约 2 分钟有效）。
-  String? _coverTicket;
-  DateTime? _coverTicketExpiresAt;
-  bool _coverTicketInFlight = false;
+  /// 道理鱼封面票据：**按专辑**申请（`POST /api/library/cover-ticket`
+  /// `{albumId}`，120s 有效）。响应含现成 `url`，但图片请求仍需 JWT。
+  final Map<String, _DaoliyuCoverTicket> _albumCoverTickets = {};
+  final Set<String> _coverTicketInFlight = {};
+
+  /// 道理鱼艺人封面路径缓存（artistId → `coverArtPath`），由
+  /// `GET /api/library/artists` 一次性拉取。
+  final Map<String, String> _artistCoverPaths = {};
+  bool _artistCoversInFlight = false;
 
   /// 进行中的 loginToApi Future：并发去重，多个 _apiGet 同时触发时只发一次登录。
   Future<bool>? _loginInFlight;
@@ -83,8 +88,9 @@ class SubsonicService {
     _apiLoginFailed = false;
     _apiUserId = null;
     _loginInFlight = null; // 丢弃进行中的登录（旧服务器凭据/地址已失效）
-    _coverTicket = null;
-    _coverTicketExpiresAt = null;
+    _albumCoverTickets.clear();
+    _coverTicketInFlight.clear();
+    _artistCoverPaths.clear();
     _setActiveBaseUrl(null);
     if (config.isJellyfin) {
       _jellyfin ??= JellyfinService();
@@ -438,7 +444,7 @@ class SubsonicService {
       _apiLoginFailed = false;
       Log.i('Daoliyu', 'API login OK (user=${_apiUserId})');
       // 预取封面票据（不阻塞登录；失败会由 daoliyuCoverUrl 再触发）。
-      ensureCoverTicket().ignore();
+      prefetchDaoliyuArtistCovers().ignore();
       return true;
     } on DioException catch (e) {
       // 401 = 凭据无效 → 永久失败；其它（网络/超时/5xx）→ 可重试。
@@ -477,6 +483,46 @@ class SubsonicService {
               options: Options(headers: {'Authorization': 'Bearer $_apiJwt'}),
             );
             return retry.data as Map<String, dynamic>;
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// POST the 道理鱼 self-layer API with Bearer auth（401 时重登一次）。
+  Future<Map<String, dynamic>?> _apiPost(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    if (!await loginToApi()) return null;
+    Future<Map<String, dynamic>?> send() async {
+      final resp = await _dio.post(
+        '$activeBaseUrl$path',
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $_apiJwt',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      return resp.data as Map<String, dynamic>;
+    }
+
+    try {
+      return await send();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        _apiJwt = null;
+        _apiLoginFailed = false;
+        if (await loginToApi()) {
+          try {
+            return await send();
           } catch (_) {
             return null;
           }
@@ -701,116 +747,137 @@ class SubsonicService {
   /// Returns a cover-art URL. All callers share the same [size] so
   /// `cached_network_image` hits the same disk-cache entry regardless of
   /// context (list, player, full-screen), avoiding duplicate downloads.
-  /// 道理鱼封面票据：`/api/library/cover-tickets`（ticket 约 2 分钟有效）。
+  /// 道理鱼**按专辑**申请封面票据：`POST /api/library/cover-ticket`
+  /// body `{"albumId": ...}` → `{ticket, url, expiresAt, expiresInSeconds}`。
   ///
-  /// 响应结构未在接口清单中给出，这里做**防御式解析**（见
-  /// `parseCoverTicketPayload` 单测）：兼容 `{ticket}` / `{tickets:[...]}` /
-  /// 列表项为字符串或 `{ticket|value|token, exp|expiresAt|expiresIn}`。
-  /// 拿不到有效期时按 100 秒缓存；过期前 15 秒主动刷新。
-  Future<String?> ensureCoverTicket({bool force = false}) async {
-    if (!isDaoliyu) return null;
+  /// 实测抓包见 `~/Downloads/道理鱼接口/道理鱼_接口素材/captures/api_cover_ticket.txt`。
+  /// 票据 120s 有效；图片请求仍需 `Authorization: Bearer <JWT>`。
+  Future<_DaoliyuCoverTicket?> ensureAlbumCoverTicket(String albumId) async {
+    if (!isDaoliyu || albumId.isEmpty) return null;
     final now = DateTime.now();
-    final expires = _coverTicketExpiresAt;
-    if (!force &&
-        _coverTicket != null &&
-        expires != null &&
-        now.isBefore(expires.subtract(const Duration(seconds: 15)))) {
-      return _coverTicket;
+    final cached = _albumCoverTickets[albumId];
+    if (cached != null &&
+        now.isBefore(cached.expiresAt.subtract(const Duration(seconds: 15)))) {
+      return cached;
     }
-    if (_coverTicketInFlight) return _coverTicket;
-    _coverTicketInFlight = true;
+    if (!_coverTicketInFlight.add(albumId)) return cached;
     try {
-      final data = await _apiGet('/api/library/cover-tickets');
-      final parsed = parseCoverTicketPayload(data, now);
+      final data = await _apiPost(
+        '/api/library/cover-ticket',
+        {'albumId': albumId},
+      );
+      final parsed = parseAlbumCoverTicket(data, now);
       if (parsed != null) {
-        _coverTicket = parsed.$1;
-        _coverTicketExpiresAt = parsed.$2;
+        _albumCoverTickets[albumId] = parsed;
+        return parsed;
       }
-      return _coverTicket;
+      return cached;
     } finally {
-      _coverTicketInFlight = false;
+      _coverTicketInFlight.remove(albumId);
     }
   }
 
-  /// 道理鱼原生封面 URL：`/api/cover?path=|artistId=&size=&ticket=`。
-  ///
-  /// **同步**返回（供 build 期调用）：票据已缓存时带上，未缓存时返回不带
-  /// ticket 的 URL 并后台刷新一次 —— 拿不到也还有 Subsonic 兼容层兜底。
-  String? daoliyuCoverUrl({String? path, String? artistId, int size = 300}) {
+  /// 同步取专辑封面 URL（build 期可用）：票据未就绪时返回 null 并后台申请，
+  /// 调用方回退到 Subsonic 兼容层 `album:<id>`（行为与改动前一致）。
+  String? daoliyuAlbumCoverUrl(String albumId, {int size = 300}) {
     if (!isDaoliyu) return null;
     final base = activeBaseUrl;
     if (base.isEmpty) return null;
-    if (path == null && artistId == null) return null;
-    final ticket = _coverTicket;
-    if (ticket == null) {
-      // 后台补一张票据，本次先用无票 URL（大概率 401 → 上层回退）。
-      // ignore: discarded_futures
-      ensureCoverTicket();
+    final ticket = _albumCoverTickets[albumId];
+    if (ticket == null ||
+        !DateTime.now().isBefore(
+          ticket.expiresAt.subtract(const Duration(seconds: 15)),
+        )) {
+      ensureAlbumCoverTicket(albumId);
+      if (ticket == null) return null;
     }
-    final params = <String, String>{
-      'size': size.toString(),
-      if (path != null) 'path': path,
-      if (artistId != null) 'artistId': artistId,
-      if (ticket != null) 'ticket': ticket,
-    };
-    final query = params.entries
-        .map((e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
-        .join('&');
-    return '$base/api/cover?$query';
+    final sep = ticket.url.contains('?') ? '&' : '?';
+    return '$base${ticket.url}${sep}size=$size';
   }
 
-  /// 票据响应解析（纯函数，便于单测）。返回 `(ticket, 过期时间)`。
-  static (String, DateTime)? parseCoverTicketPayload(
+  /// 预取道理鱼艺人封面路径（`GET /api/library/artists` 的 `coverArtPath`）。
+  ///
+  /// 登录后调用一次；失败不影响任何功能（艺人头像回退专辑封面/拼贴）。
+  Future<void> prefetchDaoliyuArtistCovers() async {
+    if (!isDaoliyu || _artistCoversInFlight) return;
+    _artistCoversInFlight = true;
+    try {
+      final data = await _apiGet('/api/library/artists?take=1000');
+      final parsed = parseArtistCoverPaths(data);
+      if (parsed.isNotEmpty) {
+        _artistCoverPaths
+          ..clear()
+          ..addAll(parsed);
+      }
+    } finally {
+      _artistCoversInFlight = false;
+    }
+  }
+
+  /// 道理鱼艺人封面 URL（路径式 `/api/cover?path=`）。
+  /// 未预取到该艺人时返回 null（调用方回退），并后台补一次。
+  String? daoliyuArtistCoverUrl(String artistId, {int size = 300}) {
+    if (!isDaoliyu) return null;
+    final base = activeBaseUrl;
+    if (base.isEmpty) return null;
+    final path = _artistCoverPaths[artistId];
+    if (path == null || path.isEmpty) {
+      // ignore: discarded_futures
+      prefetchDaoliyuArtistCovers();
+      return null;
+    }
+    return '$base/api/cover?path=${Uri.encodeComponent(path)}&size=$size';
+  }
+
+  /// 解析 `POST /api/library/cover-ticket` 响应（纯函数，便于单测）。
+  static _DaoliyuCoverTicket? parseAlbumCoverTicket(
     Map<String, dynamic>? data,
     DateTime now,
   ) {
     if (data == null) return null;
-
-    dynamic ticket;
-    dynamic exp;
-
-    final direct = data['ticket'];
-    if (direct is String && direct.isNotEmpty) {
-      ticket = direct;
-      exp = data['exp'] ?? data['expiresAt'] ?? data['expiresIn'];
-    } else {
-      final tickets = data['tickets'] ?? data['items'];
-      if (tickets is List && tickets.isNotEmpty) {
-        final first = tickets.first;
-        if (first is String && first.isNotEmpty) {
-          ticket = first;
-          exp = data['exp'] ?? data['expiresAt'];
-        } else if (first is Map) {
-          ticket = first['ticket'] ?? first['value'] ?? first['token'];
-          exp = first['exp'] ?? first['expiresAt'] ?? first['expiresIn'];
-        }
-      }
+    final ticket = data['ticket'];
+    final url = data['url'];
+    if (ticket is! String || ticket.isEmpty || url is! String || url.isEmpty) {
+      return null;
     }
-
-    if (ticket is! String || ticket.isEmpty) return null;
-
-    DateTime expires;
-    if (exp is num) {
-      final value = exp.toDouble();
-      // < 1e12 视为秒级时间戳，否则毫秒；较小的数视为「剩余秒数」。
-      if (value > 1e12) {
-        expires = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-      } else if (value > 1e9) {
-        expires = DateTime.fromMillisecondsSinceEpoch((value * 1000).toInt());
-      } else {
-        expires = now.add(Duration(seconds: value.round()));
-      }
-    } else if (exp is String) {
-      expires =
-          DateTime.tryParse(exp) ?? now.add(const Duration(seconds: 100));
-    } else {
-      expires = now.add(const Duration(seconds: 100));
+    DateTime? expires;
+    final expIso = data['expiresAt'];
+    if (expIso is String) expires = DateTime.tryParse(expIso);
+    final expIn = data['expiresInSeconds'] ?? data['expiresIn'];
+    if (expires == null && expIn is num) {
+      expires = now.add(Duration(seconds: expIn.round()));
     }
+    expires ??= now.add(const Duration(seconds: 100));
     if (!expires.isAfter(now)) {
       expires = now.add(const Duration(seconds: 30));
     }
-    return (ticket, expires);
+    return _DaoliyuCoverTicket(url: url, ticket: ticket, expiresAt: expires);
+  }
+
+  /// 解析 `GET /api/library/artists` 响应里的 `coverArtPath`
+  /// （artistId → path）。纯函数，便于单测。
+  static Map<String, String> parseArtistCoverPaths(
+    Map<String, dynamic>? data,
+  ) {
+    final out = <String, String>{};
+    final items = data?['items'];
+    if (items is! List) return out;
+    for (final item in items) {
+      if (item is! Map) continue;
+      final id = item['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      var path = item['coverArtPath']?.toString();
+      if (path == null || path.isEmpty) {
+        final url = item['coverArtUrl']?.toString() ??
+            item['coverArt']?.toString();
+        if (url != null && url.contains('path=')) {
+          final raw = Uri.tryParse(url)?.queryParameters['path'];
+          if (raw != null && raw.isNotEmpty) path = raw;
+        }
+      }
+      if (path != null && path.isNotEmpty) out[id] = path;
+    }
+    return out;
   }
 
   String getCoverArtUrl(String? coverArt, {int size = 600}) {
@@ -1661,3 +1728,17 @@ class _TlsHttpOverrides extends HttpOverrides {
 
 /// Bypasses [HttpOverrides.global] to create a real [HttpClient].
 class _RealHttpOverrides extends HttpOverrides {}
+
+/// 道理鱼专辑封面票据（120s 有效）。`url` 是服务端给好的
+/// `/api/cover?albumId=...&ticket=...`（相对路径）。
+class _DaoliyuCoverTicket {
+  final String url;
+  final String ticket;
+  final DateTime expiresAt;
+
+  const _DaoliyuCoverTicket({
+    required this.url,
+    required this.ticket,
+    required this.expiresAt,
+  });
+}

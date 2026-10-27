@@ -231,12 +231,13 @@ class LibraryProvider extends ChangeNotifier {
   /// 3. 专辑封面单图 → 4. 2×2 专辑封面拼贴 → 5. 渐变首字母占位。
   /// 组件按 `ArtistCover` 的字段择一渲染，保证无任何图源时页面也不素。
   ArtistCover resolveArtistCover(Artist artist) {
-    // 级 0（道理鱼）：原生 `/api/cover?artistId=` —— 这才是**艺人本人头像**；
-    // 需要短期票据（`/api/library/cover-tickets`，约 2 分钟），票据未就绪时
-    // 先给无票 URL（大概率 401），由下方专辑封面兜底，票据到手后自动生效。
+    // 级 0（道理鱼）：`/api/library/artists` 自带 `coverArtPath` →
+    // `/api/cover?path=...`，这是**艺人本人图**。路径由服务在登录后
+    // 预取一次（`prefetchDaoliyuArtistCovers`）；未就绪时返回 null，
+    // 回退下方链路并在后台补拉（无回归）。
     String? primaryUrl;
-    final nativeArtistCover = _subsonicService.daoliyuCoverUrl(
-      artistId: artist.id,
+    final nativeArtistCover = _subsonicService.daoliyuArtistCoverUrl(
+      artist.id,
       size: 300,
     );
     if (nativeArtistCover != null && nativeArtistCover.isNotEmpty) {

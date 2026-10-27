@@ -1,90 +1,109 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luobo/services/subsonic_service.dart';
 
-/// 道理鱼封面票据响应解析（`/api/library/cover-tickets` 结构未公开，
-/// 解析必须是防御式的）。纯函数单测，不打网络。
+/// 道理鱼封面票据 / 艺人封面路径的解析单测。
+/// 真实结构见 `~/Downloads/道理鱼接口/道理鱼_接口素材/captures/api_cover_ticket.txt`。
 void main() {
-  group('parseCoverTicketPayload', () {
-    final now = DateTime(2026, 10, 23, 12);
+  group('parseAlbumCoverTicket', () {
+    final now = DateTime.utc(2026, 8, 7, 6, 56, 20);
 
-    test('{ticket, exp(毫秒时间戳)}', () {
-      final exp = now.add(const Duration(minutes: 2));
-      final parsed = SubsonicService.parseCoverTicketPayload(
-        {'ticket': 'abc', 'exp': exp.millisecondsSinceEpoch},
-        now,
-      );
-      expect(parsed?.$1, 'abc');
-      expect(parsed?.$2.isAfter(now), isTrue);
-    });
-
-    test('{ticket, exp(秒级时间戳)}', () {
-      final exp = now.add(const Duration(minutes: 2));
-      final parsed = SubsonicService.parseCoverTicketPayload(
-        {'ticket': 'abc', 'exp': exp.millisecondsSinceEpoch ~/ 1000},
-        now,
-      );
-      expect(parsed?.$1, 'abc');
-      expect(parsed!.$2.difference(now).inSeconds, closeTo(120, 2));
-    });
-
-    test('{tickets: [字符串]}', () {
-      final parsed = SubsonicService.parseCoverTicketPayload(
-        {'tickets': ['t1', 't2']},
-        now,
-      );
-      expect(parsed?.$1, 't1');
-      // 无有效期 → 兜底 100 秒
-      expect(parsed!.$2.difference(now).inSeconds, 100);
-    });
-
-    test('{tickets: [{ticket, exp(剩余秒)}]}', () {
-      final parsed = SubsonicService.parseCoverTicketPayload(
+    test('真实响应：ticket + url + expiresAt/expiresInSeconds', () {
+      final parsed = SubsonicService.parseAlbumCoverTicket(
         {
-          'tickets': [
-            {'ticket': 'tk', 'exp': 90},
-          ],
+          'expiresAt': '2026-08-07T06:58:20Z',
+          'expiresInSeconds': 120,
+          'ticket': 'tk',
+          'url': '/api/cover?albumId=alb_1&ticket=tk',
         },
         now,
       );
-      expect(parsed?.$1, 'tk');
-      expect(parsed!.$2.difference(now).inSeconds, closeTo(90, 1));
+      expect(parsed, isNotNull);
+      expect(parsed!.ticket, 'tk');
+      expect(parsed.url, '/api/cover?albumId=alb_1&ticket=tk');
+      expect(parsed.expiresAt, DateTime.utc(2026, 8, 7, 6, 58, 20));
     });
 
-    test('{value, expiresAt(ISO)}', () {
-      final parsed = SubsonicService.parseCoverTicketPayload(
+    test('只有 expiresInSeconds 时按剩余秒算', () {
+      final parsed = SubsonicService.parseAlbumCoverTicket(
+        {'ticket': 'tk', 'url': '/api/cover?albumId=a&ticket=tk', 'expiresInSeconds': 90},
+        now,
+      );
+      expect(parsed!.expiresAt.difference(now).inSeconds, 90);
+    });
+
+    test('过期时间已过 → 给 30 秒缓冲', () {
+      final parsed = SubsonicService.parseAlbumCoverTicket(
         {
-          'tickets': [
-            {
-              'value': 'iso',
-              'expiresAt': now.add(const Duration(minutes: 2)).toIso8601String(),
-            },
-          ],
+          'ticket': 'tk',
+          'url': '/api/cover?albumId=a&ticket=tk',
+          'expiresAt': '2026-08-07T06:50:00Z',
         },
         now,
       );
-      expect(parsed?.$1, 'iso');
-      expect(parsed!.$2.isAfter(now), isTrue);
+      expect(parsed!.expiresAt.difference(now).inSeconds, 30);
     });
 
-    test('已过期 → 给 30 秒缓冲，避免死循环刷新', () {
-      final parsed = SubsonicService.parseCoverTicketPayload(
-        {'ticket': 'old', 'exp': now.subtract(const Duration(minutes: 5)).millisecondsSinceEpoch},
-        now,
-      );
-      expect(parsed?.$1, 'old');
-      expect(parsed!.$2.difference(now).inSeconds, 30);
-    });
-
-    test('无法解析 → null', () {
-      expect(SubsonicService.parseCoverTicketPayload(null, now), isNull);
-      expect(SubsonicService.parseCoverTicketPayload({}, now), isNull);
+    test('缺 ticket / url → null', () {
+      expect(SubsonicService.parseAlbumCoverTicket(null, now), isNull);
+      expect(SubsonicService.parseAlbumCoverTicket({}, now), isNull);
       expect(
-        SubsonicService.parseCoverTicketPayload({'tickets': []}, now),
+        SubsonicService.parseAlbumCoverTicket({'ticket': 'tk'}, now),
         isNull,
       );
       expect(
-        SubsonicService.parseCoverTicketPayload({'ticket': ''}, now),
+        SubsonicService.parseAlbumCoverTicket(
+          {'ticket': '', 'url': '/api/cover'},
+          now,
+        ),
         isNull,
+      );
+    });
+  });
+
+  group('parseArtistCoverPaths', () {
+    test('优先 coverArtPath', () {
+      final map = SubsonicService.parseArtistCoverPaths({
+        'items': [
+          {
+            'id': 'art_1',
+            'name': 'A',
+            'coverArtPath': 'system/covers/a.jpg',
+            'coverArtUrl': '/api/cover?path=system%2Fcovers%2Fa.jpg',
+          },
+        ],
+      });
+      expect(map['art_1'], 'system/covers/a.jpg');
+    });
+
+    test('无 coverArtPath 时从 coverArtUrl 解出 path', () {
+      final map = SubsonicService.parseArtistCoverPaths({
+        'items': [
+          {
+            'id': 'art_2',
+            'coverArt': '/api/cover?path=system%2Fcovers%2Fb.jpg',
+          },
+        ],
+      });
+      expect(map['art_2'], 'system/covers/b.jpg');
+    });
+
+    test('无封面 / 无 id 的条目跳过', () {
+      final map = SubsonicService.parseArtistCoverPaths({
+        'items': [
+          {'id': 'art_3', 'name': 'NoCover'},
+          {'name': 'NoId', 'coverArtPath': 'x.jpg'},
+          'garbage',
+        ],
+      });
+      expect(map, isEmpty);
+    });
+
+    test('非列表响应 / null → 空 Map', () {
+      expect(SubsonicService.parseArtistCoverPaths(null), isEmpty);
+      expect(SubsonicService.parseArtistCoverPaths({}), isEmpty);
+      expect(
+        SubsonicService.parseArtistCoverPaths({'items': 'x'}),
+        isEmpty,
       );
     });
   });
