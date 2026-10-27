@@ -524,7 +524,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 const Spacer(),
                 // 2026-10-23：这里不是排序，是**多选**（与全部歌曲页一致）。
                 GestureDetector(
-                  onTap: () => showMultiSelectSheet(context, songs: songs),
+                  onTap: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    showMultiSelectSheet(context, songs: songs);
+                  },
                   child: Icon(
                     Icons.checklist_rounded,
                     size: 22,
@@ -608,6 +611,8 @@ class _SearchScreenState extends State<SearchScreen> {
   /// 点任意搜索结果时把当前搜索词落进历史（用户 2026-10-23：
   /// 实时搜索下一个字就出结果、但不会按回车，历史里就丢了）。
   void _recordResultTap() {
+    // 点结果时先收键盘：否则列表/详情页会被键盘压住（用户 2026-10-23）。
+    FocusManager.instance.primaryFocus?.unfocus();
     final query = _query.trim();
     if (query.isEmpty) return;
     _historyStore.add(query).then((list) {
