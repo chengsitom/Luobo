@@ -215,6 +215,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ 必须在 Scaffold 之前算：body 内的 MediaQuery.padding 已被叠加
+    // AppBar 高度，在 Builder/Consumer 里算会多出 56dp（专辑计数行下沉的根因）。
+    final topInset = listTopInset(context);
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: LuoboListTopBar(
@@ -227,75 +230,70 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       ),
       body: _albums.isEmpty && _isLoading
           ? ListView.builder(
-              padding: EdgeInsets.only(
-                top: listTopInset(context),
-                bottom: 100,
-              ),
+              padding: EdgeInsets.only(top: topInset, bottom: 100),
               itemCount: 10,
               itemBuilder: (context, index) => const SongTileShimmer(),
             )
-          : Padding(
-              padding: EdgeInsets.only(top: listTopInset(context)),
-              child: Column(
-              children: [
-                if (_albums.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 40, 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            AppLocalizations.of(context)!
-                                .albumsTotal(_albums.length),
-                            style: LuoboType.body.copyWith(
-                              fontSize: 14,
-                              color: LuoboColors.of(context).fg2,
+          : Builder(
+              builder: (context) {
+                final sorted = _sortedAlbums;
+                // 整页滚动：计数行作为第 0 项，随列表一起滚（与歌手/全部歌曲
+                // 一致，内容从悬浮圆钮下方流过）。
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: EdgeInsets.only(top: topInset, bottom: 100),
+                  itemCount: sorted.length + 1 + (_hasMore ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                AppLocalizations.of(context)!
+                                    .albumsTotal(_albums.length),
+                                style: LuoboType.body.copyWith(
+                                  fontSize: 14,
+                                  color: LuoboColors.of(context).fg2,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        GestureDetector(
-                          key: _sortAnchor,
-                          onTap: _showSortMenu,
-                          child: Icon(
-                            Icons.sort_rounded,
-                            size: 22,
-                            color: LuoboColors.of(context).fg2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 100),
-                    itemCount: _albums.length + (_hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _albums.length) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            GestureDetector(
+                              key: _sortAnchor,
+                              onTap: _showSortMenu,
+                              child: Icon(
+                                Icons.sort_rounded,
+                                size: 22,
+                                color: LuoboColors.of(context).fg2,
+                              ),
                             ),
-                          ),
-                        );
-                      }
-                      final sorted = _sortedAlbums;
-                      return Column(
-                        children: [
-                          _AlbumRow(album: sorted[index]),
-                          if (index < _albums.length - 1)
-                            const LuoboSongDivider(),
-                        ],
+                          ],
+                        ),
                       );
-                    },
-                  ),
-                ),
-              ],
-              ),
+                    }
+                    final i = index - 1;
+                    if (i >= sorted.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        _AlbumRow(album: sorted[i]),
+                        if (i < sorted.length - 1) const LuoboSongDivider(),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
     );
   }

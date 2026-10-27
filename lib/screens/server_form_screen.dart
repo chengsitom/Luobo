@@ -15,7 +15,8 @@ import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/local_library_launcher.dart';
 import '../widgets/luobo/capsule_button.dart';
-import '../widgets/luobo/glass_circle_button.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/sheet_shell.dart';
@@ -277,33 +278,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
 
   bool get _showTypePicker => !_isEdit && !_typeChosen;
 
-  /// 本页两个 `AppBar` 共用的左上返回钮。
-  ///
-  /// ⚠️ `AppBar.leading` 槽位是**紧约束**（`_kLeadingWidth` = `toolbarHeight` = 56，
-  /// 且 `NavigationToolbar` 给 leading 的 `minHeight == maxHeight == toolbarHeight`）——
-  /// 直接把 [GlassBackButton] 放进去，它内部的 `SizedBox(40)` 会被撑成 56×56
-  /// （圆钮大 40%，且左边缘落在 x=0、贴屏幕边）。本页是全仓**唯一**把返回钮放进
-  /// `AppBar.leading` 的地方（其余二级页走 `SettingsSubPage` 的 `Stack`/`Positioned`），
-  /// 所以只在这里包装：槽位留够宽度（见 [_appBarBackLeadingWidth]）让钮保持自身尺寸，
-  /// `Align(centerLeft)` + `Padding` 把它落在 `LuoboSpacing.pageX` —— 与
-  /// `SettingsSubPage`（`Positioned(left: pageX)`）逐像素一致。
-  Widget _appBarBackLeading() => const Padding(
-        padding: EdgeInsets.only(left: LuoboSpacing.pageX),
-        child: Align(alignment: Alignment.centerLeft, child: GlassBackButton()),
-      );
-
-  /// [_appBarBackLeading] 的槽宽 = 左内边距 + 钮宽 + 同量右余量。
-  ///
-  /// 钮的**自然直径**不是 40，而是 `LuoboGlass.circleButtonSize + 2 × borderWidth`
-  /// （41.6）—— `LuoboGlassSurface` 的 `Container` 会按 Flutter 语义把
-  /// `BoxDecoration.border` 的宽度当 padding 加在子级外。槽位必须放得下这个自然
-  /// 直径，否则钮会被挤扁（曾实测：给 40 宽 → 钮成 40×41.6，不是正圆）。
-  static const double _appBarBackLeadingWidth =
-      LuoboSpacing.pageX * 2 + LuoboGlass.circleButtonSize;
-
   Widget _buildTypePicker(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final c = LuoboColors.of(context);
+    final topInset = listTopInset(context);
 
     Widget tile({
       required String family,
@@ -357,35 +335,23 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: c.bg,
-      appBar: AppBar(
-        // 与设计体系二级页对齐：玻璃圆返回 + 15px 居中标题。
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
+        // 与设置页其余子页面同款：透明顶栏 +「返回 + 标题」胶囊。
         // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
         //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
-        leadingWidth: _appBarBackLeadingWidth,
-        leading: _appBarBackLeading(),
-        title: Text(
-          l10n.addServer,
-          style: LuoboType.navTitle.copyWith(color: c.fg),
-        ),
-        centerTitle: true,
-        backgroundColor: c.bg,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        title: l10n.addServer,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: LuoboSpacing.pageX),
-            child: GlassCircleButton(
-              icon: AppIcons.scan,
-              tooltip: l10n.scanQrCode,
-              onPressed: _scanToPrefill,
-            ),
+          LuoboTopCircleButton(
+            icon: AppIcons.scan,
+            onTap: _scanToPrefill,
           ),
         ],
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
-          LuoboSpacing.pageY,
+          LuoboSpacing.pageY + topInset,
           LuoboSpacing.pageX,
           LuoboSpacing.pageBottomWithStrip(context),
         ),
@@ -753,6 +719,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     // 添加流程第一步：先选服务器类型（设计稿 B3）。
     if (_showTypePicker) return _buildTypePicker(context);
 
+    // ⚠️ 必须在 Scaffold 之前算（`extendBodyBehindAppBar` 会把它叠进 body 的
+    // `MediaQuery.padding.top`，在 body 内算会重复一次）。
+    final topInset = listTopInset(context);
+
     return Scaffold(
       // 与搜索页一致：窗口不随键盘缩放（resize 在此设备上会留下「键盘上方
       // 空白带 + 内容被顶起」）。底部字段可见性改由滚动区键盘高度留白 +
@@ -760,25 +730,18 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       resizeToAvoidBottomInset: false,
       backgroundColor:
           _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      appBar: AppBar(
-        // 与设计体系二级页对齐（同路由的类型网格步骤用的是同一套页头）。
-        leadingWidth: _appBarBackLeadingWidth,
-        leading: _appBarBackLeading(),
-        title: Text(
-          _isEdit ? l10n.editServer : l10n.addServer,
-          style: LuoboType.navTitle.copyWith(color: LuoboColors.of(context).fg),
-        ),
-        centerTitle: true,
-        backgroundColor:
-            _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
+        // 与设置页其余子页面同款（同路由的类型网格步骤用的是同一套页头）。
+        title: _isEdit ? l10n.editServer : l10n.addServer,
       ),
       body: GestureDetector(
         // 点击空白区域收起键盘（输入框等子级点击优先命中，不受影响）。
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
+          // 顶部留白由下方滚动区的 `topInset` 给足（顶栏是覆盖式）。
+          top: false,
           // Android 15+ 强制 edge-to-edge：键盘弹出时 MediaQuery.viewPadding 会
           // 镜像键盘高度，底部 SafeArea 若再避让会造成「键盘上方空白带 + 内容
           // 被顶起」。键盘弹出时禁用底部避让（Scaffold 已按 viewInsets 缩放 body），
@@ -789,7 +752,7 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.fromLTRB(
               16,
-              16,
+              16 + topInset,
               16,
               // 底部按键盘高度留白：窗口不缩放，靠滚动把内容抬到键盘上方。
               16 + MediaQuery.viewInsetsOf(context).bottom,
@@ -1388,7 +1351,7 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                 isDense: true,
                 filled: true,
                 fillColor:
-                    _isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+                    _isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF3F3F3),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,

@@ -24,6 +24,8 @@ import 'album_artwork.dart' show isLocalFilePath;
 import 'lyrics_visual_curve.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/image_cache.dart';
+import '../utils/duration_format.dart';
+import 'luobo/player_progress_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Apple Music-like Lyrics Controller (inspired by AMLL)
@@ -774,13 +776,20 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
   }
 
   Widget _buildMobileContent(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(child: _buildLyricsContent()),
-          _buildBottomControls(context),
-        ],
+    // 点空白处返回播放页（Apple Music / 飞牛同款交互）：祖先级 GestureDetector
+    // 只在**没有点到控件/歌词行**时收到 tap —— 歌词行自己有 onLineTap（跳转），
+    // 按钮也能在手势竞技场里胜出，所以「不点到文字就返回」自然成立。
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onClose,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(child: _buildLyricsContent()),
+            _buildBottomControls(context),
+          ],
+        ),
       ),
     );
   }
@@ -841,8 +850,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
             },
             onFlingDownClose: widget.onClose,
             enableFlingDownClose: !_isDesktop && !kIsWeb,
-            fontSize: isFullscreen ? 38.0 : (_isDesktop ? 32.0 : 30.0),
-            lineGap: isFullscreen ? 34.0 : 26.0,
+            fontSize: isFullscreen ? 36.0 : (_isDesktop ? 30.0 : 26.0),
+            // 段落间距在原值基础上收紧 1/3（用户 2026-10-23）。
+            lineGap: isFullscreen ? 16.0 : 9.5,
             enableBlur: true,
             alignPosition: isFullscreen ? 0.40 : 0.42,
           ),
@@ -1000,30 +1010,26 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
           child: Column(
             children: [
-              SliderTheme(
-                data: SliderThemeData(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 6,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
-                  ),
-                  activeTrackColor: Colors.white,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                  thumbColor: Colors.white,
-                  overlayColor: Colors.white.withValues(alpha: 0.2),
-                ),
-                child: Slider(
-                  value: player.progress.clamp(0.0, 1.0),
-                  onChanged: (value) {
-                    final position = Duration(
-                      milliseconds:
-                          (value * player.duration.inMilliseconds).round(),
-                    );
-                    player.seek(position);
-                  },
-                ),
+              // 与播放页共用同一个进度条：拖动只改本地显示、松手才 seek、
+              // 等待落点期间条子不回跳（原 Slider 每个 onChanged 都 seek，
+              // 转码流下会反复重开流）。
+              StreamBuilder<Duration>(
+                stream: player.positionStream,
+                initialData: player.position,
+                builder: (context, snapshot) {
+                  final position = snapshot.data ?? Duration.zero;
+                  final duration = player.effectiveDuration;
+                  final progress = duration.inMilliseconds > 0
+                      ? (position.inMilliseconds / duration.inMilliseconds)
+                          .clamp(0.0, 1.0)
+                      : 0.0;
+                  return LuoboProgressBar(
+                    progress: progress,
+                    position: position,
+                    duration: duration,
+                    formatDuration: (d) => formatDurationMs(d.inMilliseconds),
+                  );
+                },
               ),
               const SizedBox(height: 8),
               Row(
@@ -1468,7 +1474,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
         padding: EdgeInsets.only(bottom: widget.lineGap),
         child: Text(
           widget.line.text,
-          textAlign: TextAlign.left,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: widget.fontSize,
             fontWeight: FontWeight.w600,
@@ -1480,11 +1486,8 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
       );
     }
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _animController,
+    return AnimatedBuilder(
+      animation: _animController,
         builder: (context, child) {
           final t = _animController.value;
 
@@ -1504,7 +1507,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
               offset: Offset(0, translateY),
               child: Transform.scale(
                 scale: scale,
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.center,
                 child: child,
               ),
             ),
@@ -1523,8 +1526,45 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
 
           return lineWidget;
         },
-        child: _buildGradientChild(),
+      // 触控范围只包住文字本身：Align 让 Text 收缩到自身宽度，
+      // 避免整行（含行距空白）都响应点击。
+      child: Align(
+        alignment: Alignment.center,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: _buildLineContent(),
+        ),
       ),
+    );
+  }
+
+  /// 主行 +（可选）译文小字。
+  ///
+  /// 双语 LRC 的译文在 [SyncedLyrics] 构造时已并入同一行的 `translation`，
+  /// 所以这里渲染成「原文大、译文小且更淡」，高亮也只落在这一行上。
+  Widget _buildLineContent() {
+    final main = _buildGradientChild();
+    final translation = widget.line.translation;
+    if (translation == null || translation.trim().isEmpty) return main;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        main,
+        const SizedBox(height: 4),
+        Text(
+          translation,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: widget.fontSize * 0.6,
+            fontWeight: FontWeight.w500,
+            color: Colors.white.withValues(alpha: 0.55),
+            height: 1.25,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1535,7 +1575,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
           ? FontWeight.w800
           : FontWeight.w600,
       color: Colors.white,
-      height: 1.4,
+      height: 1.3,
       letterSpacing: -0.5,
     );
 
@@ -1558,7 +1598,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
           if (activeWordIdx >= words.length - 1 && activeWordIdx >= 0) {
             return Text(
               widget.line.text,
-              textAlign: TextAlign.left,
+              textAlign: TextAlign.center,
               style: textStyle,
             );
           }
@@ -1588,7 +1628,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
             ));
           }
           return Text.rich(TextSpan(children: spans),
-              textAlign: TextAlign.left);
+              textAlign: TextAlign.center);
         },
       );
     }
@@ -1601,7 +1641,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
           if (progress >= 1.0) {
             return Text(
               widget.line.text,
-              textAlign: TextAlign.left,
+              textAlign: TextAlign.center,
               style: textStyle,
             );
           }
@@ -1609,7 +1649,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
           final alpha = 0.5 + (0.5 * fadeProgress);
           return Text(
             widget.line.text,
-            textAlign: TextAlign.left,
+            textAlign: TextAlign.center,
             style: textStyle.copyWith(
               color: Colors.white.withValues(alpha: alpha),
             ),
@@ -1623,7 +1663,7 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
     // 使已播/待播在相同距离上完全对称。
     return Text(
       widget.line.text,
-      textAlign: TextAlign.left,
+      textAlign: TextAlign.center,
       style: textStyle,
     );
   }

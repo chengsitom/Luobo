@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/luobo/luobo_toast.dart';
+import '../widgets/luobo/sheet_shell.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -94,7 +95,18 @@ class _AlbumScreenState extends State<AlbumScreen> {
   }
 
   Future<void> _downloadAlbum() async {
-    if (_songs.isEmpty) return;
+    if (_songs.isEmpty || _isDownloading) return;
+
+    final l10n = AppLocalizations.of(context)!;
+
+    // 确认后再下：整张专辑的下载不可忽略、且按钮就在返回钮下面，容易误触。
+    final confirmed = await showLuoboConfirmSheet(
+      context: context,
+      title: l10n.downloadAlbumConfirmTitle,
+      message: l10n.downloadAlbumConfirmBody(_album!.name, _songs.length),
+      confirmLabel: l10n.download,
+    );
+    if (confirmed != true || !mounted) return;
 
     final subsonicService = Provider.of<SubsonicService>(
       context,
@@ -102,7 +114,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
     final offlineService = OfflineService();
     await offlineService.initialize();
-    final l10n = AppLocalizations.of(context)!;
 
     setState(() => _isDownloading = true);
 

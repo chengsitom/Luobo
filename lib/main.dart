@@ -29,6 +29,7 @@ import 'screens/audiobook_detail_screen.dart' show audiobookRouteObserver;
 import 'package:dynamic_color/dynamic_color.dart';
 import 'theme/theme.dart';
 import 'utils/image_cache.dart';
+import 'theme/design_tokens.dart';
 
 // Global instance for analytics (to be shown after auth)
 
@@ -606,7 +607,7 @@ class _ServerUnreachableScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(ctx).brightness == Brightness.dark
               ? AppTheme.darkSurface
-              : Colors.white,
+              : LuoboColors.light.bg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
         child: SafeArea(

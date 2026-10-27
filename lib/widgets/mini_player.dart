@@ -19,7 +19,6 @@ import '../utils/screen_helper.dart';
 import '../services/transcoding_service.dart';
 import 'album_artwork.dart';
 import 'luobo/glass.dart';
-import 'glass_surface.dart';
 import '../screens/now_playing_screen.dart';
 
 class MiniPlayer extends StatelessWidget {
@@ -289,9 +288,6 @@ class _MiniPlayerRow extends StatelessWidget {
   }
 }
 
-/// 播放条封面的定位锚点 —— 长按浮层靠它算锚定坐标（§6.2「锚定而非居中」）。
-final GlobalKey barArtworkKey = GlobalKey(debugLabel: 'barArtwork');
-
 /// 播放条封面：**外圈进度环** + 贴封面的**转码描边**。
 ///
 /// §6.2 的转码描边与 §6.3 的进度环都长在这个封面上 —— 合并成**一个** `CustomPaint`
@@ -312,7 +308,6 @@ class _BarArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
     return SizedBox(
-      key: barArtworkKey,
       width: _box,
       height: _box,
       child: RepaintBoundary(
@@ -463,13 +458,7 @@ class _MiniPlayerControls extends StatelessWidget {
   /// 用播放条自己的 context 弹：播放条挂在 `Scaffold.bottomNavigationBar` 上，
   /// 它与 body 里的嵌套 Navigator 是**兄弟**子树 → 最近的 Navigator 就是根 Navigator，
   /// 遮罩会盖住条带本身（这正是期望行为）。
-  void _openQueue(BuildContext context) {
-    showGlassBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const QueueSheet(),
-    );
-  }
+  void _openQueue(BuildContext context) => showQueueSheet(context);
 
   @override
   Widget build(BuildContext context) {
@@ -716,15 +705,9 @@ void _showTranscodeToast(BuildContext context) {
     statusColor = LuoboAccent.accent;
   }
 
-  // 锚定在播放条封面上（§6.2「锚定而非居中」，修 §2.8 #9）。
+  // 居中弹出（2026-10-24 用户改回；原为锚定在播放条封面上，见 §6.2）。
   // 插入 root overlay 以浮在所有页面之上；重触发时替换而不是叠加。
   final overlay = Overlay.of(context, rootOverlay: true);
-  final overlayBox = overlay.context.findRenderObject() as RenderBox?;
-  final anchorBox =
-      barArtworkKey.currentContext?.findRenderObject() as RenderBox?;
-  final Offset? anchorTopLeft = (anchorBox != null && overlayBox != null)
-      ? anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox)
-      : null;
 
   _transcodeToastEntry?.remove();
   late final OverlayEntry entry;
@@ -746,22 +729,8 @@ void _showTranscodeToast(BuildContext context) {
         },
       );
 
-      // 锚点拿不到（封面还没布局）时退回屏幕中下部的安全位置。
-      if (anchorTopLeft == null || overlayBox == null) {
-        return Align(alignment: const Alignment(0, 0.6), child: card);
-      }
-
-      const gap = 8.0;
-      // 卡片左缘对齐封面左缘，但不越出左右各 12dp 的安全边距。
-      final maxLeft = overlayBox.size.width - 12;
-      final left = anchorTopLeft.dx.clamp(12.0, maxLeft);
-      // 卡片**底边**贴封面顶边再往上留 gap → 视觉上「从播放条长出来」。
-      final bottom = overlayBox.size.height - anchorTopLeft.dy + gap;
-      return Stack(
-        children: [
-          Positioned(left: left, bottom: bottom, child: card),
-        ],
-      );
+      // 屏幕正中（用户 2026-10-24 要求；不再贴播放条）。
+      return Align(alignment: Alignment.center, child: card);
     },
   );
   _transcodeToastEntry = entry;
@@ -770,9 +739,9 @@ void _showTranscodeToast(BuildContext context) {
 
 /// 长按播放条封面弹出的**转码信息卡**（§6.2）。
 ///
-/// 材质用 [LuoboGlassSurface]（毛玻璃 + 圆角 20），与迷你播放条**同属玻璃材质** ——
-/// 观感是「从播放条长出来」；定位由调用方**锚定在封面上**（不再居中，修 §2.8 #9）。
-/// 从封面处淡入 + 轻微上移，出场反向；~2s 后自动消失，点卡片可提前关。
+/// 材质用 [LuoboGlassSurface]（毛玻璃 + 圆角 20），与迷你播放条**同属玻璃材质**；
+/// 定位由调用方**放在屏幕正中**（用户 2026-10-24 要求，原为锚定在封面上）。
+/// 淡入 + 轻微上移，出场反向；~2s 后自动消失，点卡片可提前关。
 /// 卡片自身是唯一的可点区域，四周的点击穿透到下层 UI。
 class _TranscodeToast extends StatefulWidget {
   final String title;
@@ -847,7 +816,7 @@ class _TranscodeToastState extends State<_TranscodeToast>
     );
     return FadeTransition(
       opacity: curved,
-      // 从封面处**淡入 + 轻微上移**，出场反向（§6.2）。
+      // **淡入 + 轻微上移**，出场反向（§6.2）。
       child: SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(0, 0.12),
@@ -863,8 +832,11 @@ class _TranscodeToastState extends State<_TranscodeToast>
             constraints: const BoxConstraints(maxWidth: 300),
             // ⚠️ 原为 `Material` + `colorScheme.inverseSurface` 的居中深色条
             // （SnackBar 配方、圆角 4）—— 与设计体系（白卡/毛玻璃 + 圆角 14/20 +
-            // 玫红点睛）完全不是一回事，且违反 §2.8 #9「锚定而非居中」。
-            // 现改为玻璃卡，与迷你播放条同材质。
+            // 玫红点睛）完全不是一回事。
+            // 现改为玻璃卡，**材质与迷你播放条同一套配方**（用户 2026-10-24 要求）：
+            // blur 12（`blurBar`，省 GPU）+ 深色浅色面纱渐变 `navTintDark` +
+            // 深色描边 `navBorderDark` + 同一条投影 —— 三者与 `MiniPlayer.build`
+            // 里那条胶囊逐项对齐；差别只在圆角（卡片 groupR 20，不跟着做胶囊）。
             // ⚠️ 必须包一层 `Material`（透明）：本卡挂在 **root overlay** 上，
             // 祖先里没有 `Material` —— 不包的话里面的 `Text` 会落到 Flutter 的
             // 「无样式文本」调试样式（**黄字 + 双下划线**）。
@@ -873,6 +845,16 @@ class _TranscodeToastState extends State<_TranscodeToast>
               type: MaterialType.transparency,
               child: LuoboGlassSurface(
                 borderRadius: LuoboRadius.groupR,
+                blur: LuoboGlass.blurBar,
+                tintGradient: c.isDark ? LuoboGlass.navTintDark : null,
+                borderColor: c.isDark ? LuoboGlass.navBorderDark : null,
+                shadows: const [
+                  BoxShadow(
+                    color: Color(0x2E000000), // black .18，同播放条
+                    blurRadius: 24,
+                    offset: Offset(0, 6),
+                  ),
+                ],
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

@@ -5626,6 +5626,54 @@ abstract class AppLocalizations {
   /// **'Albums'**
   String get sortByAlbumCount;
 
+  /// Queue sheet label
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat All'**
+  String get repeatAll;
+
+  /// Queue sheet label
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get clearQueue;
+
+  /// Album download confirm title
+  ///
+  /// In en, this message translates to:
+  /// **'Download this album?'**
+  String get downloadAlbumConfirmTitle;
+
+  /// Album download confirm body
+  ///
+  /// In en, this message translates to:
+  /// **'Download {count} songs from “{name}” for offline playback?'**
+  String downloadAlbumConfirmBody(String name, int count);
+
+  /// Player stream quality line prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get qualityOriginal;
+
+  /// Player stream quality line prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Transcoded'**
+  String get qualityTranscoded;
+
+  /// Car mode auto entry setting
+  ///
+  /// In en, this message translates to:
+  /// **'Auto car mode'**
+  String get autoCarModeEntry;
+
+  /// Car mode auto entry setting
+  ///
+  /// In en, this message translates to:
+  /// **'Enter car mode after 30 seconds on the player page. When off, open it manually.'**
+  String get autoCarModeEntrySubtitle;
+
   /// List header total, fnos style
   ///
   /// In en, this message translates to:

@@ -28,6 +28,7 @@ class GlassCircleButton extends StatelessWidget {
     this.size = LuoboGlass.circleButtonSize,
     this.iconSize = 17,
     this.strongBorder = false,
+    this.shadows,
   });
 
   final IconData icon;
@@ -39,6 +40,12 @@ class GlassCircleButton extends StatelessWidget {
 
   /// 纯色深底场景：加强描边。
   final bool strongBorder;
+
+  /// 覆盖默认玻璃阴影；传 `const []` = 不要阴影。
+  ///
+  /// 2026-10-24：大标题页的按钮浮在**纯白页面**上时，默认阴影（黑 .14 / blur 28）
+  /// 会在按钮周围形成一圈灰晕、两钮之间还会叠加 —— 用户反馈「按钮下面有一个背景色」。
+  final List<BoxShadow>? shadows;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +62,9 @@ class GlassCircleButton extends StatelessWidget {
       case GlassCircleButtonStyle.glass:
         iconColor = c.fg;
         tint = null;
+        // 2026-10-23：首页浅色底已统一为 `#F3F3F3`（fnos 页底），白 .65 圆钮
+        // 叠上去 ≈ #FBFBFB，自带对比 —— 不再加描边，回到 fnos 的「白圆无边框」。
+        // （深色/浅色都用 `LuoboGlassSurface` 的默认描边：深色白 .10。）
         border = null;
         shadow = null;
         useGlass = true;
@@ -95,7 +105,7 @@ class GlassCircleButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(LuoboRadius.full),
             tint: tint,
             borderColor: border,
-            shadows: shadow,
+            shadows: shadows ?? shadow,
             strongBorder: strongBorder,
             child: child,
           )
@@ -103,7 +113,7 @@ class GlassCircleButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: LuoboAccent.accent,
               shape: BoxShape.circle,
-              boxShadow: shadow,
+              boxShadow: shadows ?? shadow,
             ),
             child: child,
           );

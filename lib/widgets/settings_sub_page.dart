@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../theme/design_tokens.dart';
-import 'luobo/glass_circle_button.dart';
+import 'luobo/list_top_bar.dart';
 
-/// 设置二级页薄壳 —— **C1 二级页骨架**。
+/// 设置二级页薄壳。
 ///
 /// 设计稿：`~/Downloads/fnosmusic/设计稿/01-C1-二级页骨架对比.png`。
 ///
-/// | | BEFORE（旧） | AFTER（本骨架） |
+/// 2026-10-24 用户拍板：**设置页与所有设置子页的顶栏统一成歌单列表页那一套**
+/// （[LuoboListTopBar]：透明顶栏 + 悬浮圆钮，内容从钮下方流过）。
+///
+/// | | 旧（C1 骨架） | 现在 |
 /// |---|---|---|
-/// | 返回 | 裸箭头（无圆底） | **悬浮玻璃圆钮** |
-/// | 标题 | 31px 左对齐（与首页撞脸） | **15px 居中** |
-/// | 右上 | 无槽位 | **可选动作钮槽位** |
+/// | 返回 | 玻璃圆钮 | 列表页 40dp 圆钮 |
+/// | 标题 | 15px **居中**，单独占一条实色页头 | **收进返回胶囊**（同歌手详情折叠态） |
+/// | 右上 | 槽位 | 列表页圆钮槽位 |
 ///
 /// 改这一处，**所有二级页同时生效**。各 tab 的身体（`SettingsPlaybackTab` 等）
 /// 保持不变，只换外壳。
@@ -25,7 +28,6 @@ class SettingsSubPage extends StatelessWidget {
     required this.body,
     this.actions,
     this.trailing,
-    this.headerHeight = 56,
   });
 
   final String title;
@@ -37,74 +39,24 @@ class SettingsSubPage extends StatelessWidget {
   /// 右上角单个动作钮（便捷）。
   final Widget? trailing;
 
-  final double headerHeight;
-
   @override
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
 
-    final rightWidgets = <Widget>[
-      ...?actions,
-      if (trailing != null) trailing!,
-    ];
-
     return Scaffold(
       backgroundColor: c.bg,
-      body: Column(
-        children: [
-          ColoredBox(
-            color: c.bg,
-            child: SafeArea(
-              bottom: false,
-              child: SizedBox(
-                // ⚠️ 必须显式给宽度：`Column` 默认 crossAxisAlignment.center，
-                // 传下来的是**松宽度约束**；不写 width 的话这个 SizedBox 会收缩成
-                // 「标题 + 左右 72」的宽度，`Stack`（StackFit.loose）跟着缩窄，
-                // 于是 `Positioned(left/right: 16)` 变成相对窄条定位 —— 返回钮与
-                // 右上动作钮会被挤到标题两侧，而不是贴屏幕边缘。
-                width: double.infinity,
-                height: headerHeight,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // 居中标题
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 72),
-                      child: Text(
-                        title,
-                        style: LuoboType.navTitle.copyWith(color: c.fg),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    // 左上悬浮圆返回
-                    const Positioned(
-                      left: LuoboSpacing.pageX,
-                      child: GlassBackButton(),
-                    ),
-                    // 右上动作钮槽位
-                    if (rightWidgets.isNotEmpty)
-                      Positioned(
-                        right: LuoboSpacing.pageX,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (var i = 0; i < rightWidgets.length; i++) ...[
-                              if (i > 0) const SizedBox(width: 8),
-                              rightWidgets[i],
-                            ],
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Expanded(child: body),
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
+        title: title,
+        actions: [
+          ...?actions,
+          if (trailing != null) trailing!,
         ],
       ),
+      // ⚠️ body 不加外层 `Padding`：顶栏净空要落在**各 body 自己的滚动 padding**
+      // 里（`listScrollTopInset`），内容才会从圆钮下方流过。包一层 Padding 会让
+      // 滚动内容在顶栏下沿被裁断，看起来是一条不透明栏（2026-10-24 用户指出）。
+      body: body,
     );
   }
 }

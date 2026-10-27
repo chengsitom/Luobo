@@ -163,4 +163,37 @@ void main() {
     final title = tester.widget<Text>(find.text(longName));
     expect(title.maxLines, 2);
   });
+
+  testWidgets('alignEnd：长标题换行时第二行优先占满、第一行留短', (tester) async {
+    // 卡宽 151、左右 padding 16 → 内容宽 119；测试字体每个字宽 = fontSize(19)
+    // + letterSpacing(-0.2) ≈ 18.8 → 一行最多 6 个汉字。
+    // 10 个字应拆成「4 + 6」：第二行占满、第一行留短（常规贪心会拆成 6 + 4）。
+    const longName = '一二三四五六七八九十';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(
+        title: longName,
+        titleMaxLines: 2,
+        alignEnd: true,
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('一二三四\n五六七八九十'), findsOneWidget);
+  });
+
+  testWidgets('alignEnd：短标题不拆行且文字块贴右（距右 16）', (tester) async {
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: '收藏', alignEnd: true),
+    );
+
+    final text = tester.widget<Text>(find.text('收藏'));
+    expect(text.textAlign, TextAlign.right);
+    expect(text.data, '收藏');
+
+    final cardRect = tester.getRect(find.byType(HomeHeroCard));
+    final textRect = tester.getRect(find.text('收藏'));
+    expect(textRect.right, closeTo(cardRect.right - 16, 1));
+  });
 }

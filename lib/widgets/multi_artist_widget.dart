@@ -12,6 +12,7 @@ import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
 import 'album_artwork.dart';
 import 'glass_surface.dart';
+import '../theme/design_tokens.dart';
 
 /// Displays a list of artists as "Artist 1, Artist 2, …".
 ///
@@ -234,7 +235,7 @@ class ArtistsBottomSheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+        color: isDark ? AppTheme.darkSurface : LuoboColors.light.bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: SafeArea(

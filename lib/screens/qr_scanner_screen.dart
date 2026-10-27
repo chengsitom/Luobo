@@ -2,10 +2,13 @@ import 'dart:convert';
 import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 import '../l10n/app_localizations.dart';
 import '../models/server_config.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -115,13 +118,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.scanQrCode),
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(
+        title: l10n.scanQrCode,
+        // 底是相机取景，状态栏图标固定走亮色。
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         actions: [
-          IconButton(
-            icon: const Icon(CupertinoIcons.photo),
-            tooltip: l10n.scanFromGallery,
-            onPressed: _scanFromGallery,
+          LuoboTopCircleButton(
+            icon: CupertinoIcons.photo,
+            onTap: _scanFromGallery,
           ),
         ],
       ),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../widgets/luobo/list_top_bar.dart';
 import 'diagnostic_event.dart';
 import 'diagnostics_service.dart';
 import 'event_types.dart';
@@ -154,20 +155,25 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final diag = DiagnosticsService.instance;
     final events = _filtered;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.diagnosticsTitle), centerTitle: false),
-      body: Column(
-        children: [
-          _buildMetricCards(diag, l10n),
-          _buildControls(l10n),
-          Expanded(
-            child: events.isEmpty
-                ? Center(child: Text(l10n.diagnosticsNoLogs))
-                : ListView.builder(
-                    itemCount: events.length,
-                    itemBuilder: (context, i) => _EventTile(event: events[i]),
-                  ),
-          ),
-        ],
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(title: l10n.diagnosticsTitle),
+      body: Padding(
+        // 本页顶部是固定指标卡（不是滚动内容），用外层 Padding 即可。
+        padding: EdgeInsets.only(top: listTopInset(context)),
+        child: Column(
+          children: [
+            _buildMetricCards(diag, l10n),
+            _buildControls(l10n),
+            Expanded(
+              child: events.isEmpty
+                  ? Center(child: Text(l10n.diagnosticsNoLogs))
+                  : ListView.builder(
+                      itemCount: events.length,
+                      itemBuilder: (context, i) => _EventTile(event: events[i]),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

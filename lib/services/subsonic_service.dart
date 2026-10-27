@@ -758,9 +758,12 @@ class SubsonicService {
       // - 无转码参数时默认会转码 AAC 192k（chunked 无 Content-Length，
       //   ExoPlayer 解析不出时长 → 拖动进度条后从 0:00 重播）。LAN/无损场景
       //   必须显式 format=raw 直出，才有 Content-Length + Range 可精确 seek。
-      // - 明确请求转码（maxBitRate/format）时透传转码参数；转码流不支持
-      //   Range，seek 由 PlayerProvider 走自研 /api/tracks/{id}/stream
-      //   的 timeOffset 重起流（见 getDaoliyuApiStreamUrl，2026-08-11 WebUI 实测）。
+      // - 明确请求转码（maxBitRate/format）时透传转码参数。注意：Luobo 转码
+      //   实际播放的是自研 /api/tracks/{id}/stream（见 getDaoliyuApiStreamUrl），
+      //   该端点实测始终支持 HTTP Range；这里的 Subsonic 转码 URL 只在 JWT
+      //   登录失败时兜底。
+      // - seek 策略（Range 优先、timeOffset 兜底）见
+      //   `docs/道理鱼接入技术方案.md` §13 与 daoliyu_seek_policy.dart。
       if (maxBitRate == null && format == null) {
         params['format'] = 'raw';
       } else {
@@ -788,15 +791,14 @@ class SubsonicService {
 
   /// 道理鱼自研流端点：`GET /api/tracks/{id}/stream?token=<JWT>[&timeOffset=<秒>]`。
   ///
-  /// Subsonic 兼容层的转码流是 chunked（无 Content-Length）且服务端不认
-  /// HTTP Range，ExoPlayer 无法按字节 seek（durationMs=null → 从头重播）。
-  /// 自研层支持「时间起点」参数（`timeOffset`/`startTime`/`offset`，WebUI
-  /// 实测三选一生效），服务端 ffmpeg 直接从指定秒数重转码——WebUI 的 seek
-  /// 正是靠重发带 timeOffset 的新流实现（2026-08-11 实测）。
+  /// 服务端在 `/stream` 内部转封装/转码（实测固定 AAC 192k），但**始终支持
+  /// HTTP Range（206）** ⇒ 普通 seek 交给 ExoPlayer 原生定位即可，不必重建
+  /// 音频源（2026-10-20 实测，见 `docs/道理鱼接入技术方案.md` §13.2-A）。
   ///
-  /// 转码播放与 seek 兼得时：首次播放传 timeOffset=0，seek 时重发带目标秒数的
-  /// 新流即可。JWT 登录失败（无法走自研层）返回 null，调用方降级为 Subsonic
-  /// 转码 URL（此时 seek 大概率仍不可用，但不比现状更差）。
+  /// `timeOffset` 仅作**兜底**：首次未缓存的转码是 200 实时管道（不可 Range），
+  /// 或要回到当前流起点之前时，重发一条从目标秒数开始的新流（2026-08-11
+  /// WebUI 实测其 seek 也走重发新流）。JWT 登录失败（无法走自研层）返回 null，
+  /// 调用方降级为 Subsonic 转码 URL。
   Future<String?> getDaoliyuApiStreamUrl(String songId,
       {int timeOffsetSeconds = 0}) async {
     if (!await loginToApi()) return null;

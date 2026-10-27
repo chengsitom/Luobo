@@ -11,6 +11,7 @@ import '../providers/library_provider.dart';
 import '../services/ai_knowledge_service.dart';
 import '../services/storage_service.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 
@@ -58,7 +59,7 @@ class _SettingsAiPlaylistTabState extends State<SettingsAiPlaylistTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16 + listScrollTopInset(context), bottom: 16),
       children: [
         _buildConnectionSection(),
         _buildKnowledgeSection(),

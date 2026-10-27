@@ -10,7 +10,10 @@ bool shouldRunAutoCarModeTimer({
   required bool appBackgrounded,
   required bool carModeOpen,
   required bool lyricsShowing,
+  bool autoEntryEnabled = true,
 }) {
+  // 设置里关掉「自动进入车载模式」→ 计时器不运行（只能手动进入）。
+  if (!autoEntryEnabled) return false;
   if (appBackgrounded || carModeOpen || lyricsShowing) return false;
   // 有声书不自动进入车载模式（§10：无歌词 → 无歌词页联动需求）。
   return isPlaying && !isPlayingRadio && !isPlayingAudiobook;

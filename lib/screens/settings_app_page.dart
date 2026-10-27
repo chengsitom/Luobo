@@ -13,6 +13,7 @@ import '../utils/byte_format.dart';
 import '../utils/image_cache.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/luobo/capsule_button.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/sheet_shell.dart';
@@ -46,7 +47,7 @@ class SettingsAppPage extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
-          LuoboSpacing.pageY,
+          LuoboSpacing.pageY + listTopInset(context),
           LuoboSpacing.pageX,
           LuoboSpacing.pageBottomWithStrip(context),
         ),
@@ -283,7 +284,7 @@ class _SettingsAppearancePageState extends State<SettingsAppearancePage> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
-          LuoboSpacing.pageY,
+          LuoboSpacing.pageY + listTopInset(context),
           LuoboSpacing.pageX,
           LuoboSpacing.pageBottomWithStrip(context),
         ),

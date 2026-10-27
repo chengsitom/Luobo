@@ -432,61 +432,51 @@ class _CarModeScreenState extends State<CarModeScreen>
     _feedbackController.forward(from: 0);
   }
 
-  /// 居中的醒目收藏反馈：大爱心 + 光晕 + 弹性弹出 + 渐隐
+  /// 收藏反馈：**一颗红心「扑通」一下**（无圆圈、无文字）。
+  ///
+  /// 0 → 0.28 放大到 1.18（easeOutBack），0.28 → 0.5 回弹到 1.0，
+  /// 之后缓缩到 0.92；整体淡入 0.12、末段 0.3 淡出。
   Widget _buildFeedbackOverlay() {
+    final success = _feedbackFavorited && !_feedbackFailed;
+    final color = _feedbackFailed
+        ? Colors.white70
+        : (success ? Colors.redAccent : Colors.white70);
     return IgnorePointer(
       child: Center(
         child: AnimatedBuilder(
           animation: _feedbackController,
           builder: (context, _) {
             final t = _feedbackController.value;
-            final popT = (t / 0.35).clamp(0.0, 1.0);
-            final scale = Curves.elasticOut.transform(popT);
-            final opacity = t <= 0.55 ? 1.0 : (1.0 - (t - 0.55) / 0.45);
-            final color = _feedbackFailed
-                ? Colors.grey
-                : (_feedbackFavorited ? Colors.redAccent : Colors.blueGrey);
+            double scale;
+            if (t < 0.28) {
+              scale =
+                  0.75 + 0.43 * Curves.easeOutBack.transform(t / 0.28);
+            } else if (t < 0.5) {
+              scale = 1.18 - 0.18 * Curves.easeOut.transform((t - 0.28) / 0.22);
+            } else {
+              scale = 1.0 - 0.08 * Curves.easeIn.transform((t - 0.5) / 0.5);
+            }
+            final opacity = t < 0.12
+                ? t / 0.12
+                : (t > 0.7 ? (1 - (t - 0.7) / 0.3).clamp(0.0, 1.0) : 1.0);
             return Opacity(
               opacity: opacity.clamp(0.0, 1.0),
               child: Transform.scale(
                 scale: scale,
-                child: Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.6),
-                        blurRadius: 30,
-                        spreadRadius: 4,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _feedbackFailed
-                            ? Icons.error_outline_rounded
-                            : Icons.favorite_rounded,
-                        color: color,
-                        size: 64,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _feedbackFailed
-                            ? '操作失败'
-                            : (_feedbackFavorited ? '已收藏' : '已取消收藏'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  success
+                      ? Icons.favorite_rounded
+                      : (_feedbackFailed
+                          ? Icons.heart_broken_rounded
+                          : Icons.favorite_rounded),
+                  color: color,
+                  size: 132,
+                  shadows: [
+                    Shadow(
+                      color: color.withValues(alpha: 0.55),
+                      blurRadius: 28,
+                    ),
+                  ],
                 ),
               ),
             );
@@ -731,7 +721,7 @@ class _CarModeScreenState extends State<CarModeScreen>
   }
 }
 
-class _CarModeLyrics extends StatelessWidget {
+class _CarModeLyrics extends StatefulWidget {
   final PlayerProvider player;
   final SyncedLyrics? lyrics;
   final bool isLoading;
@@ -743,60 +733,117 @@ class _CarModeLyrics extends StatelessWidget {
   });
 
   @override
+  State<_CarModeLyrics> createState() => _CarModeLyricsState();
+}
+
+/// 车载歌词：固定三行（上一行 / 当前行 / 下一行）。
+///
+/// 2026-10-23：①**只在换行时重建**（原实现每个位置 tick ≈5Hz 都重建三个
+/// Text，即使行没变）；②当前行加 180ms 的**交叉淡入 + 轻微上滑**，是车载
+/// 场景唯一值得加的动效（不做弹簧/模糊/渐变，避免持续渲染耗电）；③双语歌词
+/// 的译文小字跟在当前行下面。
+class _CarModeLyricsState extends State<_CarModeLyrics> {
+  StreamSubscription<Duration>? _positionSub;
+  int _currentIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindPositionStream();
+    // initState 里**不能** setState：直接算初值即可（首帧本来就要 build）。
+    final lyrics = widget.lyrics;
+    if (lyrics != null && lyrics.isNotEmpty) {
+      _currentIndex = lyrics.getCurrentLineIndex(widget.player.position);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_CarModeLyrics oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != widget.player) {
+      _bindPositionStream();
+      _currentIndex = -1;
+    }
+    if (oldWidget.lyrics != widget.lyrics) {
+      _currentIndex = -1;
+    }
+    // didUpdateWidget 后必然重建，直接算新值，无需 setState。
+    final lyrics = widget.lyrics;
+    if (lyrics != null && lyrics.isNotEmpty) {
+      _currentIndex = lyrics.getCurrentLineIndex(widget.player.position);
+    }
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+
+  void _bindPositionStream() {
+    _positionSub?.cancel();
+    _positionSub = widget.player.positionStream.listen(_recompute);
+  }
+
+  void _recompute(Duration position) {
+    final lyrics = widget.lyrics;
+    if (lyrics == null || lyrics.isEmpty || !mounted) return;
+    final index = lyrics.getCurrentLineIndex(position);
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (isLoading) {
+    if (widget.isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.white38),
       );
     }
 
-    if (lyrics == null || lyrics!.isEmpty) {
+    final lyrics = widget.lyrics;
+    if (lyrics == null || lyrics.isEmpty) {
       return const Center(
         child: Text(
           '暂无歌词',
-          style: TextStyle(
-            color: Colors.white38,
-            fontSize: 20,
-          ),
+          style: TextStyle(color: Colors.white38, fontSize: 20),
         ),
       );
     }
 
-    return StreamBuilder<Duration>(
-      stream: player.positionStream,
-      initialData: player.position,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
-        final currentIndex = lyrics!.getCurrentLineIndex(position);
-        final lines = lyrics!.lines;
+    final lines = lyrics.lines;
+    final index = _currentIndex;
+    final prevLine = index > 0 ? lines[index - 1].text : '';
+    final currentLine = index >= 0 && index < lines.length ? lines[index] : null;
+    final nextLine = index >= 0 && index < lines.length - 1
+        ? lines[index + 1].text
+        : '';
 
-        final prevLine = currentIndex > 0 ? lines[currentIndex - 1].text : '';
-        final currentLine = currentIndex >= 0 ? lines[currentIndex].text : '';
-        final nextLine = currentIndex >= 0 && currentIndex < lines.length - 1
-            ? lines[currentIndex + 1].text
-            : '';
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 2026-10-23：车载歌词**不做动画**（用户：换行效果不好）——
+          // 保持纯静态替换；只保留「换行才重建」的性能优化与译文小字。
+          Text(
+            prevLine,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 27,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 16),
+          Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Previous line
               Text(
-                prevLine,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.35),
-                  fontSize: 27,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-              // Current line (highlighted)
-              Text(
-                currentLine,
+                currentLine?.text ?? '',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 36,
@@ -807,23 +854,38 @@ class _CarModeLyrics extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 16),
-              // Next line
-              Text(
-                nextLine,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.35),
-                  fontSize: 27,
-                  height: 1.5,
+              if (currentLine?.translation != null &&
+                  currentLine!.translation!.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  currentLine.translation!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+              ],
             ],
           ),
-        );
-      },
+          const SizedBox(height: 16),
+          Text(
+            nextLine,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 27,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }

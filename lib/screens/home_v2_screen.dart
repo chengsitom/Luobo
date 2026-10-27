@@ -22,14 +22,15 @@ import '../widgets/home_hero_card.dart';
 import '../widgets/luobo/glass_circle_button.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/sheet_shell.dart';
+import '../widgets/pressable_scale.dart';
 import '../widgets/widgets.dart';
 import 'ai_playlist_screen.dart';
 import 'album_screen.dart';
+import 'discover_screen.dart';
 import 'favorites_screen.dart';
 import 'history_screen.dart';
 import 'playlist_screen.dart';
 import 'search_screen.dart';
-import 'settings_root_screen.dart';
 import 'song_list_screen.dart';
 
 /// 新首页（§5.1，Apple Music「现在就听」风格，v2 独立实现）。
@@ -49,23 +50,22 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   String _lastFeedKey = '';
 
   // ── 「漫游」卡的随机配色（方案 §4.6）──
-  // 漫游卡没有封面，配色从 `RoamingPalettes` 随机抽，**每次回到首页换一组**。
-  // 只放内存、不持久化——「回来就换」本来就是易失行为。
+  // 漫游卡没有封面，配色从 `RoamingPalettes` 随机抽。**冷启抽一次后不再变**
+  //（2026-10-24 用户：回到首页看到颜色跳变不舒服）。只放内存、不持久化。
   final Random _roamingRandom = Random();
   int _roamingPaletteIndex = -1;
   List<Color> _roamingPalette = RoamingPalettes.all.first;
   double _roamingSeed = 0;
 
   // ── 取色用的「随机一首歌的封面」（2026-10-08 用户要求）──
-  // 「收藏大卡 / 你的歌单」的流体颜色**不再固定取第一首**，而是每次回到首页
-  // 从池子里随机挑一首歌的封面。只放内存、不持久化。
+  // 「收藏大卡 / 你的歌单」的流体颜色从池子里随机挑一首歌的封面取色。
   //
   // ⚠️ 为什么用「签名 + 懒重抽」而不是在 `didChangeDependencies` 里抽一次：
   // 首页首帧时 `LibraryProvider` 还没初始化（池子是空的），若那时抽完就不再抽，
-  // 收藏卡会一直停在默认 mesh —— 正是要修的「取不到色」。签名里带上池子规模
-  // 与 `_coverEpoch`，数据加载完（签名变）或回到首页（epoch 变）都会重抽。
+  // 收藏卡会一直停在默认 mesh —— 正是要修的「取不到色」。签名里带上池子规模，
+  // 数据加载完（签名变）时重抽一次；**之后切 tab 回来不再重抽**
+  //（2026-10-24 用户：每次回首页都跳变，不舒服）。
   final Random _coverRandom = Random();
-  int _coverEpoch = 0;
   String _coverSig = '';
   String? _favoriteCover;
   Map<String, String> _playlistCovers = const {};
@@ -78,25 +78,8 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   @override
   void initState() {
     super.initState();
+    // 冷启抽一次：漫游配色 + 封面取色（封面在数据加载完后由签名触发）。
     _randomizeRoamingPalette();
-    NavigationHelper.tabIndex.addListener(_onTabIndexChanged);
-  }
-
-  @override
-  void dispose() {
-    NavigationHelper.tabIndex.removeListener(_onTabIndexChanged);
-    super.dispose();
-  }
-
-  /// 首页在 `IndexedStack` 里，切 tab 不会重建（`main_screen.dart`），所以「回到
-  /// 首页」只能靠订阅 `NavigationHelper.tabIndex` 拿信号（首页 = 0）。
-  void _onTabIndexChanged() {
-    if (!mounted || NavigationHelper.tabIndex.value != 0) return;
-    setState(() {
-      _randomizeRoamingPalette();
-      // 换一版取色：`_coverEpoch` 变了 → 下面的签名也变 → 重抽封面。
-      _coverEpoch++;
-    });
   }
 
   /// 抽一组新的漫游配色 + 纹样 seed（`exclude` 避免连续两次抽到同一组）。
@@ -128,8 +111,9 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   Iterable<String?> _libraryCovers(LibraryProvider p) =>
       p.cachedAllSongs.map(p.effectiveCoverArt);
 
-  /// 池子签名变了（首次加载完 / 收藏数变化 / 歌单列表变化）或回到首页
-  /// （`_coverEpoch` 变）就重抽一次。
+  /// 池子签名变了（冷启数据加载完 / 收藏数变化 / 歌单列表变化）就重抽一次。
+  ///
+  /// ⚠️ 2026-10-24 起**不再随「切 tab 回首页」重抽**（用户反馈颜色跳变不舒服）。
   ///
   /// 与同文件 `_cachedFeed` / `_lastFeedKey` 是同一套「签名守卫的 build 期缓存」写法。
   void _rollCoversIfNeeded({
@@ -140,8 +124,8 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     // ⚠️ 签名只用 **O(1) 标量**：早先拼了 `playlists.id.join()` 与
     // `cachedAllSongs.length`（后者在 mergeLocal 开启时**每次访问都会重建合并列表**），
     // 而这段代码在 build 期跑 —— 等于每帧做一次 O(N)。改成标量后仍能覆盖
-    // 「数据加载完 / 收藏数变化 / 歌单列表变化 / 回到首页」四种该重抽的时机。
-    final sig = '$_coverEpoch|${favorites.length}|'
+    // 「数据加载完 / 收藏数变化 / 歌单列表变化」三种该重抽的时机。
+    final sig = '${favorites.length}|'
         '${playlists.length}|${library.isInitialized}';
     if (sig == _coverSig) return;
     _coverSig = sig;
@@ -254,24 +238,62 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
             pinned: true,
             floating: true,
             expandedHeight: _isDesktop ? 80 : 70,
-            backgroundColor: tokens.background,
+            // §6.4：大标题页「标题淡出、圆钮常驻」——顶栏**无实色底**，内容从
+            // 问候语下方流过；问候语随折叠比淡出，右侧圆钮（搜索 / AI 歌单）常驻。
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            scrolledUnderElevation: 0,
             flexibleSpace: FlexibleSpaceBar(
-              titlePadding: EdgeInsets.only(left: hPad, bottom: 14),
-              title: Text(
-                _getGreeting(),
-                style: TextStyle(
-                  fontSize: _isDesktop ? 28 : 24,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
+              titlePadding: EdgeInsets.zero,
+              background: Builder(
+                builder: (context) {
+                  // 纯布局期读折叠比（无 setState、不掉帧）：展开 t=1、收起 t=0。
+                  final settings = context
+                      .dependOnInheritedWidgetOfExactType<
+                          FlexibleSpaceBarSettings>();
+                  final maxExtent = settings?.maxExtent ?? 0;
+                  final minExtent = settings?.minExtent ?? 0;
+                  final current = settings?.currentExtent ?? maxExtent;
+                  final t = ((current - minExtent) /
+                          max(1.0, maxExtent - minExtent))
+                      .clamp(0.0, 1.0);
+                  return Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding:
+                          EdgeInsets.only(left: hPad, bottom: 14),
+                      child: Opacity(
+                        opacity: t,
+                        // 保留原 `FlexibleSpaceBar` 标题的展开缩放（默认
+                        // `expandedTitleScale` = 1.5）：展开 36dp、收起 24dp，
+                        // 只是从「缩进工具栏」改为「淡出」。
+                        child: Transform.scale(
+                          scale: 1 + 0.5 * t,
+                          alignment: Alignment.bottomLeft,
+                          child: Text(
+                            _getGreeting(),
+                            style: TextStyle(
+                              fontSize: _isDesktop ? 28 : 24,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             actions: [
-              // C2 起底栏不再有「搜索」tab（改为 首页/音乐库/设置），
-              // 搜索入口挪到大标题页右上角 —— 与 fnos 一致（§2.2）。
+              // 2026-10-24 用户拍板：右上只留「搜索」「AI 歌单」两个圆钮
+              //（设置走底栏 tab；最近播放改由首页大卡进入）。
+              // `shadows: []`：纯白页面上玻璃默认阴影会在按钮周围形成灰晕
+              //（两钮 8dp 间距还会叠加）—— 用户反馈「按钮下面有一个背景色」。
               GlassCircleButton(
                 icon: AppIcons.search,
                 tooltip: AppLocalizations.of(context)!.search,
+                shadows: const [],
                 onPressed: () => NavigationHelper.push(
                   context,
                   const SearchScreen(),
@@ -281,28 +303,13 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
               GlassCircleButton(
                 icon: AppIcons.ai,
                 tooltip: AppLocalizations.of(context)!.aiPlaylist,
+                shadows: const [],
                 onPressed: () => NavigationHelper.push(
                   context,
                   const AiPlaylistScreen(),
                 ),
               ),
               const SizedBox(width: 8),
-              GlassCircleButton(
-                icon: AppIcons.settings,
-                tooltip: AppLocalizations.of(context)!.settings,
-                onPressed: () => NavigationHelper.push(
-                  context,
-                  const SettingsRootScreen(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GlassCircleButton(
-                icon: AppIcons.history,
-                tooltip: AppLocalizations.of(context)!.recentlyPlayed,
-                onPressed: () =>
-                    NavigationHelper.push(context, const HistoryScreen()),
-              ),
-              if (_isDesktop) const SizedBox(width: 8),
             ],
           ),
           SliverToBoxAdapter(
@@ -389,7 +396,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                     _buildDiscover(
                       context,
                       feed?.discover ?? const [],
-                      libraryProvider,
                       hPad,
                     ),
                     // 覆盖式底栏（`extendBody`）悬浮在内容之上，Scaffold 把底栏高度注入
@@ -444,8 +450,9 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
 
     return _heroRow(
       hPad: hPad,
-      // 只有 2 张 → 铺满整行，右侧不留空白（2026-10-09 用户反馈）。
-      fillWidth: true,
+      // 2026-10-24 用户拍板：加「最近播放」→ 3 张**横滑**（不再铺满整行）。
+      // 3 张 × 151 + 2 × 12 + 左右 16 ≈ 509dp > 360，右侧自然露出第 3 张。
+      fillWidth: false,
       cards: [
         // 顺序（用户指定）：漫游 → 收藏。
         HomeHeroCard(
@@ -478,6 +485,18 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
           imageUrl: _coverUrl(libraryProvider, _favoriteCover),
           seed: FluidBackground.seedForIndex(1),
           onTap: () => NavigationHelper.push(context, const FavoritesScreen()),
+        ),
+        // 第 3 张：最近播放（2026-10-24 用户拍板，对齐飞牛首屏 3 张横滑）——
+        // 原顶栏的「最近播放」圆钮已删除，入口收进这张卡。
+        // 配色固定取 `RoamingPalettes` 的「抹茶绿」：飞牛这张卡就是绿底 + 时钟，
+        // 也避免落到 `FluidPalette.defaultColors` 的深蓝紫（与相邻彩卡不搭）。
+        HomeHeroCard(
+          icon: AppIcons.history,
+          title: l10n.recentlyPlayed,
+          colors: RoamingPalettes.all[5],
+          seed: FluidBackground.seedForIndex(2),
+          onTap: () =>
+              NavigationHelper.push(context, const HistoryScreen()),
         ),
       ],
     );
@@ -520,10 +539,12 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 标题自己带页边距（`SectionHeader.padding`）——**不要再外包 Padding**，
+          // 否则标题比卡片/歌曲行右移 16dp（2026-10-24 用户反馈「没有左对齐」）。
           if (title != null)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: SectionHeader(title: title),
+            SectionHeader(
+              title: title,
+              padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
             ),
           if (fillWidth)
             LayoutBuilder(
@@ -540,15 +561,6 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
         ],
       ),
     );
-  }
-
-  /// 歌单名 → 卡面首字字母牌（取第一个**完整字符**，避免把 emoji 的代理对劈开）。
-  ///
-  /// 用首字而不是封面：一个歌单里有很多首歌，**单张封面代表不了它**（用户 2026-10-09）。
-  String? _monogramOf(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return null;
-    return String.fromCharCode(trimmed.runes.first).toUpperCase();
   }
 
   Widget _buildDailyCard(
@@ -609,59 +621,74 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
         ? libraryProvider.cachedAllSongs
         : allSongs;
     final byId = {for (final s in pool) s.id: s};
-    // 多行横滑：2 行 × 每行 5 个 = 10 首，横滑 5 下看全（用户反馈）。
-    const rows = 2;
-    const perRow = 5;
+    // 2026-10-24 用户拍板：改飞牛「最近播放」行式 —— 每列 4 行歌曲行、横滑。
+    // （推翻 2026-08-05 的「2 行×5 列交错」宽横卡网格。）
     final recent = recommendationService.recentlyPlayed
         .map((id) => byId[id])
         .whereType<Song>()
-        .take(rows * perRow)
+        .take(_rowSongsPerColumn * _rowColumnsMax)
         .toList();
     if (recent.isEmpty) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
-
-    const cardWidth = 200.0;
-    const cardHeight = 72.0;
-    const rowSpacing = 10.0;
-    const colSpacing = 12.0;
-    final gridHeight = rows * cardHeight + (rows - 1) * rowSpacing;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: hPad),
-          child: SectionHeader(title: l10n.continueListening),
+        SectionHeader(
+          title: l10n.continueListening,
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: gridHeight,
-          // 横向 GridView 按「先列后行」填充（index0 左上、index1 左下、index2
-          // 右上…），且 recentlyPlayed 本身最新在前（insert(0)），因此视觉上
-          // 即：最新在左上角、整体 1 3 5 / 2 4 6 交错（用户 2026-08-05 确认）。
-          child: GridView.builder(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
+        _buildSongRowColumns(recent),
+      ],
+    );
+  }
+
+  /// 歌曲行横滑区的每列行数 —— 飞牛首页实测 4 行（4 × 64 = 256dp）。
+  static const int _rowSongsPerColumn = 4;
+
+  /// 歌曲行横滑区最多几列（4 × 3 = 12 首）。
+  static const int _rowColumnsMax = 3;
+
+  /// 歌曲行横滑区（飞牛首页「最近播放 / 最近添加歌曲」同款）：
+  /// 每列 4 行 `SongTile`（64dp 行、封面 48、⋮ 走 C3 面板），横向分页。
+  ///
+  /// 列宽 = 视口宽 − **20**：左 16 由 `SongTile` 自己的内边距提供，右侧露出
+  /// 下一列的 **4dp 封面**（实测下一列封面左缘 356dp / 360 屏）作为可滑提示。
+  Widget _buildSongRowColumns(List<Song> songs) {
+    final columns = (songs.length / _rowSongsPerColumn).ceil();
+    return SizedBox(
+      height: _rowSongsPerColumn * 64.0,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columnWidth = constraints.maxWidth - 20;
+          return ListView.builder(
             scrollDirection: Axis.horizontal,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: rows,
-              crossAxisSpacing: rowSpacing,
-              mainAxisSpacing: colSpacing,
-              childAspectRatio: cardHeight / cardWidth,
-            ),
-            itemCount: recent.length,
-            itemBuilder: (context, index) {
-              final song = recent[index];
-              return ContinuePlayingCard(
-                song: song,
-                coverArt: libraryProvider.effectiveCoverArt(song),
-                width: cardWidth,
-                onTap: () => _play(context, song, recent, index),
+            padding: EdgeInsets.zero,
+            itemCount: columns,
+            itemBuilder: (context, column) {
+              final start = column * _rowSongsPerColumn;
+              final end = min(start + _rowSongsPerColumn, songs.length);
+              final slice = songs.sublist(start, end);
+              return SizedBox(
+                width: columnWidth,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < slice.length; i++)
+                      SongTile(
+                        song: slice[i],
+                        playlist: songs,
+                        index: start + i,
+                      ),
+                  ],
+                ),
               );
             },
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
 
@@ -734,22 +761,15 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     }
   }
 
-  /// 列表第一首有封面的歌的封面 URL（二级页 hero 取色用）。
-  String? _firstCoverUrl(LibraryProvider p, List<Song> songs) {
-    for (final song in songs) {
-      final cover = p.effectiveCoverArt(song);
-      if (cover != null && cover.isNotEmpty) {
-        return p.getCoverArtUrl(cover);
-      }
-    }
-    return null;
-  }
-
   /// 最近播放的**专辑**横滑区。
   ///
   /// 2026-10-08：歌单 / 收藏卡已移除——它们的 2×2 拼图封面在不足 4 张时会留透明格，
   /// 观感是「封面显示不全」；歌单那一份语义搬到了「歌单」快捷入口卡
   /// （见 `_buildQuickEntries`）。
+  ///
+  /// 2026-10-24：样式对齐飞牛「最近添加专辑」——150×150 封面 + 卡下两行
+  /// （歌名 16/600、副题 12「歌手 · N 首」）；不再走 `HorizontalScrollSection`
+  /// （它按 `cardSize + 60` 定容器高，会把两行文字挤扁）。
   Widget _buildRecentlyPlayed(
     BuildContext context,
     LibraryProvider libraryProvider,
@@ -761,28 +781,50 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     // `libraryProvider.recentAlbums`，它其实是 `_cachedAllAlbums.take(20)`
     // （曲库列表头部，不是播放历史），只在初始化/刷新时赋值 → 永远不变。
     // 现改为从 **真实播放历史**（recentlyPlayed 歌曲 ID，最新在前）推导专辑。
-    final albums = _recentAlbumsFromHistory(libraryProvider, recommendationService);
+    final albums =
+        _recentAlbumsFromHistory(libraryProvider, recommendationService);
     if (albums.isEmpty) return const SizedBox.shrink();
 
-    return HorizontalScrollSection(
-      title: l10n.recentlyPlayed,
-      padding: EdgeInsets.symmetric(horizontal: hPad),
-      cardSize: 150,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final album in albums)
-          AlbumCard(
-            album: album,
-            size: 150,
-            onTap: () => NavigationHelper.push(
-              context,
-              AlbumScreen(albumId: album.id),
-            ),
+        SectionHeader(
+          title: l10n.recentlyPlayed,
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: _albumCardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            itemCount: albums.length,
+            // 飞牛实测卡间距 13.5dp（取 14）。
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return _HomeAlbumCard(
+                album: album,
+                onTap: () => NavigationHelper.push(
+                  context,
+                  AlbumScreen(albumId: album.id),
+                ),
+              );
+            },
           ),
+        ),
       ],
     );
   }
 
+  /// 专辑卡总高：封面 150 + 6 + 歌名 ~22 + 3 + 副题 ~17 ≈ 198（留 2dp 余量）。
+  static const double _albumCardHeight = 200;
+
   /// 由播放历史推导「最近播放的专辑」：按播放顺序去重取前 10 张。
+  ///
+  /// 2026-10-24：优先用 `cachedAllAlbums` 里的**完整 Album**（带 `songCount` /
+  /// 规范歌手 / 封面），这样卡下的「歌手 · N 首」不用逐帧统计；缓存里找不到时
+  /// 才用历史歌曲拼一个兜底 Album。
   List<Album> _recentAlbumsFromHistory(
     LibraryProvider libraryProvider,
     RecommendationService recommendationService,
@@ -790,6 +832,7 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
     final pool = libraryProvider.cachedAllSongs;
     if (pool.isEmpty) return const [];
     final byId = {for (final s in pool) s.id: s};
+    final albumById = {for (final a in libraryProvider.cachedAllAlbums) a.id: a};
     final seen = <String>{};
     final out = <Album>[];
     for (final id in recommendationService.recentlyPlayed) {
@@ -799,13 +842,14 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
       if (albumId == null || albumId.isEmpty) continue;
       if (!seen.add(albumId)) continue;
       out.add(
-        Album(
-          id: albumId,
-          name: song.album ?? '',
-          artist: song.artist,
-          artistId: song.artistId,
-          coverArt: song.coverArt,
-        ),
+        albumById[albumId] ??
+            Album(
+              id: albumId,
+              name: song.album ?? '',
+              artist: song.artist,
+              artistId: song.artistId,
+              coverArt: song.coverArt,
+            ),
       );
       if (out.length >= 10) break;
     }
@@ -830,10 +874,11 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
       cards: [
         for (var i = 0; i < playlists.length; i++)
           HomeHeroCard(
-            monogram: _monogramOf(playlists[i].name),
+            // 2026-10-24 用户拍板：**砍掉卡面中间的字母牌**，只留流体底 + 文字；
+            // 文字整体靠右，长名称换行时**第二行优先占满**（见 `_HeroTitleText`）。
             title: playlists[i].name,
-            // 歌单名可能较长 —— 允许两行（入口卡只有 1 行）。
             titleMaxLines: 2,
+            alignEnd: true,
             subtitle: playlists[i].songCount == null
                 ? null
                 : l10n.songCount(playlists[i].songCount!),
@@ -867,78 +912,33 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   Widget _buildDiscover(
     BuildContext context,
     List<Song> discover,
-    LibraryProvider libraryProvider,
     double hPad,
   ) {
     if (discover.isEmpty) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
-    // 单曲横滑网格（§8-9）：探索发现是「歌曲」不是合集，用横卡与方块网格
-    // （Mix/歌单/最近播放）区分；4 行 × 每行 5 首 = 20 首（探索发现全量），
-    // 加宽卡片、隐藏播放按钮、歌名允许两行——未听过的歌认歌名比按钮重要。
-    // 横向 GridView 按「先列后行」填充（index0 左上、index1 左下…）。
-    const rows = 4;
-    const perRow = 5;
-    final songs = discover.take(rows * perRow).toList();
-    const cardWidth = 240.0;
-    const cardHeight = 72.0;
-    const rowSpacing = 10.0;
-    const colSpacing = 12.0;
-    final gridHeight = rows * cardHeight + (rows - 1) * rowSpacing;
+    // 2026-10-24 用户拍板：item 改飞牛行式（与「继续播放」同一套 4 行/列），
+    // 「查看全部」进与收藏 / 歌单同款的 hero 头详情页（`DiscoverScreen`）。
+    final songs = discover
+        .take(_rowSongsPerColumn * _rowColumnsMax)
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: hPad),
-          child: SectionHeader(
-            title: l10n.discover,
-            actionText: l10n.seeAll,
-            onActionTap: () => NavigationHelper.push(
-              context,
-              SongListScreen(
-                title: l10n.discover,
-                songs: discover,
-                slogans: [
-                  l10n.discoverSlogan1,
-                  l10n.discoverSlogan2,
-                  l10n.discoverSlogan3,
-                ],
-                imageUrl: _firstCoverUrl(libraryProvider, discover),
-              ),
+        SectionHeader(
+          title: l10n.discover,
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
+          actionText: l10n.seeAll,
+          onActionTap: () => NavigationHelper.push(
+            context,
+            DiscoverScreen(
+              songs: discover,
+              subtitle: l10n.discoverSlogan1,
             ),
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: gridHeight,
-          child: GridView.builder(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            scrollDirection: Axis.horizontal,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: rows,
-              crossAxisSpacing: rowSpacing,
-              mainAxisSpacing: colSpacing,
-              childAspectRatio: cardHeight / cardWidth,
-            ),
-            itemCount: songs.length,
-            itemBuilder: (context, index) {
-              final song = songs[index];
-              return ContinuePlayingCard(
-                song: song,
-                coverArt: libraryProvider.effectiveCoverArt(song),
-                width: cardWidth,
-                showPlayButton: false,
-                titleMaxLines: 2,
-                // 副标题歌手 + 专辑：填满右侧留白，且"歌手 · 专辑"更便于认歌。
-                subtitle: [song.artist, song.album]
-                    .whereType<String>()
-                    .where((s) => s.isNotEmpty)
-                    .join(' · '),
-                onTap: () => _play(context, song, discover, index),
-              );
-            },
-          ),
-        ),
+        _buildSongRowColumns(songs),
       ],
     );
   }
@@ -988,3 +988,66 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
 
 // （`_CollectionCardV2` 已于 2026-10-08 删除：「最近播放」不再插入歌单/收藏卡，
 // 其 2×2 拼图封面在不足 4 张时会留透明格；歌单语义搬到了「歌单」快捷入口卡。）
+
+/// 首页「最近播放」专辑卡 —— 飞牛「最近添加专辑」同款：
+/// **150×150 封面（r10）** → 6 → 歌名 **16/600** → 3 → 副题 **12**「歌手 · N 首」。
+///
+/// 不复用 `AlbumCard`：它用的是 `bodyMedium` 字号、副题只有歌手（无「N 首」），
+/// 且带 hover 播放按钮；这里按飞牛实测版式单独实现，避免影响其他页面的卡片。
+class _HomeAlbumCard extends StatelessWidget {
+  const _HomeAlbumCard({required this.album, this.onTap});
+
+  final Album album;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HomeV2Tokens.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final artist = (album.artist ?? '').trim();
+    final subtitle = [
+      if (artist.isNotEmpty) artist,
+      if (album.songCount != null) l10n.songCount(album.songCount!),
+    ].join(' · ');
+
+    return PressableScale(
+      onTap: onTap,
+      child: SizedBox(
+        width: 150,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AlbumArtwork(
+              coverArt: album.coverArt,
+              size: 150,
+              borderRadius: 10,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              album.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: tokens.secondaryText,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

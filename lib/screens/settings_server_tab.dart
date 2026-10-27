@@ -5,6 +5,7 @@ import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../utils/navigation_helper.dart';
@@ -66,7 +67,7 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
     }
 
     return ListView(
-      padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 8, bottom: 32),
+      padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 8 + listScrollTopInset(context), bottom: 32),
       children: [
         _buildSection(
           title: l10n.sectionServerConnection,

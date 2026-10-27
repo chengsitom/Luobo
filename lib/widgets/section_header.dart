@@ -87,12 +87,18 @@ class SectionHeader extends StatelessWidget {
   final VoidCallback? onActionTap;
   final IconData? icon;
 
+  /// 左右内边距。默认 16；**调用方若已按自己的页边距排版，用这个参数对齐**，
+  /// 不要在外层再包一层 `Padding`（会叠成 32dp，标题比内容右移 16dp ——
+  /// 首页 2026-10-24 就是这么错位的）。
+  final EdgeInsetsGeometry padding;
+
   const SectionHeader({
     super.key,
     required this.title,
     this.actionText,
     this.onActionTap,
     this.icon,
+    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
   });
 
   @override
@@ -100,7 +106,7 @@ class SectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: padding,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

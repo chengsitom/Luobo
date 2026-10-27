@@ -16,14 +16,15 @@
 double lyricBlur(int itemIndex, int activeIndex) => 0.0;
 
 /// Scale factor for a lyric line at [itemIndex] relative to [activeIndex]:
-/// active line 1.0, then a clear ladder 0.88 / 0.80 / 0.74.
+/// active line 1.0, then a clear ladder **0.85 / 0.74 / 0.64**
+/// （2026-10-23：用户觉得非当前行仍偏大，在原 0.88/0.80/0.74 基础上再收一档）。
 double lyricScale(int itemIndex, int activeIndex) {
-  if (activeIndex < 0) return 0.94;
+  if (activeIndex < 0) return 0.90;
   if (itemIndex == activeIndex) return 1.0;
   final distance = (itemIndex - activeIndex).abs();
-  if (distance == 1) return 0.88;
-  if (distance == 2) return 0.80;
-  return 0.74;
+  if (distance == 1) return 0.85;
+  if (distance == 2) return 0.74;
+  return 0.64;
 }
 
 /// Opacity for a lyric line at [itemIndex] relative to [activeIndex].

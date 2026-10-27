@@ -34,7 +34,10 @@ import 'album_screen.dart';
 import 'car_mode_screen.dart';
 import '../widgets/multi_artist_widget.dart';
 import '../widgets/song_tile.dart' show SongMenuContext, showSongMenuSheet;
-import '../widgets/album_artwork.dart' show isLocalFilePath;
+import '../widgets/album_artwork.dart' show AlbumArtwork, isLocalFilePath;
+import '../theme/design_tokens.dart';
+import '../widgets/luobo/empty_state.dart';
+import '../widgets/luobo/player_progress_bar.dart';
 
 const _kCarouselGap = 40.0;
 
@@ -174,6 +177,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
       appBackgrounded: _appBackgrounded,
       carModeOpen: _carModeOpen,
       lyricsShowing: _showLyrics,
+      autoEntryEnabled:
+          PlayerUiSettingsService().getAutoCarModeEntry(),
     )) {
       if (_autoCarModeTimer == null) _startAutoCarModeTimer();
     } else {
@@ -201,6 +206,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
       appBackgrounded: _appBackgrounded,
       carModeOpen: _carModeOpen,
       lyricsShowing: _showLyrics,
+      autoEntryEnabled:
+          PlayerUiSettingsService().getAutoCarModeEntry(),
     )) {
       return;
     }
@@ -1586,40 +1593,7 @@ class _PlayerHeader extends StatelessWidget {
                     size: 22,
                   ),
                 ),
-              Selector<PlayerProvider, (double, double, bool)>(
-                selector: (_, p) =>
-                    (p.playbackSpeed, p.pitch, p.pitchCorrection),
-                builder: (context, data, _) {
-                  final (speed, pitch, correction) = data;
-                  final speedStr = speed == 1.0 ? '1×' : '$speed×';
-                  final tooltip = correction
-                      ? AppLocalizations.of(context)!
-                          .speedTooltipPitchPreserved(speedStr)
-                      : AppLocalizations.of(context)!.speedTooltipWithPitch(
-                          speedStr, pitch.toStringAsFixed(2));
-                  return IconButton(
-                    tooltip: tooltip,
-                    onPressed: () => _showSpeedDialog(context),
-                    padding: const EdgeInsets.all(6),
-                    constraints:
-                        const BoxConstraints(minWidth: 36, minHeight: 36),
-                    icon: speed != 1.0
-                        ? Text(
-                            '$speed×',
-                            style: const TextStyle(
-                              color: AppTheme.appleMusicRed,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : const Icon(
-                            CupertinoIcons.speedometer,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                  );
-                },
-              ),
+              // 睡眠定时（保留）：speed 与队列按钮已按用户要求从顶栏移除。
               Selector<PlayerProvider, bool>(
                 selector: (_, p) => p.hasSleepTimer,
                 builder: (context, hasTimer, _) => IconButton(
@@ -1637,16 +1611,6 @@ class _PlayerHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton(
-                onPressed: () => _showQueue(context),
-                padding: const EdgeInsets.all(6),
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                icon: const Icon(
-                  CupertinoIcons.list_bullet,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
               const SizedBox(width: 4),
             ],
           ),
@@ -1655,142 +1619,6 @@ class _PlayerHeader extends StatelessWidget {
     );
   }
 
-  void _showSpeedDialog(BuildContext context) {
-    final player = context.read<PlayerProvider>();
-    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-
-    showGlassBottomSheet(
-      context: context,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSt) => Container(
-          decoration: BoxDecoration(
-            color: AppTheme.darkSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 36,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: AppTheme.darkDivider,
-                      borderRadius: BorderRadius.circular(2.5),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    AppLocalizations.of(ctx)!.playbackSpeed,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...speeds.map(
-                    (s) => ListTile(
-                      dense: true,
-                      title: Text(
-                        s == 1.0
-                            ? AppLocalizations.of(ctx)!.normalSpeed
-                            : '$s×',
-                        style: TextStyle(
-                          color: player.playbackSpeed == s
-                              ? AppTheme.appleMusicRed
-                              : Colors.white,
-                          fontWeight: player.playbackSpeed == s
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      trailing: player.playbackSpeed == s
-                          ? const Icon(
-                              CupertinoIcons.checkmark,
-                              color: AppTheme.appleMusicRed,
-                              size: 16,
-                            )
-                          : null,
-                      onTap: () {
-                        player.setPlaybackSpeed(s);
-                        setSt(() {});
-                      },
-                    ),
-                  ),
-                  const Divider(
-                      color: AppTheme.darkDivider, indent: 16, endIndent: 16),
-                  SwitchListTile(
-                    dense: true,
-                    title: Text(
-                      AppLocalizations.of(ctx)!.preservePitch,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                    subtitle: Text(
-                      AppLocalizations.of(ctx)!.preservePitchSubtitle,
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                    value: player.pitchCorrection,
-                    activeTrackColor: AppTheme.appleMusicRed,
-                    thumbColor: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return AppTheme.appleMusicRed;
-                      }
-                      return null;
-                    }),
-                    onChanged: (_) {
-                      player.togglePitchCorrection();
-                      setSt(() {});
-                    },
-                  ),
-                  if (!player.pitchCorrection) ...[
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            AppLocalizations.of(ctx)!.pitch,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 15),
-                          ),
-                          Text(
-                            '${player.pitch.toStringAsFixed(2)}×',
-                            style: const TextStyle(
-                              color: AppTheme.appleMusicRed,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Slider(
-                      value: player.pitch,
-                      min: 0.5,
-                      max: 2.0,
-                      divisions: 30,
-                      activeColor: AppTheme.appleMusicRed,
-                      inactiveColor: AppTheme.darkDivider,
-                      label: '${player.pitch.toStringAsFixed(2)}×',
-                      onChanged: (v) {
-                        player.setPitch(v);
-                        setSt(() {});
-                      },
-                    ),
-                  ],
-                  SizedBox(height: MediaQuery.of(ctx).padding.bottom + 8),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showSleepTimerDialog(BuildContext context) {
     final player = context.read<PlayerProvider>();
@@ -2058,13 +1886,6 @@ class _PlayerHeader extends StatelessWidget {
     );
   }
 
-  void _showQueue(BuildContext context) {
-    showGlassBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => const QueueSheet(),
-    );
-  }
 }
 
 class _AlbumArtworkSection extends StatefulWidget {
@@ -2468,17 +2289,20 @@ class _PlayerControlsState extends State<_PlayerControls> {
                           1.0,
                         )
                       : 0.0;
-                  return _ProgressBar(
+                  // 流信息并进时间行中间（fnos 同款）：贴着进度条，而不是
+                  // 掉到下面的播放按钮旁边。
+                  return LuoboProgressBar(
                     progress: progress,
                     position: pos,
                     duration: duration,
                     formatDuration: widget.formatDuration,
+                    centerInfo: const _StreamQualityLine(),
                   );
                 },
               );
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           const _PlaybackControls(),
           const SizedBox(height: 16),
         ],
@@ -2567,15 +2391,7 @@ class _SongInfoState extends State<_SongInfo> {
             ],
           ),
         ),
-        IconButton(
-          onPressed: widget.onLyricsPressed,
-          icon: Icon(
-            CupertinoIcons.music_note_list,
-            color:
-                widget.isLyricsActive ? AppTheme.appleMusicRed : Colors.white,
-            size: 24,
-          ),
-        ),
+        // 车载模式入口（用户 2026-10-23 要求保留）。
         IconButton(
           onPressed: widget.onCarPressed,
           icon: const Icon(
@@ -2584,15 +2400,8 @@ class _SongInfoState extends State<_SongInfo> {
             size: 24,
           ),
         ),
-        if (!isAudiobook)
-          IconButton(
-            onPressed: () => _showAddToPlaylistDialog(context),
-            icon: const Icon(
-              CupertinoIcons.plus_circle,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
+        // 2026-10-23：其余只保留「收藏♡ + 更多⋮」——歌词入口改为点封面，
+        // 「加入歌单」从这一行移除。
         if (!isAudiobook)
           IconButton(
             onPressed: () => _toggleFavorite(context),
@@ -2656,552 +2465,59 @@ class _SongInfoState extends State<_SongInfo> {
     }
   }
 
-  Future<void> _showAddToPlaylistDialog(BuildContext context) async {
-    if (widget.song == null) return;
-
-    final subsonicService = Provider.of<SubsonicService>(
-      context,
-      listen: false,
-    );
-
-    try {
-      final playlists = await subsonicService.getPlaylists();
-
-      if (!context.mounted) return;
-
-      final outerContext = context;
-
-      showGlassBottomSheet(
-        context: outerContext,
-        builder: (sheetContext) {
-          final l10n = AppLocalizations.of(outerContext)!;
-          return Container(
-            decoration: BoxDecoration(
-              color: AppTheme.darkSurface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 36,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppTheme.darkDivider,
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.addToPlaylistTitle,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Material(
-                    color: AppTheme.appleMusicRed,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        _showCreatePlaylistDialog(outerContext);
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              CupertinoIcons.add_circled_solid,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              l10n.createNewPlaylist,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    l10n.yourPlaylistsLabel,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: playlists.length,
-                    itemBuilder: (listContext, index) {
-                      final playlist = playlists[index];
-                      final coverArtUrl = playlist.coverArt != null
-                          ? subsonicService.getCoverArtUrl(
-                              playlist.coverArt!,
-                              size: 100,
-                            )
-                          : null;
-
-                      return ListTile(
-                        leading: coverArtUrl != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: CachedNetworkImage(
-                                  cacheManager: coverCacheManager,
-                                  imageUrl: coverArtUrl,
-                                  cacheKey:
-                                      coverArtCacheKeyFromUrl(coverArtUrl),
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                  placeholder: (ctx, url) => Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: AppTheme.darkCard,
-                                    child: const Icon(
-                                      CupertinoIcons.music_note_list,
-                                      color: Colors.white30,
-                                      size: 24,
-                                    ),
-                                  ),
-                                  errorWidget: (ctx, e, _) => Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: AppTheme.darkCard,
-                                    child: const Icon(
-                                      CupertinoIcons.music_note_list,
-                                      color: Colors.white30,
-                                      size: 24,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.darkCard,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Icon(
-                                  CupertinoIcons.music_note_list,
-                                  color: Colors.white30,
-                                  size: 24,
-                                ),
-                              ),
-                        title: Text(
-                          playlist.name,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        subtitle: playlist.songCount != null
-                            ? Text(
-                                l10n.songsCount(playlist.songCount!),
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                ),
-                              )
-                            : null,
-                        onTap: () async {
-                          Navigator.pop(sheetContext);
-                          await _addToPlaylist(
-                            outerContext,
-                            playlist.id,
-                            playlist.name,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          );
-        },
-      );
-    } catch (e) {
-      if (context.mounted) {
-        showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!.errorLoadingPlaylists(e),
-      tone: LuoboToastTone.info,
-    );
-      }
-    }
-  }
-
-  Future<void> _showCreatePlaylistDialog(BuildContext context) async {
-    if (widget.song == null) return;
-
-    final nameController = TextEditingController();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.darkSurface,
-        title: Text(
-          AppLocalizations.of(dialogContext)!.createPlaylistTitle,
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: TextField(
-          controller: nameController,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: AppLocalizations.of(dialogContext)!.playlistNameHint,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.appleMusicRed),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              AppLocalizations.of(dialogContext)!.cancel,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                Navigator.pop(dialogContext, nameController.text.trim());
-              }
-            },
-            child: Text(
-              AppLocalizations.of(dialogContext)!.create,
-              style: const TextStyle(
-                color: AppTheme.appleMusicRed,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    nameController.dispose();
-
-    if (result != null && result.isNotEmpty && context.mounted) {
-      await _createPlaylistAndAddSong(context, result);
-    }
-  }
-
-  Future<void> _createPlaylistAndAddSong(
-    BuildContext context,
-    String playlistName,
-  ) async {
-    if (widget.song == null) return;
-
-    // Use LibraryProvider so the playlist list gets refreshed after creation
-    final libraryProvider = Provider.of<LibraryProvider>(
-      context,
-      listen: false,
-    );
-
-    try {
-      await libraryProvider.createPlaylist(
-        playlistName,
-        songIds: [widget.song!.id],
-      );
-
-      if (context.mounted) {
-        showLuoboToast(
-      context,
-      message: AppLocalizations.of(
-                context,
-              )!
-                  .playlistCreatedWithSong(playlistName),
-      tone: LuoboToastTone.info,
-    );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showLuoboToast(
-      context,
-      message: 'Error: $e',
-      tone: LuoboToastTone.info,
-    );
-      }
-    }
-  }
-
-  Future<void> _addToPlaylist(
-    BuildContext context,
-    String playlistId,
-    String playlistName,
-  ) async {
-    if (widget.song == null) return;
-
-    final subsonicService = Provider.of<SubsonicService>(
-      context,
-      listen: false,
-    );
-
-    try {
-      await subsonicService.updatePlaylist(
-        playlistId: playlistId,
-        songIdsToAdd: [widget.song!.id],
-      );
-
-      if (context.mounted) {
-        showLuoboToast(
-      context,
-      message: AppLocalizations.of(
-                context,
-              )!
-                  .addedToPlaylist(widget.song!.title, playlistName),
-      tone: LuoboToastTone.info,
-    );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showLuoboToast(
-      context,
-      message: 'Error: $e',
-      tone: LuoboToastTone.info,
-    );
-      }
-    }
-  }
 }
 
-class _ProgressBar extends StatefulWidget {
-  final double progress;
-  final Duration position;
-  final Duration duration;
-  final String Function(Duration) formatDuration;
-
-  const _ProgressBar({
-    required this.progress,
-    required this.position,
-    required this.duration,
-    required this.formatDuration,
-  });
-
-  @override
-  State<_ProgressBar> createState() => _ProgressBarState();
-}
-
-class _ProgressBarState extends State<_ProgressBar> {
-  bool _isDragging = false;
-  bool _waitingForSeek = false;
-  double _dragValue = 0.0;
-
-  @override
-  void didUpdateWidget(_ProgressBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.duration != widget.duration) {
-      _isDragging = false;
-      _waitingForSeek = false;
-      _dragValue = 0.0;
-      return;
-    }
-
-    if (_waitingForSeek && (widget.progress - _dragValue).abs() < 0.05) {
-      setState(() => _waitingForSeek = false);
-    }
-  }
-
-  void _updateProgressFromPosition(Offset localPosition, double width) {
-    final newProgress = (localPosition.dx / width).clamp(0.0, 1.0);
-    setState(() => _dragValue = newProgress);
-  }
+/// 进度条下方的音质信息行（fnos：「原文件 · FLAC · 1769 kbps」）。
+///
+/// 数据取 **实际播放流**：`isActiveStreamTranscoded` 为真时用
+/// `activeStreamFormat/activeStreamBitrate`（转码后），否则回退到歌曲元数据
+/// （`suffix` / `bitRate`）。
+class _StreamQualityLine extends StatelessWidget {
+  const _StreamQualityLine();
 
   @override
   Widget build(BuildContext context) {
-    final showDragValue = _isDragging || _waitingForSeek;
-    final displayProgress = showDragValue ? _dragValue : widget.progress;
-    final displayPosition = showDragValue
-        ? Duration(
-            milliseconds: (_dragValue * widget.duration.inMilliseconds).round(),
-          )
-        : widget.position;
+    return Selector<PlayerProvider,
+        (bool, int?, String?, String?, int?)>(
+      selector: (_, p) => (
+        p.isActiveStreamTranscoded,
+        p.activeStreamBitrate,
+        p.activeStreamFormat,
+        p.currentSong?.suffix,
+        p.currentSong?.bitRate,
+      ),
+      builder: (context, data, _) {
+        final (transcoded, streamBitrate, streamFormat, suffix, metadataBitrate) =
+            data;
+        final rawFormat = transcoded ? streamFormat : suffix;
+        final format = (rawFormat == null ||
+                rawFormat.isEmpty ||
+                rawFormat.toLowerCase() == 'original')
+            ? null
+            : rawFormat.toUpperCase();
+        final bitrate = transcoded ? streamBitrate : metadataBitrate;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final trackWidth = constraints.maxWidth;
+        if (format == null && (bitrate == null || bitrate <= 0)) {
+          return const SizedBox.shrink();
+        }
 
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (details) {
-                  setState(() {
-                    _isDragging = true;
-                    _waitingForSeek = false;
-                    _dragValue = widget.progress;
-                  });
-                  _updateProgressFromPosition(
-                    details.localPosition,
-                    trackWidth,
-                  );
-                },
-                onHorizontalDragUpdate: (details) {
-                  _updateProgressFromPosition(
-                    details.localPosition,
-                    trackWidth,
-                  );
-                },
-                onHorizontalDragEnd: (details) {
-                  context.read<PlayerProvider>().seekToProgress(_dragValue);
-                  setState(() {
-                    _isDragging = false;
-                    _waitingForSeek = true;
-                  });
-                },
-                onTapDown: (details) {
-                  final newProgress =
-                      (details.localPosition.dx / trackWidth).clamp(0.0, 1.0);
-                  setState(() {
-                    _dragValue = newProgress;
-                    _waitingForSeek = true;
-                  });
-                  context.read<PlayerProvider>().seekToProgress(newProgress);
-                },
-                child: SizedBox(
-                  height: 44,
-                  child: Center(
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        // Background track
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          curve: Curves.easeOut,
-                          height: _isDragging ? 5.0 : 3.0,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(
-                              _isDragging ? 2.5 : 1.5,
-                            ),
-                          ),
-                        ),
-                        // Active track
-                        FractionallySizedBox(
-                          widthFactor: displayProgress.clamp(0.0, 1.0),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            curve: Curves.easeOut,
-                            height: _isDragging ? 5.0 : 3.0,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(
-                                _isDragging ? 2.5 : 1.5,
-                              ),
-                              boxShadow: _isDragging
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                        blurRadius: 8,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                        ),
-                        // Thumb
-                        Positioned(
-                          left:
-                              ((trackWidth * displayProgress.clamp(0.0, 1.0)) -
-                                      (_isDragging ? 14 : 0))
-                                  .clamp(
-                            0.0,
-                            trackWidth - (_isDragging ? 28 : 0),
-                          ),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            curve: Curves.easeOut,
-                            width: _isDragging ? 28 : 0,
-                            height: _isDragging ? 28 : 0,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: _isDragging
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.25,
-                                        ),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+        final l10n = AppLocalizations.of(context)!;
+        final parts = <String>[
+          transcoded ? l10n.qualityTranscoded : l10n.qualityOriginal,
+          if (format != null) format,
+          if (bitrate != null && bitrate > 0) '$bitrate kbps',
+        ];
+        return Text(
+          parts.join(' · '),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 10,
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                widget.formatDuration(displayPosition),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 13,
-                ),
-              ),
-              Text(
-                widget.duration > Duration.zero
-                    ? '-${widget.formatDuration(widget.duration - displayPosition)}'
-                    : '',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -3228,13 +2544,25 @@ class _PlaybackControls extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            // 有声书（B10）：隐藏 shuffle/repeat（强制顺序播放）。
-            if (!isAudiobook)
+            // 左：单键循环播放模式（随机 / 列表循环 / 单曲循环）。
+            // 有声书（B10）强制顺序播放，隐藏该键但保留占位以居中。
+            if (isAudiobook)
+              const SizedBox(width: 48)
+            else
               IconButton(
-                onPressed: provider.toggleShuffle,
+                onPressed: () => cyclePlaybackMode(provider),
+                tooltip: shuffleEnabled
+                    ? AppLocalizations.of(context)!.shuffle
+                    : (repeatMode == RepeatMode.one
+                        ? AppLocalizations.of(context)!.repeatOne
+                        : AppLocalizations.of(context)!.repeatAll),
                 icon: Icon(
-                  CupertinoIcons.shuffle,
-                  color: shuffleEnabled
+                  shuffleEnabled
+                      ? AppIcons.shuffle
+                      : (repeatMode == RepeatMode.one
+                          ? CupertinoIcons.repeat_1
+                          : CupertinoIcons.repeat),
+                  color: (shuffleEnabled || repeatMode != RepeatMode.off)
                       ? AppTheme.appleMusicRed
                       : Colors.white.withValues(alpha: 0.7),
                   size: 22,
@@ -3276,20 +2604,16 @@ class _PlaybackControls extends StatelessWidget {
                 size: ScreenHelper.skipButtonIconSize(context),
               ),
             ),
-            // 有声书（B10）：隐藏 repeat。
-            if (!isAudiobook)
-              IconButton(
-                onPressed: provider.toggleRepeat,
-                icon: Icon(
-                  repeatMode == RepeatMode.one
-                      ? CupertinoIcons.repeat_1
-                      : CupertinoIcons.repeat,
-                  color: repeatMode != RepeatMode.off
-                      ? AppTheme.appleMusicRed
-                      : Colors.white.withValues(alpha: 0.7),
-                  size: 22,
-                ),
+            // 右：播放列表（队列）。
+            IconButton(
+              onPressed: () => showQueueSheet(context),
+              tooltip: AppLocalizations.of(context)!.queue,
+              icon: Icon(
+                CupertinoIcons.list_bullet,
+                color: Colors.white.withValues(alpha: 0.7),
+                size: 22,
               ),
+            ),
           ],
         );
       },
@@ -3548,152 +2872,267 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   }
 }
 
+/// 打开播放队列浮层（fnos：从播放条/播放页的队列按钮升起）。
+///
+/// 用 root navigator + 透明背景：浮层自身负责底色与圆角（浅色 `c.bg`、
+/// 深色深面），遮罩会盖住播放条与底栏。
+Future<void> showQueueSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.42),
+    builder: (_) => const QueueSheet(),
+  );
+}
+
+/// 播放模式循环：随机播放 → 列表循环 → 单曲循环 → 随机播放。
+///
+/// 只用 PlayerProvider 的公开开关（`toggleShuffle` / `toggleRepeat`），
+/// 播放页控制栏与队列浮层共用。
+void cyclePlaybackMode(PlayerProvider provider) {
+  if (provider.shuffleEnabled) {
+    provider.toggleShuffle();
+    if (provider.repeatMode != RepeatMode.all) provider.toggleRepeat();
+    return;
+  }
+  if (provider.repeatMode == RepeatMode.all) {
+    provider.toggleRepeat(); // → 单曲循环
+    return;
+  }
+  if (provider.repeatMode == RepeatMode.one) provider.toggleRepeat(); // → 关
+  provider.toggleShuffle(); // → 随机播放
+}
+
+/// 播放队列浮层（对齐 fnos `v4_0002` / `v5_0048` / `v6_0096` 的**视觉**，
+/// 但按用户 2026-10-23 的要求简化）：
+///
+/// 把手 → 模式胶囊（左）+「清空」胶囊（右）→ **只展示待播放（当前曲 → 队尾）**
+/// 的 64dp 行（封面 48 r6 + 歌名 16/600 + 歌手 12 + ×）。
+/// 不做「已播放/待播放」分区，也没有重新排序；浮层**固定高度**（屏高 52%，
+/// 320~480dp），避免太高不好点。
 class QueueSheet extends StatelessWidget {
   const QueueSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      // 不撑满整屏：否则 showGlassBottomSheet 的实色外层容器会被顶到全屏高度，
-      // 亮色主题下弹层上方露出一整块白色色块（暗色下为深色色块）。
-      expand: false,
-      initialChildSize: 0.7,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.darkSurface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    final c = LuoboColors.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final height =
+        (MediaQuery.sizeOf(context).height * 0.52).clamp(320.0, 480.0);
+
+    return SizedBox(
+      height: height,
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 12),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 模式 + 清空两颗胶囊。
+            Selector<PlayerProvider, (bool, RepeatMode)>(
+              selector: (_, p) => (p.shuffleEnabled, p.repeatMode),
+              builder: (context, mode, _) {
+                final provider = context.read<PlayerProvider>();
+                final (shuffle, repeat) = mode;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      _QueuePill(
+                        icon: shuffle
+                            ? AppIcons.shuffle
+                            : (repeat == RepeatMode.one
+                                ? CupertinoIcons.repeat_1
+                                : CupertinoIcons.repeat),
+                        label: shuffle
+                            ? l10n.shuffle
+                            : (repeat == RepeatMode.one
+                                ? l10n.repeatOne
+                                : l10n.repeatAll),
+                        onTap: () => cyclePlaybackMode(provider),
+                      ),
+                      const Spacer(),
+                      _QueuePill(
+                        icon: CupertinoIcons.trash,
+                        label: l10n.clearQueue,
+                        onTap: provider.clearQueue,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: Selector<PlayerProvider, (List<Song>, int)>(
+                selector: (_, p) => (p.queue, p.currentIndex),
+                builder: (context, data, _) {
+                  final (queue, currentIndex) = data;
+                  final provider = context.read<PlayerProvider>();
+                  final start = currentIndex.clamp(0, queue.length);
+                  if (start >= queue.length) {
+                    return LuoboEmptyState(message: l10n.noSongsInQueue);
+                  }
+                  final upcoming = queue.sublist(start);
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    itemCount: upcoming.length,
+                    itemBuilder: (context, i) {
+                      final index = start + i;
+                      return _QueueRow(
+                        song: upcoming[i],
+                        isPlaying: index == currentIndex,
+                        onTap: () => provider.skipToIndex(index),
+                        onRemove: () => provider.removeFromQueue(index),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+}
+
+/// 队列顶部胶囊（白底 h36 r18；深色用抬升面）。
+class _QueuePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QueuePill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return Material(
+      color: c.card,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: SizedBox(
+          height: 36,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: c.fg),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: LuoboType.body.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: c.fg,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
+        ),
+      ),
+    );
+  }
+}
+
+/// 队列行（64dp）：封面 48 r6 + 歌名 16/600（播放中玫红）+ 歌手 12 + ×。
+class _QueueRow extends StatelessWidget {
+  final Song song;
+  final bool isPlaying;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _QueueRow({
+    required this.song,
+    required this.isPlaying,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    final coverArt = Provider.of<LibraryProvider>(context, listen: false)
+        .effectiveCoverArt(song);
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
             children: [
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                behavior: HitTestBehavior.opaque,
+              AlbumArtwork(coverArt: coverArt, size: 48, borderRadius: 6),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 36,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: AppTheme.darkDivider,
-                        borderRadius: BorderRadius.circular(2.5),
+                    Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.body.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isPlaying ? LuoboAccent.accent : c.fg,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 2),
                     Text(
-                      AppLocalizations.of(context)!.playingNext,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: Colors.white,
-                              ),
+                      song.artist ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.caption.copyWith(color: c.fg2),
                     ),
-                    const SizedBox(height: 16),
                   ],
                 ),
               ),
-              Expanded(
-                child: SafeArea(
-                  top: false,
-                  child: Selector<PlayerProvider, (List<Song>, int)>(
-                    selector: (_, p) => (p.queue, p.currentIndex),
-                    builder: (context, data, _) {
-                      final (queue, currentIndex) = data;
-                      final provider = context.read<PlayerProvider>();
-
-                      return ReorderableListView.builder(
-                        scrollController: scrollController,
-                        itemCount: queue.length,
-                        buildDefaultDragHandles: false,
-                        onReorder: provider.reorderQueue,
-                        proxyDecorator: (child, index, animation) =>
-                            AnimatedBuilder(
-                          animation: animation,
-                          builder: (context, child) {
-                            final elevationValue =
-                                Tween<double>(begin: 0.0, end: 6.0)
-                                    .animate(animation)
-                                    .value;
-                            return Material(
-                              elevation: elevationValue,
-                              color: Colors.transparent,
-                              shadowColor: Colors.black.withValues(alpha: 0.3),
-                              child: child,
-                            );
-                          },
-                          child: child,
-                        ),
-                        itemBuilder: (context, index) {
-                          final song = queue[index];
-                          final isPlaying = index == currentIndex;
-
-                          return ListTile(
-                            key: ValueKey(song.id),
-                            leading: isPlaying
-                                ? const Icon(
-                                    Icons.equalizer_rounded,
-                                    color: AppTheme.appleMusicRed,
-                                  )
-                                : Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      color: AppTheme.lightSecondaryText,
-                                    ),
-                                  ),
-                            title: Text(
-                              song.title,
-                              style: TextStyle(
-                                color: isPlaying
-                                    ? AppTheme.appleMusicRed
-                                    : Colors.white,
-                                fontWeight: isPlaying ? FontWeight.w600 : null,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              song.artist ?? '',
-                              style: const TextStyle(
-                                color: AppTheme.lightSecondaryText,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline,
-                                    color: Colors.white70,
-                                  ),
-                                  onPressed: () =>
-                                      provider.removeFromQueue(index),
-                                ),
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: const Icon(
-                                    Icons.drag_handle,
-                                    color: Colors.white38,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onTap: () => provider.skipToIndex(index),
-                          );
-                        },
-                      );
-                    },
-                  ),
+              GestureDetector(
+                onTap: onRemove,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(Icons.close_rounded, size: 20, color: c.fg3),
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

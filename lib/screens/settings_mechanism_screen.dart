@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
+import '../widgets/luobo/list_top_bar.dart';
 
 /// 「机制说明」入口：解释 App 内各功能的实现机理。
 ///
@@ -18,20 +19,18 @@ class SettingsMechanismScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final topInset = listTopInset(context);
     return Scaffold(
       backgroundColor:
           _isDark(context) ? AppTheme.darkBackground : AppTheme.lightBackground,
-      appBar: AppBar(
-        title: Text(l10n.settingsMechanicsEntry),
-        centerTitle: false,
-        backgroundColor: _isDark(context)
-            ? AppTheme.darkBackground
-            : AppTheme.lightBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(title: l10n.settingsMechanicsEntry),
       body: ListView(
-        padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
+        padding: LuoboSpacing.scrollPadding(
+          context,
+          top: 16 + topInset,
+          bottom: 16,
+        ),
         children: [
           for (final group in _buildGroups(l10n)) ...[
             _sectionHeader(context, group),
@@ -58,19 +57,18 @@ class SettingsMechanismDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final isDark = _isDark(context);
+    final topInset = listTopInset(context);
     return Scaffold(
       backgroundColor:
           isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      appBar: AppBar(
-        title: Text(item.title),
-        centerTitle: false,
-        backgroundColor:
-            isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
+      extendBodyBehindAppBar: true,
+      appBar: LuoboListTopBar(title: item.title),
       body: ListView(
-        padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
+        padding: LuoboSpacing.scrollPadding(
+          context,
+          top: 16 + topInset,
+          bottom: 16,
+        ),
         children: [
           _summaryCard(context, item),
           const SizedBox(height: 24),

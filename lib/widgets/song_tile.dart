@@ -534,6 +534,10 @@ class SongTile extends StatelessWidget {
       song: song,
       menuContext: menuContext,
       onRemoveFromPlaylist: onRemoveFromPlaylist,
+      // ⚠️ 弹窗挂在 root navigator 上，若直接用它 push 会把专辑/歌手页顶到
+      // 根导航（盖住主界面的播放条）。这里把**打开菜单时的导航器**传进去，
+      // 由菜单在 pop 之后用它 push。
+      originNavigator: Navigator.of(context),
     );
   }
 }
@@ -543,10 +547,14 @@ class _SongOptionsSheet extends StatefulWidget {
   final SongMenuContext menuContext;
   final VoidCallback? onRemoveFromPlaylist;
 
+  /// 打开菜单时的导航器（列表页 = 嵌套导航，播放页 = 根导航）。
+  final NavigatorState? originNavigator;
+
   const _SongOptionsSheet({
     required this.song,
     this.menuContext = SongMenuContext.list,
     this.onRemoveFromPlaylist,
+    this.originNavigator,
   });
 
   @override
@@ -645,9 +653,9 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           onTap: song.albumId == null
               ? null
               : () {
+                  final nav = widget.originNavigator ?? Navigator.of(context);
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
+                  nav.push(
                     MaterialPageRoute(
                       builder: (context) => AlbumScreen(albumId: song.albumId!),
                     ),
@@ -664,8 +672,8 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           onTap: song.artistId == null
               ? null
               : () {
-                  final nav = Navigator.of(context);
-                  nav.pop();
+                  final nav = widget.originNavigator ?? Navigator.of(context);
+                  Navigator.pop(context);
                   _navigateToArtist(nav);
                 },
         ),
@@ -1275,6 +1283,7 @@ void showSongMenuSheet(
   required Song song,
   SongMenuContext menuContext = SongMenuContext.list,
   VoidCallback? onRemoveFromPlaylist,
+  NavigatorState? originNavigator,
 }) {
   showLuoboSheet(
     context: context,
@@ -1288,6 +1297,7 @@ void showSongMenuSheet(
         song: song,
         menuContext: menuContext,
         onRemoveFromPlaylist: onRemoveFromPlaylist,
+        originNavigator: originNavigator ?? Navigator.of(context),
       ),
     ),
   );

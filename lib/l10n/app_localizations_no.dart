@@ -3085,6 +3085,33 @@ class AppLocalizationsNo extends AppLocalizations {
   String get sortByAlbumCount => 'Albums';
 
   @override
+  String get repeatAll => 'Repeat All';
+
+  @override
+  String get clearQueue => 'Clear';
+
+  @override
+  String get downloadAlbumConfirmTitle => 'Download this album?';
+
+  @override
+  String downloadAlbumConfirmBody(String name, int count) {
+    return 'Download $count songs from “$name” for offline playback?';
+  }
+
+  @override
+  String get qualityOriginal => 'Original';
+
+  @override
+  String get qualityTranscoded => 'Transcoded';
+
+  @override
+  String get autoCarModeEntry => 'Auto car mode';
+
+  @override
+  String get autoCarModeEntrySubtitle =>
+      'Enter car mode after 30 seconds on the player page. When off, open it manually.';
+
+  @override
   String songsTotal(int count) {
     return '共 $count 首';
   }

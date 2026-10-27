@@ -63,7 +63,7 @@ class LuoboColors {
   final bool isDark;
 
   static const LuoboColors light = LuoboColors(
-    bg: Color(0xFFF2F2F7),
+    bg: Color(0xFFF3F3F3), // fnos 浅色页底（2026-10-23 全局统一）
     card: Color(0xFFFFFFFF),
     fg: Color(0xFF000000),
     fg2: Color(0xFF8E8E93),

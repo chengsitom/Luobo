@@ -184,76 +184,74 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                     ],
                   ),
                 )
-              : Column(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        listTopInset(context) + 8,
-                        16,
-                        8,
-                      ),
-                      child: Row(
+              : ListView.builder(
+                  controller: _scrollController,
+                  // 整页滚动：留白 + 计数行都在列表里，内容从悬浮圆钮下方流过
+                  //（与歌手/专辑列表一致）。
+                  padding: EdgeInsets.only(
+                    top: listTopInset(context),
+                    bottom: 100,
+                  ),
+                  itemCount: _sortedSongs.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Column(
                         children: [
-                          Expanded(
-                            child: Text(
-                              l10n.songsTotal(_sortedSongs.length),
-                              style: LuoboType.body.copyWith(
-                                fontSize: 14,
-                                color: LuoboColors.of(context).fg2,
-                              ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    l10n.songsTotal(_sortedSongs.length),
+                                    style: LuoboType.body.copyWith(
+                                      fontSize: 14,
+                                      color: LuoboColors.of(context).fg2,
+                                    ),
+                                  ),
+                                ),
+                                // fnos：计数行右侧只有「排序 + 多选」两个图标。
+                                GestureDetector(
+                                  key: _sortAnchorHeader,
+                                  onTap: () =>
+                                      _showSortOptions(_sortAnchorHeader),
+                                  child: Icon(
+                                    Icons.sort_rounded,
+                                    size: 22,
+                                    color: LuoboColors.of(context).fg2,
+                                  ),
+                                ),
+                                const SizedBox(width: 18),
+                                GestureDetector(
+                                  onTap: _openMultiSelect,
+                                  child: Icon(
+                                    Icons.checklist_rounded,
+                                    size: 22,
+                                    color: LuoboColors.of(context).fg2,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          // fnos：计数行右侧只有「排序 + 多选」两个图标。
-                          GestureDetector(
-                            key: _sortAnchorHeader,
-                            onTap: () =>
-                                _showSortOptions(_sortAnchorHeader),
-                            child: Icon(
-                              Icons.sort_rounded,
-                              size: 22,
-                              color: LuoboColors.of(context).fg2,
-                            ),
-                          ),
-                          const SizedBox(width: 18),
-                          GestureDetector(
-                            onTap: _openMultiSelect,
-                            child: Icon(
-                              Icons.checklist_rounded,
-                              size: 22,
-                              color: LuoboColors.of(context).fg2,
-                            ),
-                          ),
+                          const Divider(height: 1),
                         ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 100),
-                        itemCount: _sortedSongs.length,
-                        itemBuilder: (context, index) {
-                          return Column(
-                            children: [
-                              SongTile(
-                                song: _sortedSongs[index],
-                                playlist: _sortedSongs,
-                                index: index,
-                                showAlbum: true,
-                                
-                                onLongPress: _openMultiSelect,
-                              ),
-                              // 行间通栏分隔线（fnos v1_0012 实测：0-719 全宽，
-                              // 行高 64dp）。
-                              if (index < _sortedSongs.length - 1)
-                                const LuoboSongDivider(),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+                    final i = index - 1;
+                    return Column(
+                      children: [
+                        SongTile(
+                          song: _sortedSongs[i],
+                          playlist: _sortedSongs,
+                          index: i,
+                          showAlbum: true,
+                          onLongPress: _openMultiSelect,
+                        ),
+                        if (i < _sortedSongs.length - 1)
+                          const LuoboSongDivider(),
+                      ],
+                    );
+                  },
                 ),
     );
   }

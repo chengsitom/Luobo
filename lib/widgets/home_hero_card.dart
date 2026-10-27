@@ -28,6 +28,7 @@ class HomeHeroCard extends StatelessWidget {
     this.imageUrl,
     this.colors,
     this.seed = 0,
+    this.alignEnd = false,
     this.onTap,
     this.onLongPress,
   });
@@ -38,13 +39,13 @@ class HomeHeroCard extends StatelessWidget {
   /// 卡面主体的**首字字母牌**（歌单卡用）。与 [icon] 二选一，优先。
   final String? monogram;
 
-  /// 左下角主标题。
+  /// 底部主标题（默认左下角；[alignEnd] = true 时右下角）。
   final String title;
 
   /// 标题最多几行（歌单名可能较长，用 2；入口卡 1 行足够）。
   final int titleMaxLines;
 
-  /// 左下角副标题（标题下一行，白 75%）。为 null 或空白时不占位。
+  /// 标题下方/上方副标题（白 75%）。为 null 或空白时不占位。
   final String? subtitle;
 
   /// 取色源（封面 URL）。[colors] 有值时忽略。
@@ -57,6 +58,11 @@ class HomeHeroCard extends StatelessWidget {
 
   /// 流动纹样 seed。
   final double seed;
+
+  /// 文字块靠右（歌单卡，2026-10-24 用户要求）：
+  /// - 标题 / 副标题整体移到**右下角**；
+  /// - 标题换行时**优先占满第二行**（第一行留短），见 [_HeroTitleText]。
+  final bool alignEnd;
 
   final VoidCallback? onTap;
 
@@ -120,35 +126,40 @@ class HomeHeroCard extends StatelessWidget {
           ),
           _buildArtwork(),
           Align(
-            alignment: Alignment.bottomLeft,
+            alignment:
+                alignEnd ? Alignment.bottomRight : Alignment.bottomLeft,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    maxLines: titleMaxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: LuoboType.heroCardTitle.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
-                  // ⚠️ 用 trim 判空：纯空白串会渲染出一行空行 + 间距。
+                  // 副题在上、主标题在下（2026-10-24 用户拍板：收藏/歌单卡
+                  // 「N 首」放名称上面）。⚠️ 用 trim 判空：纯空白串会渲染出
+                  // 一行空行 + 间距。
                   if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textAlign: alignEnd ? TextAlign.right : TextAlign.left,
                       // 复用 caption 的 12px，但要覆写行高（caption 默认 1.5 会撑开）。
                       style: LuoboType.caption.copyWith(
                         height: 1,
                         color: Colors.white.withValues(alpha: 0.75),
                       ),
                     ),
+                    const SizedBox(height: 3),
                   ],
+                  _HeroTitleText(
+                    text: title,
+                    maxLines: titleMaxLines,
+                    alignEnd: alignEnd,
+                    style: LuoboType.heroCardTitle.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -193,6 +204,130 @@ class HomeHeroCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 卡面标题：默认普通省略；[alignEnd] + 可换行时走**「第二行优先占满」**断行。
+///
+/// 背景（2026-10-24 用户）：歌单名很长换行时，常规贪心换行是「第一行满、第二行
+/// 留短」，右对齐后右下角会缺一块。用户要求反过来 —— **第二行尽量占满、第一行
+/// 留短**。做法：`TextPainter` **从末尾往前**二分找「最大的、能放进一行的后缀」
+/// 当第二行，余下部分当第一行，显式插入 `\n` 交给右对齐渲染。
+///
+/// 英文/数字不劈在单词中间：分界点落在词内时向后找最近的空格（第二行会短一点）。
+/// 标题超过两行容量时退回普通两行省略。
+class _HeroTitleText extends StatelessWidget {
+  const _HeroTitleText({
+    required this.text,
+    required this.style,
+    required this.maxLines,
+    required this.alignEnd,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final align = alignEnd ? TextAlign.right : TextAlign.left;
+    if (!alignEnd || maxLines < 2) {
+      return Text(
+        text,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        textAlign: align,
+        style: style,
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        if (maxWidth <= 0 || text.isEmpty) {
+          return Text(text, style: style, textAlign: align);
+        }
+
+        final direction = Directionality.of(context);
+        final scaler = MediaQuery.textScalerOf(context);
+        double widthOf(String s) {
+          final painter = TextPainter(
+            text: TextSpan(text: s, style: style),
+            textDirection: direction,
+            textScaler: scaler,
+            maxLines: 1,
+          )..layout();
+          return painter.width;
+        }
+
+        // 一行放得下 → 不拆。
+        if (widthOf(text) <= maxWidth) {
+          return Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: align,
+            style: style,
+          );
+        }
+
+        // 找**最小的分界点**（= 最长的第二行），使第二行能放进一行。
+        var lo = 1;
+        var hi = text.length;
+        var split = text.length; // 空后缀也算「放得下」，兜底
+        while (lo <= hi) {
+          final mid = (lo + hi) ~/ 2;
+          if (widthOf(text.substring(mid)) <= maxWidth) {
+            split = mid;
+            hi = mid - 1;
+          } else {
+            lo = mid + 1;
+          }
+        }
+
+        var head = split > 0 ? text.substring(0, split).trimRight() : '';
+        var tail =
+            split < text.length ? text.substring(split).trimLeft() : '';
+
+        // 英文/数字别劈在单词中间：分界点在词内时向后找最近的空格
+        // （第二行会短一点，但可读性优先）；前提是第一行仍放得下。
+        if (split > 0 && split < text.length) {
+          final wordChar = RegExp(r'[A-Za-z0-9]');
+          final touchesWord = wordChar.hasMatch(text[split - 1]) &&
+              wordChar.hasMatch(text[split]);
+          if (touchesWord) {
+            final space = text.indexOf(' ', split);
+            if (space != -1) {
+              final newHead = text.substring(0, space).trimRight();
+              if (widthOf(newHead) <= maxWidth) {
+                head = newHead;
+                tail = text.substring(space).trimLeft();
+              }
+            }
+          }
+        }
+
+        // 第一行还放不下（标题超过两行的容量）→ 退回普通两行省略。
+        if (head.isEmpty || widthOf(head) > maxWidth) {
+          return Text(
+            text,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            textAlign: align,
+            style: style,
+          );
+        }
+
+        return Text(
+          '$head\n$tail',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: align,
+          style: style,
+        );
+      },
     );
   }
 }

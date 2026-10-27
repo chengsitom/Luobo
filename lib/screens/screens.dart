@@ -13,6 +13,7 @@ export 'albums_screen.dart';
 export 'songs_screen.dart';
 export 'playlists_screen.dart';
 export 'favorites_screen.dart';
+export 'discover_screen.dart';
 export 'playlist_screen.dart';
 export 'settings_screen.dart';
 export 'settings_root_screen.dart';

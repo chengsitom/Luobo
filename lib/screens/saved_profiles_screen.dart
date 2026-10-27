@@ -12,9 +12,10 @@ import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/luobo/capsule_button.dart';
 import '../widgets/luobo/empty_state.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
-import '../widgets/luobo/pill_actions.dart';
 import '../widgets/luobo/sheet_shell.dart';
 import '../widgets/server_profile_card.dart' show ServerFamilyInfo;
 import '../widgets/server_qr_dialog.dart';
@@ -338,19 +339,10 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     return SettingsSubPage(
       title: l10n.connectedServers,
       actions: [
-        LuoboPillActions(
-          actions: [
-            LuoboPillAction(
-              icon: AppIcons.scan,
-              onPressed: _openScanner,
-            ),
-            LuoboPillAction(
-              icon: AppIcons.plus,
-              onPressed: _openAddServer,
-              tooltip: l10n.addServer,
-            ),
-          ],
-        ),
+        // 与歌单列表页同款：右上独立 40dp 圆钮（不再用胶囊双钮）。
+        LuoboTopCircleButton(icon: AppIcons.scan, onTap: _openScanner),
+        const SizedBox(width: 8),
+        LuoboTopCircleButton(icon: AppIcons.plus, onTap: _openAddServer),
       ],
       body: FutureBuilder<List<ServerConfig>>(
         future: _profilesFuture,
@@ -391,7 +383,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
           return ListView(
             padding: EdgeInsets.fromLTRB(
               LuoboSpacing.pageX,
-              LuoboSpacing.pageY,
+              LuoboSpacing.pageY + listTopInset(context),
               LuoboSpacing.pageX,
               LuoboSpacing.pageBottomWithStrip(context),
             ),

@@ -39,7 +39,7 @@ class HomeV2Tokens {
 
   /// 亮色：Apple Music 亮色观感（纯白底 + 浅灰描边区分卡片）。
   static const HomeV2Tokens light = HomeV2Tokens(
-    background: Color(0xFFFFFFFF),
+    background: Color(0xFFF3F3F3), // fnos 浅色页底（原先纯白，玻璃圆钮无对比）
     card: Color(0xFFFFFFFF),
     cardBorder: Color(0xFFE5E5EA),
     divider: Color(0xFFE5E5EA),

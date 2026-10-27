@@ -9,6 +9,7 @@ import '../services/player_ui_settings_service.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/sheet_shell.dart';
@@ -33,6 +34,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   String _artworkShadow = 'soft';
   String _artworkShadowColor = 'black';
   bool _liveSearch = true;
+  bool _autoCarModeEntry = true;
 
   bool get _isDesktop {
     if (kIsWeb) return false;
@@ -63,13 +65,14 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
       _artworkShadow = _playerUiSettings.getArtworkShadow();
       _artworkShadowColor = _playerUiSettings.getArtworkShadowColor();
       _liveSearch = _playerUiSettings.getLiveSearch();
+      _autoCarModeEntry = _playerUiSettings.getAutoCarModeEntry();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: LuoboSpacing.scrollPadding(context, top: 16, bottom: 16),
+      padding: LuoboSpacing.scrollPadding(context, top: 16 + listScrollTopInset(context), bottom: 16),
       children: [
         _buildSection(
           title: AppLocalizations.of(context)!.playerInterface.toUpperCase(),
@@ -83,6 +86,8 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             _buildMiniPlayerRepeatToggle(),
             _buildDivider(),
             _buildMiniPlayerShuffleToggle(),
+            _buildDivider(),
+            _buildAutoCarModeEntryToggle(),
             if (_isDesktop) ...[
               _buildDivider(),
               _buildDiscordRpcToggle(),
@@ -183,6 +188,22 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         onChanged: (value) async {
           setState(() => _showMiniPlayerHeart = value);
           await _playerUiSettings.setShowMiniPlayerHeart(value);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAutoCarModeEntryToggle() {
+    return LuoboRow(
+      icon: CupertinoIcons.car_detailed,
+      title: AppLocalizations.of(context)!.autoCarModeEntry,
+      subtitle: AppLocalizations.of(context)!.autoCarModeEntrySubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
+        value: _autoCarModeEntry,
+        onChanged: (value) async {
+          setState(() => _autoCarModeEntry = value);
+          await _playerUiSettings.setAutoCarModeEntry(value);
         },
       ),
     );

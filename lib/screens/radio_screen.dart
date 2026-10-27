@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/load_error_view.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/design_tokens.dart';
 
 class RadioScreen extends StatefulWidget {
   const RadioScreen({super.key});
@@ -85,7 +86,7 @@ class _RadioScreenState extends State<RadioScreen> {
       context: context,
       builder: (context) => Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          color: isDark ? const Color(0xFF1C1C1E) : LuoboColors.light.bg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
         child: SafeArea(

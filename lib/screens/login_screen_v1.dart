@@ -987,7 +987,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: BoxDecoration(
                                 color: theme.brightness == Brightness.dark
                                     ? const Color(0xFF2C2C2E)
-                                    : const Color(0xFFF2F2F7),
+                                    : const Color(0xFFF3F3F3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(

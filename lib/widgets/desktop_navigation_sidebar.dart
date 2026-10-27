@@ -407,7 +407,7 @@ class _LibrarySection extends StatelessWidget {
             hintText: l10n.playlistName,
             filled: true,
             fillColor:
-                isDark ? const Color(0xFF383838) : const Color(0xFFF2F2F7),
+                isDark ? const Color(0xFF383838) : const Color(0xFFF3F3F3),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide.none,

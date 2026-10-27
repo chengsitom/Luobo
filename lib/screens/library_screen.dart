@@ -929,7 +929,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           end: Alignment.bottomRight,
           colors: isDark
               ? [const Color(0xFF2C2C2E), const Color(0xFF1C1C1E)]
-              : [const Color(0xFFF2F2F7), const Color(0xFFE5E5EA)],
+              : [const Color(0xFFF3F3F3), const Color(0xFFE5E5EA)],
         ),
         borderRadius: BorderRadius.circular(type == 'Artist' ? 28 : 4),
       ),
@@ -1219,7 +1219,7 @@ class _LibraryScreenState extends State<LibraryScreen>
               hintText: l10n.playlistName,
               filled: true,
               fillColor:
-                  isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+                  isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF3F3F3),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,

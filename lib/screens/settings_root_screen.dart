@@ -12,7 +12,7 @@ import '../theme/design_tokens.dart';
 import '../utils/byte_format.dart';
 import '../utils/connection_status.dart';
 import '../utils/navigation_helper.dart';
-import '../widgets/luobo/glass_circle_button.dart';
+import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/settings_sub_page.dart';
@@ -72,10 +72,11 @@ class SettingsRootScreen extends StatelessWidget {
                       style: LuoboType.display.copyWith(color: c.fg),
                     ),
                   ),
-                  GlassCircleButton(
+                  // 与歌单列表页等列表页同款圆钮（40dp 白/黑半透明），
+                  // 只换钮不换结构：大标题仍留在内容里（本页是底栏常驻 tab）。
+                  LuoboTopCircleButton(
                     icon: AppIcons.settings,
-                    tooltip: l10n.settingsTitle,
-                    onPressed: () => NavigationHelper.push(
+                    onTap: () => NavigationHelper.push(
                       context,
                       const SettingsAppPage(),
                     ),

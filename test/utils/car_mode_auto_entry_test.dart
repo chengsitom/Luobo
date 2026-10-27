@@ -19,6 +19,21 @@ void main() {
       );
     });
 
+    test('设置里关掉自动进入车载 → 计时器不运行', () {
+      expect(
+        shouldRunAutoCarModeTimer(
+          isPlaying: true,
+          isPlayingRadio: false,
+          isPlayingAudiobook: false,
+          appBackgrounded: false,
+          carModeOpen: false,
+          lyricsShowing: false,
+          autoEntryEnabled: false,
+        ),
+        false,
+      );
+    });
+
     test('未播放 / 电台播放 / 有声书播放时不运行', () {
       expect(
         shouldRunAutoCarModeTimer(

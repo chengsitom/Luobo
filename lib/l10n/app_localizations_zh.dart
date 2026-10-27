@@ -2982,6 +2982,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sortByAlbumCount => '专辑数';
 
   @override
+  String get repeatAll => '列表循环';
+
+  @override
+  String get clearQueue => '清空';
+
+  @override
+  String get downloadAlbumConfirmTitle => '下载整张专辑？';
+
+  @override
+  String downloadAlbumConfirmBody(String name, int count) {
+    return '将下载《$name》的 $count 首歌曲到本机，可离线播放。';
+  }
+
+  @override
+  String get qualityOriginal => '原文件';
+
+  @override
+  String get qualityTranscoded => '转码';
+
+  @override
+  String get autoCarModeEntry => '自动进入车载模式';
+
+  @override
+  String get autoCarModeEntrySubtitle => '播放页停留 30 秒后自动进入车载模式；关闭后只能手动进入。';
+
+  @override
   String songsTotal(int count) {
     return '共 $count 首';
   }

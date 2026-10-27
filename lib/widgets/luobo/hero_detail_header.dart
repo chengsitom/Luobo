@@ -29,10 +29,14 @@ class LuoboTopCircleButton extends StatelessWidget {
               ? Colors.black.withValues(alpha: 0.45)
               : Colors.white.withValues(alpha: 0.72),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.white,
-            width: 0.8,
-          ),
+          // 2026-10-23：浅色页底已统一 #F3F3F3 → 白 .72 圆自带对比，
+          // 去掉描边（fnos：白圆无边框）；深色保留白 .12 高光边。
+          border: isDark
+              ? Border.all(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  width: 0.8,
+                )
+              : null,
         ),
         child: Icon(
           icon,

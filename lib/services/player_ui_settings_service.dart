@@ -12,6 +12,7 @@ class PlayerUiSettingsService {
   static const String _keyArtworkShadow = 'artwork_shadow';
   static const String _keyArtworkShadowColor = 'artwork_shadow_color';
   static const String _keyLiveSearch = 'search_live_search';
+  static const String _keyAutoCarModeEntry = 'player_auto_car_mode_entry';
 
   static final PlayerUiSettingsService _instance =
       PlayerUiSettingsService._internal();
@@ -26,6 +27,9 @@ class PlayerUiSettingsService {
   final ValueNotifier<bool> showMiniPlayerShuffleNotifier =
       ValueNotifier(false);
   final ValueNotifier<bool> liveSearchNotifier = ValueNotifier(true);
+
+  /// 播放页停留 30s 自动进入车载模式（默认开）。
+  final ValueNotifier<bool> autoCarModeEntryNotifier = ValueNotifier(true);
   final ValueNotifier<double> albumArtCornerRadiusNotifier = ValueNotifier(8.0);
 
   final ValueNotifier<String> artworkShapeNotifier = ValueNotifier('rounded');
@@ -47,6 +51,7 @@ class PlayerUiSettingsService {
     artworkShadowNotifier.value = getArtworkShadow();
     artworkShadowColorNotifier.value = getArtworkShadowColor();
     liveSearchNotifier.value = getLiveSearch();
+    autoCarModeEntryNotifier.value = getAutoCarModeEntry();
   }
 
   Future<void> setShowVolumeSlider(bool show) async {
@@ -144,6 +149,16 @@ class PlayerUiSettingsService {
     liveSearchNotifier.value = enabled;
   }
 
+  Future<void> setAutoCarModeEntry(bool enabled) async {
+    await initialize();
+    await _prefs!.setBool(_keyAutoCarModeEntry, enabled);
+    autoCarModeEntryNotifier.value = enabled;
+  }
+
+  bool getAutoCarModeEntry() {
+    return _prefs?.getBool(_keyAutoCarModeEntry) ?? true;
+  }
+
   bool getLiveSearch() {
     return _prefs?.getBool(_keyLiveSearch) ?? true;
   }
@@ -154,6 +169,7 @@ class PlayerUiSettingsService {
     showMiniPlayerRepeatNotifier.dispose();
     showMiniPlayerShuffleNotifier.dispose();
     liveSearchNotifier.dispose();
+    autoCarModeEntryNotifier.dispose();
     albumArtCornerRadiusNotifier.dispose();
     artworkShapeNotifier.dispose();
     artworkShadowNotifier.dispose();

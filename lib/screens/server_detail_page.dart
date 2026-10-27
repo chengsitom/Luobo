@@ -7,6 +7,7 @@ import '../providers/library_provider.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/server_profile_card.dart';
@@ -70,7 +71,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
-          LuoboSpacing.pageY,
+          LuoboSpacing.pageY + listTopInset(context),
           LuoboSpacing.pageX,
           LuoboSpacing.pageBottomWithStrip(context),
         ),

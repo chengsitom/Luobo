@@ -10,7 +10,48 @@ class SyncedLyrics {
   final String? artist;
   final String? title;
 
-  SyncedLyrics({required this.lines, this.artist, this.title});
+  /// 构造即归一化：**稳定排序 + 合并同时间戳的译文行**。
+  ///
+  /// 双语 LRC 的形态是「原文行 + 译文行」共用同一时间戳；不合并会带来两个 bug：
+  /// 1. 高亮索引取「最后一个 timestamp <= position」→ 永远命中译文行；
+  /// 2. 译文行用下一行时间戳算进度，同时间戳时 `end <= start` → 直接显示 100%。
+  ///
+  /// 时间戳为 0 的行（纯文本歌词）**不合并**，否则整篇纯文本会被并成一行。
+  SyncedLyrics({required List<LyricLine> lines, this.artist, this.title})
+      : lines = _normalize(lines);
+
+  static List<LyricLine> _normalize(List<LyricLine> input) {
+    if (input.isEmpty) return const [];
+    // 稳定排序：时间戳相同保持文件顺序（List.sort 不保证稳定，用原下标兜底）。
+    final indexed = input.asMap().entries.toList()
+      ..sort((a, b) {
+        final c = a.value.timestamp.compareTo(b.value.timestamp);
+        return c != 0 ? c : a.key.compareTo(b.key);
+      });
+
+    final out = <LyricLine>[];
+    for (final entry in indexed) {
+      final line = entry.value;
+      final canMerge = out.isNotEmpty &&
+          line.timestamp == out.last.timestamp &&
+          line.timestamp > Duration.zero;
+      if (canMerge) {
+        final prev = out.last;
+        final merged = (prev.translation == null || prev.translation!.isEmpty)
+            ? line.text
+            : '${prev.translation}\n${line.text}';
+        out[out.length - 1] = LyricLine(
+          timestamp: prev.timestamp,
+          text: prev.text,
+          words: prev.words,
+          translation: merged,
+        );
+      } else {
+        out.add(line);
+      }
+    }
+    return out;
+  }
 
   bool get isEmpty => lines.isEmpty;
   bool get isNotEmpty => lines.isNotEmpty;
@@ -140,7 +181,15 @@ class LyricLine {
   final String text;
   final List<WordSegment>? words;
 
-  LyricLine({required this.timestamp, required this.text, this.words});
+  /// 同时间戳的译文（双语歌词的第二行）—— 由 [SyncedLyrics] 构造时合并进来。
+  final String? translation;
+
+  LyricLine({
+    required this.timestamp,
+    required this.text,
+    this.words,
+    this.translation,
+  });
 
   bool get hasWordTimestamps => words != null && words!.isNotEmpty;
 

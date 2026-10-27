@@ -278,7 +278,7 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
           onLineTap: _onLineTap,
           onUserScroll: () => setState(() => _showReturnButton = true),
           fontSize: 18.0,
-          lineGap: 14.0,
+          lineGap: 9.5, // 与全屏歌词页同步收紧 1/3
           enableBlur: false,
           alignPosition: 0.5,
         ),

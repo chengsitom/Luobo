@@ -8,7 +8,7 @@ class AppTheme {
   static const Color spotifyGreen = Color(0xFF1DB954);
   static const Color spotifyGreenDim = Color(0xFF158A3E);
 
-  static const Color lightBackground = Color(0xFFF2F2F7);
+  static const Color lightBackground = Color(0xFFF3F3F3); // fnos 实测浅色页底
   static const Color lightSurface = Colors.white;
   static const Color lightCard = Colors.white;
   static const Color lightDivider = Color(0xFFE5E5EA);

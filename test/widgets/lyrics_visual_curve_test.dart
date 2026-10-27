@@ -15,20 +15,20 @@ void main() {
   });
 
   group('lyricScale', () {
-    test('字号阶梯 1.0 / 0.88 / 0.80 / 0.74，上下对称', () {
+    test('字号阶梯 1.0 / 0.85 / 0.74 / 0.64，上下对称', () {
       const active = 10;
       expect(lyricScale(10, active), 1.0);
-      expect(lyricScale(9, active), 0.88);
-      expect(lyricScale(11, active), 0.88);
-      expect(lyricScale(8, active), 0.80);
-      expect(lyricScale(12, active), 0.80);
-      expect(lyricScale(7, active), 0.74);
-      expect(lyricScale(13, active), 0.74);
-      expect(lyricScale(0, active), 0.74);
+      expect(lyricScale(9, active), 0.85);
+      expect(lyricScale(11, active), 0.85);
+      expect(lyricScale(8, active), 0.74);
+      expect(lyricScale(12, active), 0.74);
+      expect(lyricScale(7, active), 0.64);
+      expect(lyricScale(13, active), 0.64);
+      expect(lyricScale(0, active), 0.64);
     });
 
-    test('无活动行兜底 0.94', () {
-      expect(lyricScale(0, -1), 0.94);
+    test('无活动行兜底 0.90', () {
+      expect(lyricScale(0, -1), 0.90);
     });
   });
 

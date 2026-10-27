@@ -162,7 +162,7 @@ class FluidBackground extends StatefulWidget {
 class FluidBackgroundStyle {
   /// Creates a style. Every parameter has a sensible default.
   const FluidBackgroundStyle({
-    this.speed = 0.27,
+    this.speed = 0.34,
     this.warp = 3.2,
     this.grain = 0.05,
   });
@@ -172,9 +172,11 @@ class FluidBackgroundStyle {
 
   /// **Flow speed multiplier**: `shader time = real seconds × speed`.
   ///
-  /// `1.0` is the raw rate baked into the shader; smaller is slower. `0.27`
-  /// takes roughly 30 s for a colour band to cross the widget — slow enough to
+  /// `1.0` is the raw rate baked into the shader; smaller is slower. `0.34`
+  /// takes roughly 24 s for a colour band to cross the widget — slow enough to
   /// feel like a background, fast enough not to look frozen.
+  ///
+  /// 2026-10-24 用户反馈「流动太慢」：0.27 → **0.34**（约 +26%）。
   final double speed;
 
   /// Warping strength. Larger makes the bands gentler; too small turns them

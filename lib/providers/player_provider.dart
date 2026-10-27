@@ -26,6 +26,7 @@ import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../services/audio_handler.dart';
 import '../services/audio_interruption_policy.dart';
+import '../services/daoliyu_seek_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
 import '../services/lyrics/lrc_parser.dart';
@@ -974,9 +975,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final artworkUrl = _resolveArtworkUrl();
 
-    final effectiveDuration = _duration.inMilliseconds > 0
-        ? _duration
-        : Duration(seconds: _currentSong!.duration ?? 0);
+    // 与进度条同源：转码重起流后 duration 只是剩余时长，必须用有效的总时长。
+    final totalDuration = effectiveDuration;
 
     _androidAutoService.updatePlaybackState(
       songId: _currentSong!.id,
@@ -984,7 +984,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       artist: _currentSong!.artist ?? '',
       album: _currentSong!.album ?? '',
       artworkUrl: artworkUrl,
-      duration: effectiveDuration,
+      duration: totalDuration,
       position: _position,
       isPlaying: _isPlaying,
     );
@@ -997,7 +997,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       artist: _currentSong!.artist,
       album: _currentSong!.album,
       artworkUrl: artworkUrl,
-      duration: effectiveDuration,
+      duration: totalDuration,
     );
 
     _updateDiscordRpc();
@@ -1009,14 +1009,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final artworkUrl = _resolveArtworkUrl();
 
-    final effectiveDuration = _duration.inMilliseconds > 0
-        ? _duration
-        : Duration(seconds: _currentSong!.duration ?? 0);
+    // 与进度条同源：转码重起流后 duration 只是剩余时长，必须用有效的总时长。
+    final totalDuration = effectiveDuration;
 
     _androidSystemService.updateFromSong(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: effectiveDuration,
+      duration: totalDuration,
       position: _position,
       isPlaying: _isPlaying,
       currentIndex: _currentIndex,
@@ -1026,7 +1025,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _windowsService.updatePlaybackState(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: effectiveDuration,
+      duration: totalDuration,
       position: _position,
       isPlaying: _isPlaying,
     );
@@ -1034,7 +1033,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _bluetoothService.updateFromSong(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: effectiveDuration,
+      duration: totalDuration,
       position: _position,
       isPlaying: _isPlaying,
       currentIndex: _currentIndex,
@@ -1045,7 +1044,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _samsungService.updateFromSong(
         song: _currentSong!,
         artworkUrl: artworkUrl,
-        duration: effectiveDuration,
+        duration: totalDuration,
         position: _position,
         isPlaying: _isPlaying,
       );
@@ -1096,10 +1095,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// to the renderer instead of the Android system volume.
   bool get isRemotePlayback => _isRenderingRemotely;
 
-  /// 当前请求是否会让道理鱼走转码流。道理鱼转码流是 chunked（无
-  /// Content-Length）且 seek 必须靠自研 /api 层 timeOffset 重起流，无法走
-  /// 无缝 concat 预建（预建会立即并发拉取整队列转码流），播放入口据此强制
-  /// 单曲模式；seek 由 [_restartDaoliyuStream] 处理。
+  /// 当前请求是否会让道理鱼走转码流。道理鱼转码时播放的是自研
+  /// `/api/tracks/{id}/stream`（实测始终 206 可 Range），但首次未缓存的转码
+  /// 仍是 200 实时管道，且转码流无法走无缝 concat 预建（预建会立即并发拉取整
+  /// 队列转码流），播放入口据此强制单曲模式；seek 策略见
+  /// `docs/道理鱼接入技术方案.md` §13（Range 优先、timeOffset 兜底）。
   bool get _isDaoliyuTranscodeRequested {
     if (!_subsonicService.isDaoliyu) return false;
     return (_transcodingService.getCurrentBitrate() ?? 0) > 0 ||
@@ -1142,6 +1142,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// metadata when the player can't resolve it (e.g. on-the-fly transcoded
   /// streams with unknown Content-Length).
   Duration get effectiveDuration {
+    // timeOffset 重起流的 duration 只是「剩余时长」（从流起点算起），歌曲总时长
+    // = 流起点 + 流时长。否则进度条分母会突然变短（右侧剩余时间出现 -0:50 之类）。
+    if (_streamBaseOffsetMs > 0 && _duration.inMilliseconds > 0) {
+      return Duration(
+        milliseconds: _duration.inMilliseconds + _streamBaseOffsetMs,
+      );
+    }
     if (_duration.inMilliseconds > 0) return _duration;
     final song = _currentSong;
     if (song != null && song.duration != null && song.duration! > 0) {
@@ -1209,6 +1216,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 最近一次 seek() 请求的目标位置（道理鱼转码重起流被更新 seek 取代后，
   /// 以它作为重新起流的目标；position 流 tick 会覆盖 [_position]，不能复用）。
   Duration _lastSeekRequest = Duration.zero;
+
+  /// 歌曲真实播放位置 = 播放器流内位置 + 当前流起点。
+  ///
+  /// 道理鱼 timeOffset 重起流后 ExoPlayer 从 0 计起，[_streamBaseOffsetMs] 才是
+  /// 歌曲真实起点。**所有对外语义的「歌曲位置」都必须用它**——直接拿
+  /// `_audioPlayer.position` 会在重起流后少算 base（恢复/自愈往前跳）。
+  Duration get _playerEffectivePosition => Duration(
+        milliseconds:
+            _audioPlayer.position.inMilliseconds + _streamBaseOffsetMs,
+      );
+
+  /// 歌曲位置 → 播放器流内位置（timeOffset 重起流后两者相差当前流起点）。
+  Duration _toStreamPosition(Duration songPosition) {
+    final ms = songPosition.inMilliseconds - _streamBaseOffsetMs;
+    return Duration(milliseconds: ms < 0 ? 0 : ms);
+  }
 
   // Fallback timer for Windows where positionStream may not emit reliably
   Timer? _windowsPositionTimer;
@@ -1803,6 +1826,26 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    // 诊断：一首歌自然播完时记录分支依据 —— 「播完不切歌」先用它定位是
+    // concat 分支误判（concatActive=false）还是切歌调用本身没生效。
+    DiagnosticsService.instance.record(
+      EventType.trackNext,
+      LogLevel.info,
+      {
+        'phase': 'songComplete',
+        'songId': completedSong?.id,
+        'repeat': _repeatMode.name,
+        'shuffle': _shuffleEnabled,
+        'queueLen': _queue.length,
+        'index': _currentIndex,
+        'concat': _concatenatingSource != null,
+        'concatActive':
+            identical(_audioPlayer.audioSource, _concatenatingSource),
+        'posMs': _position.inMilliseconds,
+        'durationMs': _duration.inMilliseconds,
+      },
+    );
+
     // 有声书（B7/B3/B9）：不 scrobble、不记录歌曲统计；bookmark 推进。
     // sleepTimer endCurrentSong 检查保持原顺序（§14 编码注意：两种停止不冲突）。
     if (_isPlayingAudiobook) {
@@ -1863,9 +1906,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    if (_concatenatingSource != null) {
+    if (_concatenatingSource != null &&
+        identical(_audioPlayer.audioSource, _concatenatingSource)) {
       // With ConcatenatingAudioSource this only fires at the very end
       // of the queue when LoopMode is off.
+      // 防御：单音源模式下标记可能残留（见 playSong 同处注释），此时「播完」
+      // 是当前这首的结束而非队列结束，必须继续按单曲逻辑切歌。
       if (_shuffleEnabled &&
           _repeatMode == RepeatMode.all &&
           _queue.length > 1) {
@@ -2132,6 +2178,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _startPlayback();
         } else {
           // Gapless disabled — single-song mode
+          //
+          // 必须清掉拼接音源标记：否则 _onSongComplete / skipNext / skipPrevious
+          // 会误判「当前是拼接队列」，把「这首歌播完」当成「整个队列播完」
+          // （走 _handleEndOfQueue → 不切歌、停在 completed），或对单音源执行
+          // seek(index:)。gapless 关闭与道理鱼转码都走这里。
+          _concatenatingSource = null;
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
             playUrl = Uri.file(song.path!).toString();
@@ -2670,15 +2722,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               _audioPlayer.duration == Duration.zero)) {
         neededPrepare = true;
         // 重载前记录最后位置与歌曲：_prepareCurrentSong 从头建源会把位置清零，
-        // 重载后 seek 回去，避免暂停后恢复从 0:00 重放。
-        final restorePos = _audioPlayer.position;
+        // 重载后 seek 回去，避免暂停后恢复从 0:00 重放。位置取「歌曲位置」而非
+        // 裸播放器位置 —— 道理鱼 timeOffset 重起流后两者相差流起点。
+        final restorePos = _playerEffectivePosition;
         final restoreSongId = _currentSong?.id;
         await _prepareCurrentSong();
         // 重载可能耗时（网络流）：期间若已切歌/停止，seek 不能作用到新源上。
         if (restoreSongId != null &&
             restoreSongId == _currentSong?.id &&
             restorePos > Duration.zero) {
-          await _audioPlayer.seek(restorePos);
+          await _audioPlayer.seek(_toStreamPosition(restorePos));
         }
       } else if (_audioPlayer.processingState == ProcessingState.completed) {
         // 队列播完/单曲播完后再点播放：媒体停在曲末，play() 不会自动重播。
@@ -3011,6 +3064,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> seek(Duration position) async {
     _silentCheckToken++; // 使挂起的无声检测失效（seek 后位置跳变）
+    // **2026-10-24 真机修订**：曾按「Web 端 /stream 返回 206」改成 native 优先，
+    // 真机结果是播放器位置落到目标、**音频却从 0s 重放**（位置校验骗人，服务端
+    // 的 Range 只对浏览器成立）。所以道理鱼转码流默认回到「服务端重起流」，
+    // 只有确认可 seek 的源才走 native。见 `docs/道理鱼接入技术方案.md` §13.3。
+    final plan = decideSeekPlan(
+      isDaoliyu: _subsonicService.isDaoliyu,
+      streamTranscoded: isActiveStreamTranscoded,
+    );
     DiagnosticsService.instance.record(
       EventType.audioPlayerAction,
       LogLevel.info,
@@ -3023,10 +3084,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         'durationMs': _audioPlayer.duration?.inMilliseconds,
         'transcoded': isActiveStreamTranscoded,
         'daoliyu': _subsonicService.isDaoliyu,
+        'plan': plan.name,
+        'baseOffsetMs': _streamBaseOffsetMs,
       },
     );
     _position = position;
     _lastSeekRequest = position; // 供重起流被取代后按最新目标重试
+    // 立即广播：播放页进度条订阅的是 positionStream（不是 provider 通知），
+    // 暂停态下位置流不会再 tick —— 只 notifyListeners 会让进度条停在旧位置。
+    _positionController.add(position);
     // 用户主动 seek ⇒ 作废挂起的「打断后自动恢复」意图（方案 B §4.1 步骤 3）。
     _wasPlayingBeforeInterruption = false;
     notifyListeners();
@@ -3034,15 +3100,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _castService.seek(position);
     } else if (_upnpService.isConnected) {
       await _upnpService.seek(position);
-    } else if (_subsonicService.isDaoliyu && isActiveStreamTranscoded) {
-      // 道理鱼转码流是 chunked（无 Content-Length），ExoPlayer 无法按字节
-      // seek（实测拖动后从 0:00 重播），服务端也不认 HTTP Range。改走自研
-      // /api/tracks/{id}/stream?timeOffset=<秒> 重起一条从目标时间开始转码的
-      // 新流——WebUI 快进正是这个机制（2026-08-11 实测）。
+    } else if (plan == SeekPlan.restart) {
       await _restartDaoliyuStream(position);
     } else {
-      await _audioPlayer.seek(position);
+      await _audioPlayer.seek(_toStreamPosition(position));
     }
+    // 暂停态 seek 不会再有位置 tick：通知栏 / 锁屏 / 车机的位置要主动推一次。
+    _updateAllServices();
+
     // seek 后位置流的下一个 tick 可能被 5s 节流吞掉，若紧接着暂停/强杀会恢复回
     // seek 前位置；seek 即落盘（§9.2-1）。但进度条拖拽期间 onChanged 会连续调
     // seek，每次都写整表快照会造成写放大——位移不足 1s 时跳过，交给位置流
@@ -3055,13 +3120,23 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// 道理鱼转码流的 seek：重发带 `timeOffset=<目标秒>` 的自研流 URL，服务端
-  /// ffmpeg 直接从该时间点重新转码推送，播放器从新流开头续播，实现「跳到
-  /// X 秒」而非 Range 续传。重起后播放器位置从 0 计起，显示位置由
-  /// [_streamBaseOffsetMs] 补回；锁屏歌词也按「流位置 + 基准」重新同步。
+  /// 道理鱼转码流的 seek **唯一路径**：重发带 `timeOffset=<目标秒>` 的自研流
+  /// URL，服务端 ffmpeg 直接从该时间点重新转码推送。
+  ///
+  /// 为什么不用 native seek：2026-10-24 真机实测，`_audioPlayer.seek()` 会把
+  /// **位置属性**设到目标（校验能通过），但音频内容仍从 0s 重放——服务端的
+  /// Range 只对浏览器成立。位置校验无法证明内容跳转，因此不作为依据。
+  ///
+  /// 重起后播放器位置从 0 计起，歌曲真实位置由 [_streamBaseOffsetMs] 补回；
+  /// **但服务端是否真的按 timeOffset 起播需要校验**（见下方 loadedDuration）：
+  /// 若被忽略，就撤销基准、让 UI 跟随真实音频，绝不用假偏移制造「进度在走、
+  /// 声音在开头」的错觉。
   Future<void> _restartDaoliyuStream(Duration position) async {
     final song = _currentSong;
     if (song == null) return;
+    // 快照播放态：await setAudioSource 期间 playerStateStream 会把 _isPlaying
+    // 刷成 false，之后再读会把「拖动时在播」误判成「暂停」→ 重起后不续播。
+    final wasPlaying = _isPlaying || _audioPlayer.playing;
     final token = ++_seekRestartToken;
 
     final url = await _subsonicService.getDaoliyuApiStreamUrl(song.id,
@@ -3070,7 +3145,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 自研层不可用（JWT 登录失败）→ 退回原生 seek（转码流大概率仍无效，
       // 但不比现状更差）。
       if (token == _seekRestartToken) {
-        await _audioPlayer.seek(position);
+        await _audioPlayer.seek(_toStreamPosition(position));
       }
       return;
     }
@@ -3087,8 +3162,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       },
     );
 
+    Duration? loadedDuration;
     try {
-      await _audioPlayer.setAudioSource(
+      // 重起流是单一音源：同步清掉拼接音源标记，避免完成/切歌逻辑走错分支。
+      _concatenatingSource = null;
+      loadedDuration = await _audioPlayer.setAudioSource(
         AudioSource.uri(Uri.parse(url), tag: song.id),
       );
     } catch (e) {
@@ -3096,7 +3174,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 原生 seek（即使失败也只影响本次拖动）。
       if (token == _seekRestartToken) {
         _streamBaseOffsetMs = 0;
-        await _audioPlayer.seek(position);
+        await _audioPlayer.seek(_toStreamPosition(position));
       }
       return;
     }
@@ -3107,11 +3185,65 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    // 校验服务端是否真的按 timeOffset 起播：从 X 秒起播的流，时长应接近
+    // 「歌曲总时长 − X」。若拿到的仍是完整时长 ⇒ timeOffset 被忽略（新文档里
+    // `/stream` 只列 token/q/rq，2026-08-11 的探测结论可能已失效）。此时若仍
+    // 套基准，就会出现「进度条从目标位置走、声音却从 0 播」的错位。
+    final songTotalMs = (song.duration ?? 0) * 1000;
+    final remainingMs = songTotalMs - position.inMilliseconds;
+    final offsetHonored = loadedDuration == null ||
+        songTotalMs <= 0 ||
+        remainingMs <= 0 ||
+        loadedDuration.inMilliseconds <= remainingMs * 1.25 + 15000;
+    DiagnosticsService.instance.record(
+      EventType.audioPlayerAction,
+      LogLevel.info,
+      {
+        'action': 'seekRestartLoaded',
+        'songId': song.id,
+        'targetMs': position.inMilliseconds,
+        'loadedDurationMs': loadedDuration?.inMilliseconds,
+        'songTotalMs': songTotalMs,
+        'offsetHonored': offsetHonored,
+      },
+    );
+    if (!offsetHonored) {
+      // 服务端没按 timeOffset 起播：撤销基准，让位置/进度条跟随真实音频，
+      // 不要用一个假的偏移量制造「进度在走、声音在开头」的错觉。
+      DiagnosticsService.instance.record(
+        EventType.audioPlayerAction,
+        LogLevel.warn,
+        {
+          'action': 'seekOffsetIgnored',
+          'songId': song.id,
+          'targetMs': position.inMilliseconds,
+          'loadedDurationMs': loadedDuration.inMilliseconds,
+          'songTotalMs': songTotalMs,
+        },
+      );
+      _streamBaseOffsetMs = 0;
+      _position = Duration.zero;
+      _positionController.add(Duration.zero);
+      notifyListeners();
+      if (wasPlaying) {
+        _startPlayback();
+      }
+      _lyricsService.stopSync();
+      _lyricsService.startSync(_audioPlayer.positionStream);
+      return;
+    }
+
     // 流加载成功后才设基准：避免旧源被替换前发出的位置 tick 被加上新基准
     // （短暂错位）。
     _streamBaseOffsetMs = position.inMilliseconds;
-    if (_isPlaying)
-      _startPlayback(); // 用当前态而非入口快照；不 await（play Future 播放停止才完成，否则下方歌词重同步被延迟到暂停时）
+    // 新源位置从 0 计起，setAudioSource 会推一个 0 位置的 tick —— 这里把「歌曲
+    // 位置」重新对齐到目标并立即广播，否则进度条 / 迷你播放器进度环会掉到 0。
+    _position = position;
+    _positionController.add(position);
+    notifyListeners();
+    if (wasPlaying) {
+      _startPlayback(); // 用入口快照；不 await（play Future 播放停止才完成，否则下方歌词重同步被延迟到暂停时）
+    }
 
     // 重起流后播放器位置从 0 计起：锁屏歌词同步到「流位置 + 基准」才正确。
     _lyricsService.stopSync();
@@ -3721,12 +3853,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _streamBaseOffsetMs = 0;
     _seekRestartToken++;
     var restoredViaTimeOffset = false; // 道理鱼转码按 timeOffset 起播时置位
+    Duration? loadedDuration; // 起播流的时长，用于校验 timeOffset 是否生效
     try {
       if (_gaplessEnabled &&
           _queue.isNotEmpty &&
           !_isDaoliyuTranscodeRequested) {
         await _buildAndSetConcatenatingSource(initialIndex: _currentIndex);
       } else {
+        // 单一音源模式（gapless 关闭 / 道理鱼转码）：清掉拼接音源标记，避免
+        // 完成事件与切歌逻辑误走 concat 分支（详见 playSong 同处注释）。
+        _concatenatingSource = null;
         final String playUrl;
         if (_currentSong!.isLocal == true && _currentSong!.path != null) {
           playUrl = Uri.file(_currentSong!.path!).toString();
@@ -3755,14 +3891,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
         if (_currentSong!.isLocal == true ||
             _offlineService.getLocalPath(_currentSong!.id) != null) {
-          await _audioPlayer.setUrl(playUrl);
+          loadedDuration = await _audioPlayer.setUrl(playUrl);
         } else {
           // Route straight to ExoPlayer so seeking keeps the target position.
           // LockCachingAudioSource would downgrade range requests to a full
           // 200 response and restart playback from the beginning — including
           // on LAN, where the server often omits the Accept-Ranges header and
           // seek visibly rewinds to 0:00.
-          await _audioPlayer.setAudioSource(
+          loadedDuration = await _audioPlayer.setAudioSource(
             AudioSource.uri(Uri.parse(playUrl), tag: _currentSong!.id),
           );
         }
@@ -3772,11 +3908,39 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // seek；其余场景用原生 seek 恢复。
       if (_position.inMilliseconds > 0) {
         if (restoredViaTimeOffset) {
-          _streamBaseOffsetMs = _position.inMilliseconds;
+          // 与 seek 重起流同一套校验：timeOffset 被忽略时拿到的仍是完整时长，
+          // 此时绝不能套基准（否则进度从目标走、声音从 0 播）。
+          final songTotalMs = (_currentSong!.duration ?? 0) * 1000;
+          final remainingMs = songTotalMs - _position.inMilliseconds;
+          final honored = loadedDuration == null ||
+              songTotalMs <= 0 ||
+              remainingMs <= 0 ||
+              loadedDuration.inMilliseconds <= remainingMs * 1.25 + 15000;
+          if (honored) {
+            _streamBaseOffsetMs = _position.inMilliseconds;
+          } else {
+            DiagnosticsService.instance.record(
+              EventType.audioPlayerAction,
+              LogLevel.warn,
+              {
+                'action': 'seekOffsetIgnored',
+                'phase': 'prepare',
+                'songId': _currentSong!.id,
+                'targetMs': _position.inMilliseconds,
+                'loadedDurationMs': loadedDuration.inMilliseconds,
+                'songTotalMs': songTotalMs,
+              },
+            );
+            _position = Duration.zero;
+            _positionController.add(Duration.zero);
+            notifyListeners();
+          }
         } else if (_isDaoliyuTranscodeRequested) {
-          // 道理鱼转码但未能走 timeOffset（JWT 失败回退）：转码流 seek 无效、
-          // 只能从头播，归零位置避免 UI 显示错误进度。
+          // 道理鱼转码但未能走 timeOffset（JWT 失败回退 Subsonic 转码 URL）：
+          // 该端点的 Range 行为未实测（§12.1 待办），保守起见归零位置避免 UI
+          // 显示一个实际没生效的进度。
           _position = Duration.zero;
+          _positionController.add(Duration.zero);
           notifyListeners();
         } else {
           await _audioPlayer.seek(_position);
