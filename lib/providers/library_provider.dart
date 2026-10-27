@@ -231,15 +231,26 @@ class LibraryProvider extends ChangeNotifier {
   /// 3. 专辑封面单图 → 4. 2×2 专辑封面拼贴 → 5. 渐变首字母占位。
   /// 组件按 `ArtistCover` 的字段择一渲染，保证无任何图源时页面也不素。
   ArtistCover resolveArtistCover(Artist artist) {
-    // 级 1/2：外部直链（artistImageUrl，last.fm/deezer）或服务端 coverArt id。
+    // 级 0（道理鱼）：原生 `/api/cover?artistId=` —— 这才是**艺人本人头像**；
+    // 需要短期票据（`/api/library/cover-tickets`，约 2 分钟），票据未就绪时
+    // 先给无票 URL（大概率 401），由下方专辑封面兜底，票据到手后自动生效。
     String? primaryUrl;
-    final directUrl = artist.artistImageUrl;
-    if (directUrl != null && directUrl.isNotEmpty) {
-      primaryUrl = directUrl;
+    final nativeArtistCover = _subsonicService.daoliyuCoverUrl(
+      artistId: artist.id,
+      size: 300,
+    );
+    if (nativeArtistCover != null && nativeArtistCover.isNotEmpty) {
+      primaryUrl = nativeArtistCover;
     } else {
-      final coverArt = artist.coverArt;
-      if (coverArt != null && coverArt.isNotEmpty) {
-        primaryUrl = getCoverArtUrl(coverArt);
+      // 级 1/2：外部直链（artistImageUrl，last.fm/deezer）或服务端 coverArt id。
+      final directUrl = artist.artistImageUrl;
+      if (directUrl != null && directUrl.isNotEmpty) {
+        primaryUrl = directUrl;
+      } else {
+        final coverArt = artist.coverArt;
+        if (coverArt != null && coverArt.isNotEmpty) {
+          primaryUrl = getCoverArtUrl(coverArt);
+        }
       }
     }
     // 级 3：专辑封面单图 —— 直链常有防盗链/网络失败，作为降级目标

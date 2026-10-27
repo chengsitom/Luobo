@@ -47,6 +47,11 @@ class SubsonicService {
   /// 最近一次 loginToApi 拿到的 userId（道理鱼 /api/auth/login 响应 user.id）。
   String? _apiUserId;
 
+  /// 道理鱼封面票据（`/api/library/cover-tickets`，约 2 分钟有效）。
+  String? _coverTicket;
+  DateTime? _coverTicketExpiresAt;
+  bool _coverTicketInFlight = false;
+
   /// 进行中的 loginToApi Future：并发去重，多个 _apiGet 同时触发时只发一次登录。
   Future<bool>? _loginInFlight;
 
@@ -78,6 +83,8 @@ class SubsonicService {
     _apiLoginFailed = false;
     _apiUserId = null;
     _loginInFlight = null; // 丢弃进行中的登录（旧服务器凭据/地址已失效）
+    _coverTicket = null;
+    _coverTicketExpiresAt = null;
     _setActiveBaseUrl(null);
     if (config.isJellyfin) {
       _jellyfin ??= JellyfinService();
@@ -430,6 +437,8 @@ class SubsonicService {
       _apiUserId = user?['id'] as String?;
       _apiLoginFailed = false;
       Log.i('Daoliyu', 'API login OK (user=${_apiUserId})');
+      // 预取封面票据（不阻塞登录；失败会由 daoliyuCoverUrl 再触发）。
+      ensureCoverTicket().ignore();
       return true;
     } on DioException catch (e) {
       // 401 = 凭据无效 → 永久失败；其它（网络/超时/5xx）→ 可重试。
@@ -692,6 +701,118 @@ class SubsonicService {
   /// Returns a cover-art URL. All callers share the same [size] so
   /// `cached_network_image` hits the same disk-cache entry regardless of
   /// context (list, player, full-screen), avoiding duplicate downloads.
+  /// 道理鱼封面票据：`/api/library/cover-tickets`（ticket 约 2 分钟有效）。
+  ///
+  /// 响应结构未在接口清单中给出，这里做**防御式解析**（见
+  /// `parseCoverTicketPayload` 单测）：兼容 `{ticket}` / `{tickets:[...]}` /
+  /// 列表项为字符串或 `{ticket|value|token, exp|expiresAt|expiresIn}`。
+  /// 拿不到有效期时按 100 秒缓存；过期前 15 秒主动刷新。
+  Future<String?> ensureCoverTicket({bool force = false}) async {
+    if (!isDaoliyu) return null;
+    final now = DateTime.now();
+    final expires = _coverTicketExpiresAt;
+    if (!force &&
+        _coverTicket != null &&
+        expires != null &&
+        now.isBefore(expires.subtract(const Duration(seconds: 15)))) {
+      return _coverTicket;
+    }
+    if (_coverTicketInFlight) return _coverTicket;
+    _coverTicketInFlight = true;
+    try {
+      final data = await _apiGet('/api/library/cover-tickets');
+      final parsed = parseCoverTicketPayload(data, now);
+      if (parsed != null) {
+        _coverTicket = parsed.$1;
+        _coverTicketExpiresAt = parsed.$2;
+      }
+      return _coverTicket;
+    } finally {
+      _coverTicketInFlight = false;
+    }
+  }
+
+  /// 道理鱼原生封面 URL：`/api/cover?path=|artistId=&size=&ticket=`。
+  ///
+  /// **同步**返回（供 build 期调用）：票据已缓存时带上，未缓存时返回不带
+  /// ticket 的 URL 并后台刷新一次 —— 拿不到也还有 Subsonic 兼容层兜底。
+  String? daoliyuCoverUrl({String? path, String? artistId, int size = 300}) {
+    if (!isDaoliyu) return null;
+    final base = activeBaseUrl;
+    if (base.isEmpty) return null;
+    if (path == null && artistId == null) return null;
+    final ticket = _coverTicket;
+    if (ticket == null) {
+      // 后台补一张票据，本次先用无票 URL（大概率 401 → 上层回退）。
+      // ignore: discarded_futures
+      ensureCoverTicket();
+    }
+    final params = <String, String>{
+      'size': size.toString(),
+      if (path != null) 'path': path,
+      if (artistId != null) 'artistId': artistId,
+      if (ticket != null) 'ticket': ticket,
+    };
+    final query = params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+    return '$base/api/cover?$query';
+  }
+
+  /// 票据响应解析（纯函数，便于单测）。返回 `(ticket, 过期时间)`。
+  static (String, DateTime)? parseCoverTicketPayload(
+    Map<String, dynamic>? data,
+    DateTime now,
+  ) {
+    if (data == null) return null;
+
+    dynamic ticket;
+    dynamic exp;
+
+    final direct = data['ticket'];
+    if (direct is String && direct.isNotEmpty) {
+      ticket = direct;
+      exp = data['exp'] ?? data['expiresAt'] ?? data['expiresIn'];
+    } else {
+      final tickets = data['tickets'] ?? data['items'];
+      if (tickets is List && tickets.isNotEmpty) {
+        final first = tickets.first;
+        if (first is String && first.isNotEmpty) {
+          ticket = first;
+          exp = data['exp'] ?? data['expiresAt'];
+        } else if (first is Map) {
+          ticket = first['ticket'] ?? first['value'] ?? first['token'];
+          exp = first['exp'] ?? first['expiresAt'] ?? first['expiresIn'];
+        }
+      }
+    }
+
+    if (ticket is! String || ticket.isEmpty) return null;
+
+    DateTime expires;
+    if (exp is num) {
+      final value = exp.toDouble();
+      // < 1e12 视为秒级时间戳，否则毫秒；较小的数视为「剩余秒数」。
+      if (value > 1e12) {
+        expires = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      } else if (value > 1e9) {
+        expires = DateTime.fromMillisecondsSinceEpoch((value * 1000).toInt());
+      } else {
+        expires = now.add(Duration(seconds: value.round()));
+      }
+    } else if (exp is String) {
+      expires =
+          DateTime.tryParse(exp) ?? now.add(const Duration(seconds: 100));
+    } else {
+      expires = now.add(const Duration(seconds: 100));
+    }
+    if (!expires.isAfter(now)) {
+      expires = now.add(const Duration(seconds: 30));
+    }
+    return (ticket, expires);
+  }
+
   String getCoverArtUrl(String? coverArt, {int size = 600}) {
     if (_jellyfin != null)
       return _jellyfin!.getCoverArtUrl(coverArt, size: size);
