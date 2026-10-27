@@ -597,20 +597,8 @@
     "description": "Sort by artist option"
   },
 
-  "sortByAlbum": "Album",
-  "@sortByAlbum": {
-    "description": "Sort by album option"
-  },
 
-  "sortByDate": "Date",
-  "@sortByDate": {
-    "description": "Sort by date option"
-  },
 
-  "sortByDuration": "Duration",
-  "@sortByDuration": {
-    "description": "Sort by duration option"
-  },
 
   "ascending": "Ascending",
   "@ascending": {
@@ -657,15 +645,7 @@
     "description": "All songs title"
   },
 
-  "allAlbums": "All Albums",
-  "@allAlbums": {
-    "description": "All albums title"
-  },
 
-  "allArtists": "All Artists",
-  "@allArtists": {
-    "description": "All artists title"
-  },
 
   "trackNumber": "Track {number}",
   "@trackNumber": {
@@ -976,10 +956,6 @@
   "playlist": "Playlist",
   "internetRadio": "Internet Radio",
   "newPlaylist": "New Playlist",
-  "undo": "Undo",
-  "@undo": {
-    "description": "Toast 'Undo' action (reversible operations, e.g. add to playlist)"
-  },
   "playlistName": "Playlist Name",
   "playlistNameRule": "Name cannot contain / \\ : * ? < > |",
   "create": "Create",
@@ -1035,15 +1011,9 @@
   "clearSearchHistory": "Clear search history",
   "tryDifferentSearch": "Try a different search",
   "noSuggestions": "No suggestions",
-  "browseCategories": "Browse Categories",
   "liveSearchSection": "Search",
   "liveSearch": "Live Search",
   "liveSearchSubtitle": "Update results as you type instead of showing a dropdown",
-  "categoryMadeForYou": "Made For You",
-  "categoryNewReleases": "New Releases",
-  "categoryTopRated": "Top Rated",
-  "categoryGenres": "Genres",
-  "categoryFavorites": "Favorites",
   "categoryRadio": "Radio",
 
   "@_SETTINGS_GENERAL": {},
@@ -1484,17 +1454,9 @@
   "@_SORT_OPTIONS": {},
 
 
-  "sortByArtistAZ": "Artist (A-Z)",
-  "@sortByArtistAZ": { "description": "Sort option: artist ascending" },
 
-  "sortByArtistZA": "Artist (Z-A)",
-  "@sortByArtistZA": { "description": "Sort option: artist descending" },
 
-  "sortByAlbumAZ": "Album (A-Z)",
-  "@sortByAlbumAZ": { "description": "Sort option: album ascending" },
 
-  "sortByAlbumZA": "Album (Z-A)",
-  "@sortByAlbumZA": { "description": "Sort option: album descending" },
 
   "recentlyAdded": "Recently Added",
   "@recentlyAdded": { "description": "Sort option: recently added" },
@@ -2775,8 +2737,6 @@
   "@noNewReleases": { "description": "Empty state when there are no new releases" },
   "noTopRatedAlbums": "No top rated albums",
   "@noTopRatedAlbums": { "description": "Empty state when there are no top rated albums" },
-  "downloadAlbum": "Download album",
-  "@downloadAlbum": { "description": "Tooltip to download an album" },
   "durationHoursMinutes": "{hours} HR {minutes} MIN",
   "@durationHoursMinutes": { "description": "Album duration formatted as hours and minutes", "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
   "durationMinutesOnly": "{minutes} MIN",

@@ -976,24 +976,6 @@ abstract class AppLocalizations {
   /// **'Artist'**
   String get sortByArtist;
 
-  /// Sort by album option
-  ///
-  /// In en, this message translates to:
-  /// **'Album'**
-  String get sortByAlbum;
-
-  /// Sort by date option
-  ///
-  /// In en, this message translates to:
-  /// **'Date'**
-  String get sortByDate;
-
-  /// Sort by duration option
-  ///
-  /// In en, this message translates to:
-  /// **'Duration'**
-  String get sortByDuration;
-
   /// Ascending sort order
   ///
   /// In en, this message translates to:
@@ -1047,18 +1029,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All Songs'**
   String get allSongs;
-
-  /// All albums title
-  ///
-  /// In en, this message translates to:
-  /// **'All Albums'**
-  String get allAlbums;
-
-  /// All artists title
-  ///
-  /// In en, this message translates to:
-  /// **'All Artists'**
-  String get allArtists;
 
   /// Track number label
   ///
@@ -1486,12 +1456,6 @@ abstract class AppLocalizations {
   /// **'New Playlist'**
   String get newPlaylist;
 
-  /// Toast 'Undo' action (reversible operations, e.g. add to playlist)
-  ///
-  /// In en, this message translates to:
-  /// **'Undo'**
-  String get undo;
-
   /// No description provided for @playlistName.
   ///
   /// In en, this message translates to:
@@ -1600,12 +1564,6 @@ abstract class AppLocalizations {
   /// **'No suggestions'**
   String get noSuggestions;
 
-  /// No description provided for @browseCategories.
-  ///
-  /// In en, this message translates to:
-  /// **'Browse Categories'**
-  String get browseCategories;
-
   /// No description provided for @liveSearchSection.
   ///
   /// In en, this message translates to:
@@ -1623,36 +1581,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update results as you type instead of showing a dropdown'**
   String get liveSearchSubtitle;
-
-  /// No description provided for @categoryMadeForYou.
-  ///
-  /// In en, this message translates to:
-  /// **'Made For You'**
-  String get categoryMadeForYou;
-
-  /// No description provided for @categoryNewReleases.
-  ///
-  /// In en, this message translates to:
-  /// **'New Releases'**
-  String get categoryNewReleases;
-
-  /// No description provided for @categoryTopRated.
-  ///
-  /// In en, this message translates to:
-  /// **'Top Rated'**
-  String get categoryTopRated;
-
-  /// No description provided for @categoryGenres.
-  ///
-  /// In en, this message translates to:
-  /// **'Genres'**
-  String get categoryGenres;
-
-  /// No description provided for @categoryFavorites.
-  ///
-  /// In en, this message translates to:
-  /// **'Favorites'**
-  String get categoryFavorites;
 
   /// No description provided for @categoryRadio.
   ///
@@ -2829,30 +2757,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Songs you play will appear here'**
   String get songsWillAppearHere;
-
-  /// Sort option: artist ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Artist (A-Z)'**
-  String get sortByArtistAZ;
-
-  /// Sort option: artist descending
-  ///
-  /// In en, this message translates to:
-  /// **'Artist (Z-A)'**
-  String get sortByArtistZA;
-
-  /// Sort option: album ascending
-  ///
-  /// In en, this message translates to:
-  /// **'Album (A-Z)'**
-  String get sortByAlbumAZ;
-
-  /// Sort option: album descending
-  ///
-  /// In en, this message translates to:
-  /// **'Album (Z-A)'**
-  String get sortByAlbumZA;
 
   /// Sort option: recently added
   ///
@@ -5397,12 +5301,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No new releases'**
   String get noNewReleases;
-
-  /// Tooltip to download an album
-  ///
-  /// In en, this message translates to:
-  /// **'Download album'**
-  String get downloadAlbum;
 
   /// Album duration formatted as minutes only
   ///

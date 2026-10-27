@@ -436,15 +436,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sortByArtist => 'Artiste';
 
   @override
-  String get sortByAlbum => 'Album';
-
-  @override
-  String get sortByDate => 'Date';
-
-  @override
-  String get sortByDuration => 'Durée';
-
-  @override
   String get ascending => 'Croissant';
 
   @override
@@ -470,12 +461,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get allSongs => 'Tous les titres';
-
-  @override
-  String get allAlbums => 'Tous les albums';
-
-  @override
-  String get allArtists => 'Tous les artistes';
 
   @override
   String trackNumber(int number) {
@@ -735,9 +720,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get newPlaylist => 'Nouvelle Playlist';
 
   @override
-  String get undo => 'Undo';
-
-  @override
   String get playlistName => 'Nom de la liste de lecture';
 
   @override
@@ -802,9 +784,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get noSuggestions => 'Aucune suggestion';
 
   @override
-  String get browseCategories => 'Parcourir les catégories';
-
-  @override
   String get liveSearchSection => 'Rechercher';
 
   @override
@@ -813,21 +792,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get liveSearchSubtitle =>
       'Mettre à jour les résultats lorsque vous écrivez au lieu d\'afficher une liste déroulante';
-
-  @override
-  String get categoryMadeForYou => 'Fait pour vous';
-
-  @override
-  String get categoryNewReleases => 'Nouvelles sorties';
-
-  @override
-  String get categoryTopRated => 'Les mieux notés';
-
-  @override
-  String get categoryGenres => 'Genres';
-
-  @override
-  String get categoryFavorites => 'Favoris';
 
   @override
   String get categoryRadio => 'Radio';
@@ -1471,18 +1435,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get songsWillAppearHere =>
       'Les pistes que vous jouez apparaîtront ici';
-
-  @override
-  String get sortByArtistAZ => 'Artiste (A-Z)';
-
-  @override
-  String get sortByArtistZA => 'Artiste (Z-A)';
-
-  @override
-  String get sortByAlbumAZ => 'Album (A-Z)';
-
-  @override
-  String get sortByAlbumZA => 'Album (Z-A)';
 
   @override
   String get recentlyAdded => 'Récemment Ajouté';
@@ -2966,9 +2918,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get noNewReleases => 'No new releases';
-
-  @override
-  String get downloadAlbum => 'Download album';
 
   @override
   String durationMinutesOnly(int minutes) {

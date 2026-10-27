@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import '../models/song.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/subsonic_service.dart';
@@ -9,6 +10,10 @@ import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/luobo/luobo_toast.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/artist_stats.dart';
+import '../widgets/luobo/list_rows.dart';
+import '../widgets/luobo/multi_select.dart';
+import '../widgets/luobo/song_divider.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import 'artist_screen.dart';
@@ -28,6 +33,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
+  final _resultPageController = PageController();
   final _focusNode = FocusNode();
   SearchResult? _searchResult;
   SearchResult? _autocompleteSuggestions;
@@ -41,6 +47,10 @@ class _SearchScreenState extends State<SearchScreen> {
   /// 搜索历史（fnos v5_0016：chips 流式换行 + 垃圾桶清空，本地持久化）。
   final _historyStore = SearchHistoryStore();
   List<String> _history = [];
+
+  /// 结果分段（fnos v8_0022：单曲 / 专辑 / 歌手 三 tab，带条数）。
+  int _resultTab = 0;
+
 
   @override
   void initState() {
@@ -74,6 +84,7 @@ class _SearchScreenState extends State<SearchScreen> {
         .liveSearchNotifier
         .removeListener(_onLiveSearchChanged);
     _searchController.dispose();
+    _resultPageController.dispose();
     _focusNode.dispose();
     _debounceTimer?.cancel();
     super.dispose();
@@ -162,7 +173,11 @@ class _SearchScreenState extends State<SearchScreen> {
       _isSearching = true;
       _query = query;
       _showSuggestions = false;
+      _resultTab = 0;
     });
+    if (_resultPageController.hasClients) {
+      _resultPageController.jumpToPage(0);
+    }
 
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
@@ -329,7 +344,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                 )
               else if (_searchResult != null && !_searchResult!.isEmpty)
-                SliverToBoxAdapter(child: _buildSearchResults())
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: _buildSearchResults(),
+                )
               else if (_query.isNotEmpty && _searchResult?.isEmpty == true)
                 SliverFillRemaining(
                   child: Center(
@@ -375,57 +393,226 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchResults() {
     final result = _searchResult!;
+    final l10n = AppLocalizations.of(context)!;
+    final tabs = <(String, int)>[
+      (l10n.songs, result.songs.length),
+      (l10n.albums, result.albums.length),
+      (l10n.artists, result.artists.length),
+    ];
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (result.artists.isNotEmpty) ...[
-          SectionHeader(title: AppLocalizations.of(context)!.artists),
-          ...result.artists.take(5).map(
-                (artist) => ArtistTile(
-                  artist: artist,
-                  onTap: () => NavigationHelper.push(
-                    context,
-                    ArtistScreen(artistId: artist.id),
-                  ),
-                ),
-              ),
-          const SizedBox(height: 16),
-        ],
-        if (result.albums.isNotEmpty) ...[
-          HorizontalScrollSection(
-            title: AppLocalizations.of(context)!.albums,
-            children: result.albums
-                .take(10)
-                .map(
-                  (album) => AlbumCard(
-                    album: album,
-                    size: 150,
-                    onTap: () => NavigationHelper.push(
-                      context,
-                      AlbumScreen(albumId: album.id),
-                    ),
-                  ),
-                )
-                .toList(),
+        _buildResultTabBar(tabs),
+        Expanded(
+          child: PageView(
+            controller: _resultPageController,
+            onPageChanged: (i) => setState(() => _resultTab = i),
+            children: [
+              _buildSongsResultPage(result),
+              _buildAlbumsResultPage(result),
+              _buildArtistsResultPage(result),
+            ],
           ),
-          const SizedBox(height: 16),
-        ],
-        if (result.songs.isNotEmpty) ...[
-          SectionHeader(title: AppLocalizations.of(context)!.songs),
-          ...result.songs.asMap().entries.map(
-                (entry) => SongTile(
-                  song: entry.value,
-                  playlist: result.songs,
-                  index: entry.key,
-                  showArtist: true,
-                  showAlbum: true,
-                ),
-              ),
-        ],
-        const SizedBox(height: 100),
+        ),
       ],
     );
+  }
+
+  /// 结果分段控件（fnos v8_0022）：文字 16/600 + 右上角小号条数，
+  /// 选中项下方 2dp 玫红短横线；点击/左右滑动都可切换。
+  Widget _buildResultTabBar(List<(String, int)> tabs) {
+    final c = LuoboColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      child: Row(
+        children: [
+          for (var i = 0; i < tabs.length; i++) ...[
+            if (i > 0) const SizedBox(width: 24),
+            GestureDetector(
+              onTap: () {
+                setState(() => _resultTab = i);
+                if (_resultPageController.hasClients) {
+                  _resultPageController.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tabs[i].$1,
+                        style: LuoboType.body.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: _resultTab == i ? c.fg : c.fg2,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${tabs[i].$2}',
+                        style: LuoboType.caption.copyWith(
+                          fontSize: 10,
+                          color: _resultTab == i ? LuoboAccent.accent : c.fg3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    height: 2,
+                    width: _resultTab == i ? 22 : 0,
+                    decoration: BoxDecoration(
+                      color: LuoboAccent.accent,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Song> get _sortedResultSongs =>
+      _searchResult?.songs ?? const <Song>[];
+
+  /// 单曲 tab：玫红圆形播放钮（左）+ 排序（右）→ 64dp 歌曲行。
+  Widget _buildSongsResultPage(SearchResult result) {
+    final songs = _sortedResultSongs;
+    if (songs.isEmpty) return const SizedBox.shrink();
+    final c = LuoboColors.of(context);
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 10, bottom: 100),
+      itemCount: songs.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    _recordResultTap();
+                    Provider.of<PlayerProvider>(context, listen: false)
+                        .playSong(songs.first, playlist: songs, startIndex: 0);
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: LuoboAccent.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.play_fill,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // 2026-10-23：这里不是排序，是**多选**（与全部歌曲页一致）。
+                GestureDetector(
+                  onTap: () => showMultiSelectSheet(context, songs: songs),
+                  child: Icon(
+                    Icons.checklist_rounded,
+                    size: 22,
+                    color: c.fg2,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        final i = index - 1;
+        return Column(
+          children: [
+            SongTile(
+              song: songs[i],
+              playlist: songs,
+              index: i,
+              onTap: () {
+                _recordResultTap();
+                Provider.of<PlayerProvider>(context, listen: false).playSong(
+                  songs[i],
+                  playlist: songs,
+                  startIndex: i,
+                );
+              },
+            ),
+            if (i < songs.length - 1) const LuoboSongDivider(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAlbumsResultPage(SearchResult result) {
+    if (result.albums.isEmpty) return const SizedBox.shrink();
+    // 与专辑列表页同款行式（不再用网格）。
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8, bottom: 100),
+      itemCount: result.albums.length,
+      itemBuilder: (context, index) {
+        return Column(
+          children: [
+            AlbumListTile(
+              album: result.albums[index],
+              onBeforeNavigate: _recordResultTap,
+            ),
+            if (index < result.albums.length - 1) const LuoboSongDivider(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildArtistsResultPage(SearchResult result) {
+    if (result.artists.isEmpty) return const SizedBox.shrink();
+    final libraryProvider =
+        Provider.of<LibraryProvider>(context, listen: false);
+    final songCounts = ArtistStats.songCounts(result.artists, libraryProvider);
+    final albumCounts = ArtistStats.albumCounts(result.artists, libraryProvider);
+    // 与歌手列表页同款行式（头像 + 名字 + 「N 首歌 · M 张专辑」）。
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8, bottom: 100),
+      itemCount: result.artists.length,
+      itemBuilder: (context, index) {
+        final artist = result.artists[index];
+        return Column(
+          children: [
+            ArtistListTile(
+              artist: artist,
+              songCount: songCounts[artist.id] ?? 0,
+              albumCount: albumCounts[artist.id] ?? 0,
+              onBeforeNavigate: _recordResultTap,
+            ),
+            if (index < result.artists.length - 1) const LuoboSongDivider(),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 点任意搜索结果时把当前搜索词落进历史（用户 2026-10-23：
+  /// 实时搜索下一个字就出结果、但不会按回车，历史里就丢了）。
+  void _recordResultTap() {
+    final query = _query.trim();
+    if (query.isEmpty) return;
+    _historyStore.add(query).then((list) {
+      if (mounted) setState(() => _history = list);
+    });
   }
 
   /// 搜索历史区块（fnos v5_0016）：标题 + 垃圾桶 + chips 流式换行。

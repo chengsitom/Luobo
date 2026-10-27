@@ -436,15 +436,6 @@ class AppLocalizationsSq extends AppLocalizations {
   String get sortByArtist => 'Artist';
 
   @override
-  String get sortByAlbum => 'Album';
-
-  @override
-  String get sortByDate => 'Data';
-
-  @override
-  String get sortByDuration => 'Kohëzgjatja';
-
-  @override
   String get ascending => 'Rritëse';
 
   @override
@@ -470,12 +461,6 @@ class AppLocalizationsSq extends AppLocalizations {
 
   @override
   String get allSongs => 'Të gjitha këngët';
-
-  @override
-  String get allAlbums => 'Të gjithë albumet';
-
-  @override
-  String get allArtists => 'Të gjithë artistët';
 
   @override
   String trackNumber(int number) {
@@ -736,9 +721,6 @@ class AppLocalizationsSq extends AppLocalizations {
   String get newPlaylist => 'Playlisti e re';
 
   @override
-  String get undo => 'Undo';
-
-  @override
   String get playlistName => 'Emri i listës t\'kngve';
 
   @override
@@ -803,9 +785,6 @@ class AppLocalizationsSq extends AppLocalizations {
   String get noSuggestions => 'S\'ka sugjerime';
 
   @override
-  String get browseCategories => 'Shfleto Kategoritë';
-
-  @override
   String get liveSearchSection => 'Kërko';
 
   @override
@@ -814,21 +793,6 @@ class AppLocalizationsSq extends AppLocalizations {
   @override
   String get liveSearchSubtitle =>
       'Përditëso rezultatet n\'kohë reale kuer t\'shkrush n\'vend se me qit nji listë t\'poshtme';
-
-  @override
-  String get categoryMadeForYou => 'Kriju për ty';
-
-  @override
-  String get categoryNewReleases => 'Shtimet e reja';
-
-  @override
-  String get categoryTopRated => 'Më të vlerësuarat';
-
-  @override
-  String get categoryGenres => 'Zhanret';
-
-  @override
-  String get categoryFavorites => 'Të preferuarat';
 
   @override
   String get categoryRadio => 'Radio';
@@ -1469,18 +1433,6 @@ class AppLocalizationsSq extends AppLocalizations {
 
   @override
   String get songsWillAppearHere => 'Songs you play will appear here';
-
-  @override
-  String get sortByArtistAZ => 'Artist (A-Z)';
-
-  @override
-  String get sortByArtistZA => 'Artist (Z-A)';
-
-  @override
-  String get sortByAlbumAZ => 'Album (A-Z)';
-
-  @override
-  String get sortByAlbumZA => 'Album (Z-A)';
 
   @override
   String get recentlyAdded => 'Recently Added';
@@ -2953,9 +2905,6 @@ class AppLocalizationsSq extends AppLocalizations {
 
   @override
   String get noNewReleases => 'No new releases';
-
-  @override
-  String get downloadAlbum => 'Download album';
 
   @override
   String durationMinutesOnly(int minutes) {

@@ -7,10 +7,10 @@ import '../widgets/widgets.dart';
 import '../utils/navigation_helper.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/luobo/anchored_menu.dart';
+import '../widgets/luobo/list_rows.dart';
 import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
-import 'album_screen.dart';
 import 'search_screen.dart';
 
 class AlbumsScreen extends StatefulWidget {
@@ -237,8 +237,8 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           : Builder(
               builder: (context) {
                 final sorted = _sortedAlbums;
-                // 整页滚动：计数行作为第 0 项，随列表一起滚（与歌手/全部歌曲
-                // 一致，内容从悬浮圆钮下方流过）。
+                // 行式列表（与搜索结果「专辑」tab 共用 AlbumListTile）：
+                // 计数行作为列表第 0 项，随整页滚动。
                 return ListView.builder(
                   controller: _scrollController,
                   padding: EdgeInsets.only(top: topInset, bottom: 100),
@@ -287,7 +287,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                     }
                     return Column(
                       children: [
-                        _AlbumRow(album: sorted[i]),
+                        AlbumListTile(album: sorted[i]),
                         if (i < sorted.length - 1) const LuoboSongDivider(),
                       ],
                     );
@@ -295,76 +295,6 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 );
               },
             ),
-    );
-  }
-}
-
-
-/// 专辑行（64dp，与歌手列表同款）：方形封面 48 + 名称 + 「歌手 · 年份」+ chevron。
-class _AlbumRow extends StatelessWidget {
-  final Album album;
-
-  const _AlbumRow({required this.album});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = LuoboColors.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final subtitle = [
-      if ((album.artist ?? '').isNotEmpty) album.artist!,
-      if (album.year != null) l10n.albumYear(album.year!),
-    ].join(' · ');
-
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => AlbumScreen(albumId: album.id)),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              AlbumArtwork(
-                coverArt: album.coverArt,
-                size: 48,
-                borderRadius: 6,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      album.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: LuoboType.body.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: c.fg,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: LuoboType.caption.copyWith(color: c.fg2),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, size: 18, color: c.fg3),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

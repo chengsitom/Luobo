@@ -2892,17 +2892,29 @@ Future<void> showQueueSheet(BuildContext context) {
 /// 只用 PlayerProvider 的公开开关（`toggleShuffle` / `toggleRepeat`），
 /// 播放页控制栏与队列浮层共用。
 void cyclePlaybackMode(PlayerProvider provider) {
+  // 三档：随机播放 → 列表循环 → 单曲循环 → 随机播放。
+  // ⚠️ 必须**精确设置**目标 repeat：只调 `toggleRepeat`（off→all→one→off）
+  // 在「随机播放 + 单曲循环」组合下会落到 off，导致「列表循环」这一档永远
+  // 到不了（用户 2026-10-23 反馈）。
   if (provider.shuffleEnabled) {
     provider.toggleShuffle();
-    if (provider.repeatMode != RepeatMode.all) provider.toggleRepeat();
+    _setRepeatMode(provider, RepeatMode.all);
     return;
   }
-  if (provider.repeatMode == RepeatMode.all) {
-    provider.toggleRepeat(); // → 单曲循环
+  if (provider.repeatMode == RepeatMode.one) {
+    _setRepeatMode(provider, RepeatMode.off);
+    provider.toggleShuffle();
     return;
   }
-  if (provider.repeatMode == RepeatMode.one) provider.toggleRepeat(); // → 关
-  provider.toggleShuffle(); // → 随机播放
+  _setRepeatMode(provider, RepeatMode.one);
+}
+
+void _setRepeatMode(PlayerProvider provider, RepeatMode target) {
+  var guard = 0;
+  while (provider.repeatMode != target && guard < 3) {
+    provider.toggleRepeat();
+    guard++;
+  }
 }
 
 /// 播放队列浮层（对齐 fnos `v4_0002` / `v5_0048` / `v6_0096` 的**视觉**，
@@ -2919,8 +2931,10 @@ class QueueSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
     final l10n = AppLocalizations.of(context)!;
+    // 2026-10-23：用户要求参考飞牛的高度比例（v4_0002 实测弹层占屏高
+    // ≈75.5%）。这里取 72%（略低于飞牛，保留顶部可点区域），下限 420。
     final height =
-        (MediaQuery.sizeOf(context).height * 0.52).clamp(320.0, 480.0);
+        (MediaQuery.sizeOf(context).height * 0.72).clamp(420.0, 640.0);
 
     return SizedBox(
       height: height,

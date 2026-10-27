@@ -460,18 +460,6 @@
   "@sortByArtist": {
     "description": "Sort by artist option"
   },
-  "sortByAlbum": "专辑",
-  "@sortByAlbum": {
-    "description": "Sort by album option"
-  },
-  "sortByDate": "日期",
-  "@sortByDate": {
-    "description": "Sort by date option"
-  },
-  "sortByDuration": "时长",
-  "@sortByDuration": {
-    "description": "Sort by duration option"
-  },
   "ascending": "升序",
   "@ascending": {
     "description": "Ascending sort order"
@@ -507,14 +495,6 @@
   "allSongs": "全部歌曲",
   "@allSongs": {
     "description": "All songs title"
-  },
-  "allAlbums": "全部专辑",
-  "@allAlbums": {
-    "description": "All albums title"
-  },
-  "allArtists": "全部艺术家",
-  "@allArtists": {
-    "description": "All artists title"
   },
   "trackNumber": "第 {number} 首",
   "@trackNumber": {
@@ -754,10 +734,6 @@
   "playlist": "歌单",
   "internetRadio": "网络电台",
   "newPlaylist": "新建歌单",
-  "undo": "撤销",
-  "@undo": {
-    "description": "轻提示「撤销」动作（可逆操作，如添加到歌单）"
-  },
   "playlistName": "歌单名称",
   "playlistNameRule": "名称不能包含 / \\ : * ? < > |",
   "create": "创建",
@@ -812,12 +788,6 @@
   "clearSearchHistory": "清空搜索历史",
   "tryDifferentSearch": "尝试不同的搜索",
   "noSuggestions": "无建议",
-  "browseCategories": "浏览分类",
-  "categoryMadeForYou": "为你制作",
-  "categoryNewReleases": "新歌首发",
-  "categoryTopRated": "评分最高",
-  "categoryGenres": "分类",
-  "categoryFavorites": "收藏",
   "categoryRadio": "电台",
   "@_SETTINGS_GENERAL": {},
   "settingsTitle": "设置",
@@ -1224,22 +1194,6 @@
     "description": "Empty state subtitle on the history screen"
   },
   "@_SORT_OPTIONS": {},
-  "sortByArtistAZ": "艺术家 (A-Z)",
-  "@sortByArtistAZ": {
-    "description": "Sort option: artist ascending"
-  },
-  "sortByArtistZA": "艺术家 (Z-A)",
-  "@sortByArtistZA": {
-    "description": "Sort option: artist descending"
-  },
-  "sortByAlbumAZ": "专辑 (A-Z)",
-  "@sortByAlbumAZ": {
-    "description": "Sort option: album ascending"
-  },
-  "sortByAlbumZA": "专辑 (Z-A)",
-  "@sortByAlbumZA": {
-    "description": "Sort option: album descending"
-  },
   "recentlyAdded": "最近添加",
   "@recentlyAdded": {
     "description": "Sort option: recently added"
@@ -2463,8 +2417,6 @@
   "@noNewReleases": { "description": "没有新发行时的空状态" },
   "noTopRatedAlbums": "暂无高分专辑",
   "@noTopRatedAlbums": { "description": "没有高分专辑时的空状态" },
-  "downloadAlbum": "下载专辑",
-  "@downloadAlbum": { "description": "下载专辑的提示" },
   "durationHoursMinutes": "{hours} 小时 {minutes} 分钟",
   "@durationHoursMinutes": { "description": "专辑时长（小时和分钟）", "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
   "durationMinutesOnly": "{minutes} 分钟",

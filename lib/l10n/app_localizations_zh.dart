@@ -433,15 +433,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sortByArtist => '艺术家';
 
   @override
-  String get sortByAlbum => '专辑';
-
-  @override
-  String get sortByDate => '日期';
-
-  @override
-  String get sortByDuration => '时长';
-
-  @override
   String get ascending => '升序';
 
   @override
@@ -467,12 +458,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get allSongs => '全部歌曲';
-
-  @override
-  String get allAlbums => '全部专辑';
-
-  @override
-  String get allArtists => '全部艺术家';
 
   @override
   String trackNumber(int number) {
@@ -725,9 +710,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get newPlaylist => '新建歌单';
 
   @override
-  String get undo => '撤销';
-
-  @override
   String get playlistName => '歌单名称';
 
   @override
@@ -792,9 +774,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noSuggestions => '无建议';
 
   @override
-  String get browseCategories => '浏览分类';
-
-  @override
   String get liveSearchSection => '搜索';
 
   @override
@@ -802,21 +781,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get liveSearchSubtitle => '输入时实时更新结果，而非显示下拉列表';
-
-  @override
-  String get categoryMadeForYou => '为你制作';
-
-  @override
-  String get categoryNewReleases => '新歌首发';
-
-  @override
-  String get categoryTopRated => '评分最高';
-
-  @override
-  String get categoryGenres => '分类';
-
-  @override
-  String get categoryFavorites => '收藏';
 
   @override
   String get categoryRadio => '电台';
@@ -1449,18 +1413,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get songsWillAppearHere => '您播放的歌曲将显示在这里';
-
-  @override
-  String get sortByArtistAZ => '艺术家 (A-Z)';
-
-  @override
-  String get sortByArtistZA => '艺术家 (Z-A)';
-
-  @override
-  String get sortByAlbumAZ => '专辑 (A-Z)';
-
-  @override
-  String get sortByAlbumZA => '专辑 (Z-A)';
 
   @override
   String get recentlyAdded => '最近添加';
@@ -2848,9 +2800,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noNewReleases => '暂无新发行';
-
-  @override
-  String get downloadAlbum => '下载专辑';
 
   @override
   String durationMinutesOnly(int minutes) {

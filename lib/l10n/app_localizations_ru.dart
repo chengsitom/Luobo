@@ -436,15 +436,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sortByArtist => 'Исполнитель';
 
   @override
-  String get sortByAlbum => 'Альбом';
-
-  @override
-  String get sortByDate => 'Дата';
-
-  @override
-  String get sortByDuration => 'Длительность';
-
-  @override
   String get ascending => 'По возрастанию';
 
   @override
@@ -470,12 +461,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get allSongs => 'Все песни';
-
-  @override
-  String get allAlbums => 'Все альбомы';
-
-  @override
-  String get allArtists => 'Все исполнители';
 
   @override
   String trackNumber(int number) {
@@ -740,9 +725,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get newPlaylist => 'Новый плейлист';
 
   @override
-  String get undo => 'Undo';
-
-  @override
   String get playlistName => 'Название плейлиста';
 
   @override
@@ -807,9 +789,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noSuggestions => 'Нет подходящих вариантов';
 
   @override
-  String get browseCategories => 'Просмотреть категории';
-
-  @override
   String get liveSearchSection => 'Поиск';
 
   @override
@@ -818,21 +797,6 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get liveSearchSubtitle =>
       'Сразу показывать результаты при вводе текста';
-
-  @override
-  String get categoryMadeForYou => 'Подборка для вас';
-
-  @override
-  String get categoryNewReleases => 'Новые выпуски';
-
-  @override
-  String get categoryTopRated => 'С лучшим рейтингом';
-
-  @override
-  String get categoryGenres => 'Жанры';
-
-  @override
-  String get categoryFavorites => 'Избранное';
 
   @override
   String get categoryRadio => 'Радио';
@@ -1472,18 +1436,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get songsWillAppearHere => 'Здесь будут появляться прослушанные песни';
-
-  @override
-  String get sortByArtistAZ => 'Исполнитель (А-Я)';
-
-  @override
-  String get sortByArtistZA => 'Исполнитель (Я-А)';
-
-  @override
-  String get sortByAlbumAZ => 'Альбом (А-Я)';
-
-  @override
-  String get sortByAlbumZA => 'Альбом (Я-А)';
 
   @override
   String get recentlyAdded => 'Недавно добавлено';
@@ -2959,9 +2911,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get noNewReleases => 'No new releases';
-
-  @override
-  String get downloadAlbum => 'Download album';
 
   @override
   String durationMinutesOnly(int minutes) {
