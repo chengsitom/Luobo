@@ -51,6 +51,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recentlyPlayed => '最近播放';
 
   @override
+  String get recentlyListenedAlbums => '最近听的专辑';
+
+  @override
   String get yourPlaylists => '你的歌单';
 
   @override
@@ -523,6 +526,65 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get audiobooks => '有声书';
+
+  @override
+  String get myBookshelf => '我的书架';
+
+  @override
+  String booksCount(int count) {
+    return '$count 本';
+  }
+
+  @override
+  String listenedPercent(int percent) {
+    return '已听 $percent%';
+  }
+
+  @override
+  String remainingTime(String time) {
+    return '剩 $time';
+  }
+
+  @override
+  String get replayChapter => '重播本章';
+
+  @override
+  String get chapterFilter => '筛选';
+
+  @override
+  String get playFromHere => '从这里播放';
+
+  @override
+  String get markListened => '标记为已听';
+
+  @override
+  String get markUnlistened => '标记为未听';
+
+  @override
+  String get filterUnlistened => '未听';
+
+  @override
+  String get filterListened => '已听';
+
+  @override
+  String jumpBackTo(int order) {
+    return '回到第 $order 集';
+  }
+
+  @override
+  String jumpToEpisode(int order) {
+    return '跳到第 $order 集';
+  }
+
+  @override
+  String searchResultsCount(int count) {
+    return '找到 $count 个结果';
+  }
+
+  @override
+  String chapterOfTotal(int current, int total) {
+    return '第 $current 章 / 共 $total 章';
+  }
 
   @override
   String playedTo(String position) {

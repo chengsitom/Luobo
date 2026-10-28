@@ -493,7 +493,10 @@ class _SearchScreenState extends State<SearchScreen> {
     if (songs.isEmpty) return const SizedBox.shrink();
     final c = LuoboColors.of(context);
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 10, bottom: 100),
+      padding: EdgeInsets.only(
+        top: 10,
+        bottom: LuoboSpacing.pageBottomWithStrip(context),
+      ),
       itemCount: songs.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
@@ -565,7 +568,10 @@ class _SearchScreenState extends State<SearchScreen> {
     if (result.albums.isEmpty) return const SizedBox.shrink();
     // 与专辑列表页同款行式（不再用网格）。
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 100),
+      padding: EdgeInsets.only(
+        top: 8,
+        bottom: LuoboSpacing.pageBottomWithStrip(context),
+      ),
       itemCount: result.albums.length,
       itemBuilder: (context, index) {
         return Column(
@@ -589,7 +595,10 @@ class _SearchScreenState extends State<SearchScreen> {
     final albumCounts = ArtistStats.albumCounts(result.artists, libraryProvider);
     // 与歌手列表页同款行式（头像 + 名字 + 「N 首歌 · M 张专辑」）。
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 100),
+      padding: EdgeInsets.only(
+        top: 8,
+        bottom: LuoboSpacing.pageBottomWithStrip(context),
+      ),
       itemCount: result.artists.length,
       itemBuilder: (context, index) {
         final artist = result.artists[index];

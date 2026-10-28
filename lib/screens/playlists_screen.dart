@@ -80,7 +80,7 @@ class PlaylistsScreen extends StatelessWidget {
           : ListView.builder(
               padding: EdgeInsets.only(
                 top: listTopInset(context),
-                bottom: 100,
+                bottom: LuoboSpacing.pageBottomWithStrip(context),
               ),
               itemCount: libraryProvider.playlists.length + 1,
               itemBuilder: (context, index) {

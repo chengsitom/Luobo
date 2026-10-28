@@ -5,6 +5,7 @@ import '../providers/library_provider.dart';
 import '../services/subsonic_service.dart';
 import '../widgets/widgets.dart';
 import '../utils/navigation_helper.dart';
+import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/luobo/anchored_menu.dart';
 import '../widgets/luobo/list_rows.dart';
@@ -54,6 +55,15 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     return list;
   }
 
+  /// 排序面板统一：**选中字段**显示升/降序箭头（与歌单/收藏/全部歌曲一致）。
+  Widget? _directionIcon(_AlbumSortField field) => field == _sortField
+      ? Icon(
+          _sortAscending ? AppIcons.arrowUp : AppIcons.arrowDown,
+          size: 15,
+          color: LuoboAccent.accent,
+        )
+      : null;
+
   Future<void> _showSortMenu() async {
     final l10n = AppLocalizations.of(context)!;
     final picked = await showLuoboAnchoredMenu<_AlbumSortField>(
@@ -64,14 +74,17 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         LuoboAnchoredMenuItem(
           value: _AlbumSortField.name,
           label: l10n.sortByName,
+          trailing: _directionIcon(_AlbumSortField.name),
         ),
         LuoboAnchoredMenuItem(
           value: _AlbumSortField.artist,
           label: l10n.sortByArtist,
+          trailing: _directionIcon(_AlbumSortField.artist),
         ),
         LuoboAnchoredMenuItem(
           value: _AlbumSortField.year,
           label: l10n.year,
+          trailing: _directionIcon(_AlbumSortField.year),
         ),
       ],
     );
@@ -230,7 +243,10 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       ),
       body: _albums.isEmpty && _isLoading
           ? ListView.builder(
-              padding: EdgeInsets.only(top: topInset, bottom: 100),
+              padding: EdgeInsets.only(
+                top: topInset,
+                bottom: LuoboSpacing.pageBottomWithStrip(context),
+              ),
               itemCount: 10,
               itemBuilder: (context, index) => const SongTileShimmer(),
             )
@@ -241,7 +257,10 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 // 计数行作为列表第 0 项，随整页滚动。
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: EdgeInsets.only(top: topInset, bottom: 100),
+                  padding: EdgeInsets.only(
+                    top: topInset,
+                    bottom: LuoboSpacing.pageBottomWithStrip(context),
+                  ),
                   itemCount: sorted.length + 1 + (_hasMore ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == 0) {

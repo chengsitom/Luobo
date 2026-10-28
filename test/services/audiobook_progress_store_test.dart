@@ -176,4 +176,131 @@ void main() {
       );
     });
   });
+
+  group('AudiobookProgress 扩展字段（2026-10-27）', () {
+    test('旧 JSON 缺新字段时不报错，listenedOrders 为空', () {
+      final legacy = <String, dynamic>{
+        'chapterOrder': 3,
+        'chapterId': 'abe_3',
+        'positionMs': 120000,
+        'completed': false,
+        'updatedAt': '2026-08-10T12:00:00.000Z',
+      };
+      final p = AudiobookProgress.fromJson('abk_1', legacy);
+      expect(p.chapterOrder, 3);
+      expect(p.chapterTitle, isNull);
+      expect(p.durationMs, isNull);
+      expect(p.episodeCount, isNull);
+      expect(p.listenedOrders, isEmpty);
+      // 旧数据按 chapterOrder-1 估算，不崩。
+      expect(p.listenedCount(totalEpisodes: 10), 2);
+      expect(p.progressRatio(totalEpisodes: 10), closeTo(0.2, 1e-9));
+    });
+
+    test('新字段 toJson/fromJson 往返一致；空集合不落键', () {
+      final p = AudiobookProgress(
+        audiobookId: 'abk_1',
+        chapterOrder: 4,
+        chapterId: 'abe_4',
+        positionMs: 30000,
+        durationMs: 60000,
+        episodeCount: 10,
+        chapterTitle: '第 4 章 风起',
+        listenedOrders: const [1, 2, 3],
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      final restored = AudiobookProgress.fromJson('abk_1', p.toJson());
+      expect(restored.chapterTitle, '第 4 章 风起');
+      expect(restored.durationMs, 60000);
+      expect(restored.episodeCount, 10);
+      expect(restored.listenedOrders, [1, 2, 3]);
+
+      final empty = AudiobookProgress(
+        audiobookId: 'abk_2',
+        chapterOrder: 1,
+        positionMs: 0,
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      expect(empty.toJson().containsKey('listenedOrders'), false);
+    });
+
+    test('progressRatio：真实集合 + 当前章小数，排除当前章重复计', () {
+      final p = AudiobookProgress(
+        audiobookId: 'abk_1',
+        chapterOrder: 4,
+        positionMs: 30000,
+        durationMs: 60000,
+        episodeCount: 10,
+        // 当前章 4 也在集合里（手动标记）→ 不能重复计。
+        listenedOrders: const [1, 2, 3, 4],
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      // (3 + 0.5) / 10
+      expect(p.progressRatio(), closeTo(0.35, 1e-9));
+      expect(p.listenedCount(), 4);
+    });
+
+    test('progressRatio：completed → 1，缺总章数 → null，越界钳制', () {
+      final done = AudiobookProgress(
+        audiobookId: 'a',
+        chapterOrder: 10,
+        positionMs: 0,
+        completed: true,
+        episodeCount: 10,
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      expect(done.progressRatio(), 1);
+
+      final unknown = AudiobookProgress(
+        audiobookId: 'a',
+        chapterOrder: 2,
+        positionMs: 0,
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      expect(unknown.progressRatio(), isNull);
+
+      final overflow = AudiobookProgress(
+        audiobookId: 'a',
+        chapterOrder: 2,
+        positionMs: 999999,
+        durationMs: 60000,
+        episodeCount: 2,
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      expect(overflow.progressRatio(), 1.0);
+    });
+
+    test('withListenedChapter 去重、升序、上限 500', () {
+      final base = AudiobookProgress(
+        audiobookId: 'a',
+        chapterOrder: 5,
+        positionMs: 0,
+        episodeCount: 600,
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      final once = base.withListenedChapter(3).withListenedChapter(2);
+      expect(once.listenedOrders, [2, 3]);
+      final dup = once.withListenedChapter(3);
+      expect(dup.listenedOrders, [2, 3]);
+
+      var many = base;
+      for (var i = 1; i <= 520; i++) {
+        many = many.withListenedChapter(i);
+      }
+      expect(many.listenedOrders.length, 500);
+      expect(many.listenedOrders.last, 520);
+    });
+
+    test('withoutListenedChapter 移除标记', () {
+      final p = AudiobookProgress(
+        audiobookId: 'a',
+        chapterOrder: 2,
+        positionMs: 0,
+        listenedOrders: const [1, 2, 3],
+        updatedAt: DateTime.utc(2026, 10, 27),
+      );
+      expect(p.withoutListenedChapter(2).listenedOrders, [1, 3]);
+      expect(p.withoutListenedChapter(99).listenedOrders, [1, 2, 3]);
+    });
+  });
 }

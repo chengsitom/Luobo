@@ -4,6 +4,7 @@ import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 
 /// 更新日志页：从 README.md 的「版本历史」章节提取内容，
 /// 去除 Markdown 语法符号后以纯文本 + 简单样式展示。
@@ -125,11 +126,10 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     // 顶栏净空必须在 Scaffold 之前算（`extendBodyBehindAppBar` 会把它叠进 body 的
     // `MediaQuery.padding.top`）。
     final topInset = listTopInset(context);
-    return Scaffold(
+    return ScrollRevealScaffold(
+      title: l10n.aboutLinkChangelog,
       backgroundColor:
           isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(title: l10n.aboutLinkChangelog),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _sections.isEmpty
@@ -144,7 +144,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                   ),
                 )
               : ListView.builder(
-                  padding: LuoboSpacing.scrollPadding(context, horizontal: 16, top: 12 + topInset, bottom: 32),
+                  padding: LuoboSpacing.scrollPadding(context,
+                      horizontal: 16, top: 12 + topInset, bottom: 32),
                   itemCount: _sections.length,
                   itemBuilder: (context, index) =>
                       _buildSection(context, _sections[index]),

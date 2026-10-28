@@ -61,7 +61,7 @@ class HomeHeroCard extends StatelessWidget {
 
   /// 文字块靠右（歌单卡，2026-10-24 用户要求）：
   /// - 标题 / 副标题整体移到**右下角**；
-  /// - 标题换行时**优先占满第二行**（第一行留短），见 [_HeroTitleText]。
+  /// - 标题换行走**智能断行**（断在分隔符 / 两行均衡），见 [_HeroTitleText]。
   final bool alignEnd;
 
   final VoidCallback? onTap;
@@ -208,15 +208,21 @@ class HomeHeroCard extends StatelessWidget {
   }
 }
 
-/// 卡面标题：默认普通省略；[alignEnd] + 可换行时走**「第二行优先占满」**断行。
+/// 卡面标题：默认普通省略；可换行（`titleMaxLines >= 2`）时走**智能断行**。
 ///
-/// 背景（2026-10-24 用户）：歌单名很长换行时，常规贪心换行是「第一行满、第二行
-/// 留短」，右对齐后右下角会缺一块。用户要求反过来 —— **第二行尽量占满、第一行
-/// 留短**。做法：`TextPainter` **从末尾往前**二分找「最大的、能放进一行的后缀」
-/// 当第二行，余下部分当第一行，显式插入 `\n` 交给右对齐渲染。
+/// 背景：常规贪心换行按宽度切，会把「xxx喜欢的音乐」从中间隔断（前一行满、后一行
+/// 只剩两个字），右对齐时右下角还会缺一块。2026-10-27 重写为：
 ///
-/// 英文/数字不劈在单词中间：分界点落在词内时向后找最近的空格（第二行会短一点）。
-/// 标题超过两行容量时退回普通两行省略。
+/// 1. 一行放得下 → **不拆**（长名字才有资格换两行）；
+/// 2. 两行也放不下 → 有间隔号就**只留 `·` 前的主标题**再重排（道理鱼「心动歌单」的
+///    「下班后的慢慢走·今日流行、华语、第1815辑」这种 20+ 字名字，卡面永远排不下），
+///    实在没有可用的分节符才退回普通两行省略；
+/// 3. 否则先用二分求出**可行分界区间**（前缀放得下 + 后缀放得下），再在区间内逐点
+///    打分挑最自然的分界：分隔符（空格 / `·` / 中英文标点 / 括号）之后 +10，
+///    中英交界 +8（`cheng / 喜欢的音乐`），把英文/数字单词劈开 −5，其余按两行宽度
+///    均衡度 `1 - |w1-w2|/maxWidth` 排序，同分取靠后（第一行更长）。
+///
+/// 结果显式插入 `\n` 交给 Text 渲染 —— 不依赖引擎的换行点，右对齐/左对齐都稳定。
 class _HeroTitleText extends StatelessWidget {
   const _HeroTitleText({
     required this.text,
@@ -233,14 +239,8 @@ class _HeroTitleText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final align = alignEnd ? TextAlign.right : TextAlign.left;
-    if (!alignEnd || maxLines < 2) {
-      return Text(
-        text,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-        textAlign: align,
-        style: style,
-      );
+    if (maxLines < 2) {
+      return _oneLine(text, align);
     }
 
     return LayoutBuilder(
@@ -263,71 +263,146 @@ class _HeroTitleText extends StatelessWidget {
         }
 
         // 一行放得下 → 不拆。
-        if (widthOf(text) <= maxWidth) {
-          return Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: align,
-            style: style,
-          );
-        }
+        if (widthOf(text) <= maxWidth) return _oneLine(text, align);
 
-        // 找**最小的分界点**（= 最长的第二行），使第二行能放进一行。
-        var lo = 1;
-        var hi = text.length;
-        var split = text.length; // 空后缀也算「放得下」，兜底
-        while (lo <= hi) {
-          final mid = (lo + hi) ~/ 2;
-          if (widthOf(text.substring(mid)) <= maxWidth) {
-            split = mid;
-            hi = mid - 1;
-          } else {
-            lo = mid + 1;
+        // 两行能排下 → 智能断行。
+        final split = _bestSplit(text, maxWidth, widthOf);
+        if (split != null) return _twoLines(text, split, align);
+
+        // 两行都排不下：靠「断行」救不了 —— 道理鱼「心动歌单」形如
+        // 「下班后的慢慢走·今日流行、华语、第1815辑」（21 字），151dp 卡两行只装得下
+        // 约 12 字，任何断法都会从词中间切断。退一步**只显示 `·` 前的主标题**
+        // （「今日流行、华语、第1815辑」是每日轮换的样板尾巴，信息价值低）；
+        // 主标题自己也排不下时才走普通两行省略。
+        final primary = _primarySegment(text);
+        if (primary != null) {
+          if (widthOf(primary) <= maxWidth) return _oneLine(primary, align);
+          final primarySplit = _bestSplit(primary, maxWidth, widthOf);
+          if (primarySplit != null) {
+            return _twoLines(primary, primarySplit, align);
           }
         }
 
-        var head = split > 0 ? text.substring(0, split).trimRight() : '';
-        var tail =
-            split < text.length ? text.substring(split).trimLeft() : '';
-
-        // 英文/数字别劈在单词中间：分界点在词内时向后找最近的空格
-        // （第二行会短一点，但可读性优先）；前提是第一行仍放得下。
-        if (split > 0 && split < text.length) {
-          final wordChar = RegExp(r'[A-Za-z0-9]');
-          final touchesWord = wordChar.hasMatch(text[split - 1]) &&
-              wordChar.hasMatch(text[split]);
-          if (touchesWord) {
-            final space = text.indexOf(' ', split);
-            if (space != -1) {
-              final newHead = text.substring(0, space).trimRight();
-              if (widthOf(newHead) <= maxWidth) {
-                head = newHead;
-                tail = text.substring(space).trimLeft();
-              }
-            }
-          }
-        }
-
-        // 第一行还放不下（标题超过两行的容量）→ 退回普通两行省略。
-        if (head.isEmpty || widthOf(head) > maxWidth) {
-          return Text(
-            text,
-            maxLines: maxLines,
-            overflow: TextOverflow.ellipsis,
-            textAlign: align,
-            style: style,
-          );
-        }
-
+        // 都不行 → 普通两行省略。
         return Text(
-          '$head\n$tail',
-          maxLines: 2,
+          text,
+          maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           textAlign: align,
           style: style,
         );
       },
     );
+  }
+
+  Widget _oneLine(String s, TextAlign align) => Text(
+        s,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: align,
+        style: style,
+      );
+
+  Widget _twoLines(String s, int split, TextAlign align) => Text(
+        '${s.substring(0, split).trimRight()}\n'
+        '${s.substring(split).trimLeft()}',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: align,
+        style: style,
+      );
+
+  /// 「主标题·今天的分类、期号」→ `主标题`。间隔号太靠前 / 太靠后都不当分节符。
+  static String? _primarySegment(String s) {
+    for (final sep in const ['·', '｜', '|']) {
+      final i = s.indexOf(sep);
+      if (i >= 2 && i < s.length - 1) {
+        final head = s.substring(0, i).trim();
+        if (head.isNotEmpty) return head;
+      }
+    }
+    return null;
+  }
+
+  /// 在可行区间里挑「最自然」的分界点，返回分界下标；两行排不下返回 null。
+  ///
+  /// 打分：断在分隔符（空格 / 中英文标点 / 间隔号）之后 **+10** ＞ 一切；把英文/
+  /// 数字单词劈开 **−5**；其余按两行宽度均衡度 `1 - |w1-w2|/maxWidth` 排序，同分取
+  /// **靠后**的分界（第一行更长）。
+  static int? _bestSplit(
+    String s,
+    double maxWidth,
+    double Function(String) widthOf,
+  ) {
+    int binarySearch(bool Function(int) ok, int lo, int hi) {
+      var result = -1;
+      while (lo <= hi) {
+        final mid = (lo + hi) ~/ 2;
+        if (ok(mid)) {
+          result = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return result;
+    }
+
+    // 最大分界点：第一行放得下（长度单调 → 二分）。
+    final maxSplit = binarySearch(
+      (i) => widthOf(s.substring(0, i)) <= maxWidth,
+      1,
+      s.length - 1,
+    );
+    if (maxSplit <= 0) return null;
+
+    // 最小分界点：第二行放得下。
+    var minSplit = s.length;
+    {
+      var lo = 1;
+      var hi = s.length - 1;
+      while (lo <= hi) {
+        final mid = (lo + hi) ~/ 2;
+        if (widthOf(s.substring(mid)) <= maxWidth) {
+          minSplit = mid;
+          hi = mid - 1;
+        } else {
+          lo = mid + 1;
+        }
+      }
+    }
+    if (maxSplit < minSplit) return null;
+
+    const boundaryChars = ' ·/|、，,：:—-」）)>>';
+    final asciiWord = RegExp(r'[A-Za-z0-9]');
+    // 中日韩文字（含扩展 A）—— 用来识别「中英交界」这个天然断点。
+    final cjk = RegExp(r'[\u3400-\u4dbf\u4e00-\u9fff]');
+
+    var bestSplit = minSplit;
+    var bestScore = double.negativeInfinity;
+    for (var i = minSplit; i <= maxSplit; i++) {
+      final prev = s[i - 1];
+      final next = s[i];
+      final w1 = widthOf(s.substring(0, i));
+      final w2 = widthOf(s.substring(i));
+      var score = 1 - (w1 - w2).abs() / maxWidth;
+
+      if (boundaryChars.contains(prev)) score += 10;
+      final prevAscii = asciiWord.hasMatch(prev);
+      final nextAscii = asciiWord.hasMatch(next);
+      if (prevAscii && nextAscii) score -= 5; // 词内断开
+      // 中英交界是**天然断点**（「cheng / 喜欢的音乐」）：西文与汉字本来就不该连读，
+      // 只按宽度均衡会把「cheng喜 / 欢的音乐」切在词中间。
+      final prevCjk = cjk.hasMatch(prev);
+      final nextCjk = cjk.hasMatch(next);
+      if ((prevAscii && nextCjk) || (prevCjk && nextAscii)) score += 8;
+      // 同分时取**靠后**的分界（第一行更长）：右对齐卡面右上角更满，
+      // 也让「窗边刚/好有阳光」变成「窗边刚好/有阳光」。
+      if (score >= bestScore) {
+        bestScore = score;
+        bestSplit = i;
+      }
+    }
+    return bestSplit;
   }
 }

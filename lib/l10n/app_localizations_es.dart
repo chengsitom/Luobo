@@ -52,6 +52,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recentlyPlayed => 'Reproducido Recientemente';
 
   @override
+  String get recentlyListenedAlbums => 'Recently Played Albums';
+
+  @override
   String get yourPlaylists => 'Tus Listas';
 
   @override
@@ -526,6 +529,71 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get audiobooks => 'Audiobooks';
+
+  @override
+  String get myBookshelf => 'My bookshelf';
+
+  @override
+  String booksCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count books',
+      one: '1 book',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String listenedPercent(int percent) {
+    return '$percent% listened';
+  }
+
+  @override
+  String remainingTime(String time) {
+    return '$time left';
+  }
+
+  @override
+  String get replayChapter => 'Replay chapter';
+
+  @override
+  String get chapterFilter => 'Filter';
+
+  @override
+  String get playFromHere => 'Play from here';
+
+  @override
+  String get markListened => 'Mark as listened';
+
+  @override
+  String get markUnlistened => 'Mark as unlistened';
+
+  @override
+  String get filterUnlistened => 'Unlistened';
+
+  @override
+  String get filterListened => 'Listened';
+
+  @override
+  String jumpBackTo(int order) {
+    return 'Back to $order';
+  }
+
+  @override
+  String jumpToEpisode(int order) {
+    return 'Go to episode $order';
+  }
+
+  @override
+  String searchResultsCount(int count) {
+    return '$count results';
+  }
+
+  @override
+  String chapterOfTotal(int current, int total) {
+    return 'Ch. $current of $total';
+  }
 
   @override
   String playedTo(String position) {

@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 
 /// 「机制说明」入口：解释 App 内各功能的实现机理。
 ///
@@ -20,11 +21,10 @@ class SettingsMechanismScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final topInset = listTopInset(context);
-    return Scaffold(
+    return ScrollRevealScaffold(
+      title: l10n.settingsMechanicsEntry,
       backgroundColor:
           _isDark(context) ? AppTheme.darkBackground : AppTheme.lightBackground,
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(title: l10n.settingsMechanicsEntry),
       body: ListView(
         padding: LuoboSpacing.scrollPadding(
           context,
@@ -58,11 +58,10 @@ class SettingsMechanismDetailScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final isDark = _isDark(context);
     final topInset = listTopInset(context);
-    return Scaffold(
+    return ScrollRevealScaffold(
+      title: item.title,
       backgroundColor:
           isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(title: item.title),
       body: ListView(
         padding: LuoboSpacing.scrollPadding(
           context,

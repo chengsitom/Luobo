@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/widgets.dart';
 
 class SongsScreen extends StatefulWidget {
@@ -66,7 +67,9 @@ class _SongsScreenState extends State<SongsScreen> {
           : libraryProvider.randomSongs.isEmpty
               ? Center(child: Text(AppLocalizations.of(context)!.noSongsFound))
               : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100),
+                  padding: EdgeInsets.only(
+                    bottom: LuoboSpacing.pageBottomWithStrip(context),
+                  ),
                   itemCount: libraryProvider.randomSongs.length,
                   itemBuilder: (context, index) {
                     final song = libraryProvider.randomSongs[index];

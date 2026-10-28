@@ -1175,7 +1175,9 @@ class _AMLLLyricsWidgetState extends State<AMLLLyricsWidget>
     if (key == null || key.currentContext == null) {
       // ListView.builder hasn't rendered this item yet.
       // Estimate offset to force it into view, then retry on next frame.
-      final estimatedItemHeight = widget.fontSize * 1.5 + widget.lineGap;
+      // 行高实际是 fontSize * 1.3（TextStyle.height），估算必须一致，
+      // 否则大跨度跳行会「先跳歪再补一帧」（2026-10-23）。
+      final estimatedItemHeight = widget.fontSize * 1.3 + widget.lineGap;
       final roughOffset = index * estimatedItemHeight -
           _scrollController.position.viewportDimension * widget.alignPosition +
           estimatedItemHeight / 2;
@@ -1211,6 +1213,14 @@ class _AMLLLyricsWidgetState extends State<AMLLLyricsWidget>
       0.0,
       _scrollController.position.maxScrollExtent,
     );
+
+    // 大跨度跳行（> 1.2 屏）直接 jumpTo：弹簧在这段距离上要 0.4~0.8s，
+    // 观感就是「高亮行迟到」；近距离才用弹簧做平滑滚动。
+    final distance = (targetOffset - currentOffset).abs();
+    if (distance > _scrollController.position.viewportDimension * 1.2) {
+      _scrollController.jumpTo(targetOffset);
+      return;
+    }
 
     // Spring animation — high damping avoids oscillation/over-scroll.
     _springAnimController?.dispose();
@@ -1645,8 +1655,9 @@ class _AMLLLineWidgetState extends State<_AMLLLineWidget>
               style: textStyle,
             );
           }
-          final fadeProgress = (progress / 0.10).clamp(0.0, 1.0);
-          final alpha = 0.5 + (0.5 * fadeProgress);
+          // 淡入窗口 10% → 5%，且起点从 0.5 提到 0.7：行越长以前越像「慢慢亮起来」。
+          final fadeProgress = (progress / 0.05).clamp(0.0, 1.0);
+          final alpha = 0.7 + (0.3 * fadeProgress);
           return Text(
             widget.line.text,
             textAlign: TextAlign.center,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/artist.dart';
 import '../providers/library_provider.dart';
+import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 import '../utils/artist_stats.dart';
@@ -62,7 +63,10 @@ class _ArtistsListScreenState extends State<ArtistsListScreen> {
           final artists = _sortedArtists(source, songCounts, albumCounts);
 
           return ListView.builder(
-            padding: EdgeInsets.only(top: topInset, bottom: 100),
+            padding: EdgeInsets.only(
+              top: topInset,
+              bottom: LuoboSpacing.pageBottomWithStrip(context),
+            ),
             itemCount: artists.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -112,6 +116,15 @@ class _ArtistsListScreenState extends State<ArtistsListScreen> {
     return list;
   }
 
+  /// 排序面板统一：**选中字段**显示升/降序箭头（与歌单/收藏/全部歌曲一致）。
+  Widget? _directionIcon(_ArtistSortField field) => field == _sortField
+      ? Icon(
+          _sortAscending ? AppIcons.arrowUp : AppIcons.arrowDown,
+          size: 15,
+          color: LuoboAccent.accent,
+        )
+      : null;
+
   Future<void> _showSortMenu() async {
     final l10n = AppLocalizations.of(context)!;
     final picked = await showLuoboAnchoredMenu<_ArtistSortField>(
@@ -122,14 +135,17 @@ class _ArtistsListScreenState extends State<ArtistsListScreen> {
         LuoboAnchoredMenuItem(
           value: _ArtistSortField.name,
           label: l10n.sortByName,
+          trailing: _directionIcon(_ArtistSortField.name),
         ),
         LuoboAnchoredMenuItem(
           value: _ArtistSortField.songs,
           label: l10n.sortBySongCount,
+          trailing: _directionIcon(_ArtistSortField.songs),
         ),
         LuoboAnchoredMenuItem(
           value: _ArtistSortField.albums,
           label: l10n.sortByAlbumCount,
+          trailing: _directionIcon(_ArtistSortField.albums),
         ),
       ],
     );

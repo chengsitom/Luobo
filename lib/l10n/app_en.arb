@@ -72,6 +72,11 @@
     "description": "Recently played section title"
   },
 
+  "recentlyListenedAlbums": "Recently Played Albums",
+  "@recentlyListenedAlbums": {
+    "description": "Home section: albums derived from recently played songs"
+  },
+
   "yourPlaylists": "Your Playlists",
   "@yourPlaylists": {
     "description": "Your playlists section title"
@@ -726,6 +731,119 @@
   "audiobooks": "Audiobooks",
   "@audiobooks": {
     "description": "Audiobooks section label (Daoliyu)"
+  },
+
+  "myBookshelf": "My bookshelf",
+  "@myBookshelf": {
+    "description": "Audiobook library shelf section title"
+  },
+
+  "booksCount": "{count, plural, =1{1 book} other{{count} books}}",
+  "@booksCount": {
+    "description": "Audiobook library shelf count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "listenedPercent": "{percent}% listened",
+  "@listenedPercent": {
+    "description": "Audiobook listening progress percentage",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+
+  "remainingTime": "{time} left",
+  "@remainingTime": {
+    "description": "Audiobook remaining listening time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "replayChapter": "Replay chapter",
+  "@replayChapter": {
+    "description": "Audiobook detail: replay current chapter from 0:00"
+  },
+
+  "chapterFilter": "Filter",
+  "@chapterFilter": {
+    "description": "Audiobook detail: title of the chapter filter sheet"
+  },
+
+  "playFromHere": "Play from here",
+  "@playFromHere": {
+    "description": "Audiobook chapter long-press menu: start from this chapter"
+  },
+
+  "markListened": "Mark as listened",
+  "@markListened": {
+    "description": "Audiobook chapter long-press menu: mark listened"
+  },
+
+  "markUnlistened": "Mark as unlistened",
+  "@markUnlistened": {
+    "description": "Audiobook chapter long-press menu: clear listened mark"
+  },
+
+  "filterUnlistened": "Unlistened",
+  "@filterUnlistened": {
+    "description": "Audiobook chapter filter chip: unlistened only"
+  },
+
+  "filterListened": "Listened",
+  "@filterListened": {
+    "description": "Audiobook chapter filter chip: listened only"
+  },
+
+  "jumpBackTo": "Back to {order}",
+  "@jumpBackTo": {
+    "description": "Audiobook long list: jump back to the saved episode",
+    "placeholders": {
+      "order": {
+        "type": "int"
+      }
+    }
+  },
+
+  "jumpToEpisode": "Go to episode {order}",
+  "@jumpToEpisode": {
+    "description": "Audiobook in-book search: numeric input jumps to episode",
+    "placeholders": {
+      "order": {
+        "type": "int"
+      }
+    }
+  },
+
+  "searchResultsCount": "{count} results",
+  "@searchResultsCount": {
+    "description": "Audiobook in-book search result count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "chapterOfTotal": "Ch. {current} of {total}",
+  "@chapterOfTotal": {
+    "description": "Audiobook dock: current chapter / total",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
   },
 
   "playedTo": "Played to {position}",

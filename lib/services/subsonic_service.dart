@@ -47,11 +47,21 @@ class SubsonicService {
   /// 最近一次 loginToApi 拿到的 userId（道理鱼 /api/auth/login 响应 user.id）。
   String? _apiUserId;
 
+  /// 道理鱼艺人统计（artistId → trackCount / albumCount），来自
+  /// `GET /api/library/artists`（抓包 `api_artists.body` 每个条目都带这两个字段）。
+  Map<String, int> _artistTrackCounts = {};
+  Map<String, int> _artistAlbumCounts = {};
+  bool _artistStatsInFlight = false;
+
   /// 道理鱼封面票据：**按专辑**申请（`POST /api/library/cover-ticket`
   /// `{albumId}`，120s 有效）。响应含现成 `url`，但图片请求仍需 JWT。
   final Map<String, _DaoliyuCoverTicket> _albumCoverTickets = {};
-  final Set<String> _coverTicketInFlight = {};
 
+  /// 心动歌单封面票据：**按封面路径**批量申请（`POST /api/library/cover-tickets`
+  /// `{items:[{path,size}]}`）。12 组歌单 × 4 张图一次申请，120s 有效。
+  final Map<String, _DaoliyuCoverTicket> _pathCoverTickets = {};
+
+  final Set<String> _coverTicketInFlight = {};
 
   /// 进行中的 loginToApi Future：并发去重，多个 _apiGet 同时触发时只发一次登录。
   Future<bool>? _loginInFlight;
@@ -86,6 +96,9 @@ class SubsonicService {
     _loginInFlight = null; // 丢弃进行中的登录（旧服务器凭据/地址已失效）
     _albumCoverTickets.clear();
     _coverTicketInFlight.clear();
+    _pathCoverTickets.clear();
+    _artistTrackCounts = {};
+    _artistAlbumCounts = {};
     _setActiveBaseUrl(null);
     if (config.isJellyfin) {
       _jellyfin ??= JellyfinService();
@@ -438,6 +451,8 @@ class SubsonicService {
       _apiUserId = user?['id'] as String?;
       _apiLoginFailed = false;
       Log.i('Daoliyu', 'API login OK (user=${_apiUserId})');
+      // 预取艺人统计（trackCount / albumCount），失败静默回退本地启发式。
+      prefetchDaoliyuArtistStats().ignore();
       return true;
     } on DioException catch (e) {
       // 401 = 凭据无效 → 永久失败；其它（网络/超时/5xx）→ 可重试。
@@ -792,6 +807,51 @@ class SubsonicService {
     return '$base${ticket.url}${sep}size=$size';
   }
 
+  /// 道理鱼艺人的权威歌曲数 / 专辑数（`trackCount` / `albumCount`）。
+  Map<String, int> get daoliyuArtistTrackCounts => _artistTrackCounts;
+  Map<String, int> get daoliyuArtistAlbumCounts => _artistAlbumCounts;
+
+  /// 预取道理鱼艺人统计（登录后调用一次；失败静默，回退本地启发式）。
+  Future<void> prefetchDaoliyuArtistStats() async {
+    if (!isDaoliyu || _artistStatsInFlight) return;
+    _artistStatsInFlight = true;
+    try {
+      final data = await _apiGet('/api/library/artists?limit=1000');
+      final parsed = parseArtistStats(data);
+      if (parsed.trackCounts.isNotEmpty) {
+        _artistTrackCounts = parsed.trackCounts;
+        _artistAlbumCounts = parsed.albumCounts;
+      }
+    } finally {
+      _artistStatsInFlight = false;
+    }
+  }
+
+  /// 解析 `GET /api/library/artists` 里的 `trackCount` / `albumCount`
+  /// （纯函数，便于单测）。
+  static ({Map<String, int> trackCounts, Map<String, int> albumCounts})
+      parseArtistStats(Map<String, dynamic>? data) {
+    final tracks = <String, int>{};
+    final albums = <String, int>{};
+    final items = data?['items'];
+    if (items is List) {
+      for (final item in items) {
+        if (item is! Map) continue;
+        final id = item['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        final trackCount = item['trackCount'];
+        if (trackCount is num && trackCount >= 0) {
+          tracks[id] = trackCount.toInt();
+        }
+        final albumCount = item['albumCount'];
+        if (albumCount is num && albumCount >= 0) {
+          albums[id] = albumCount.toInt();
+        }
+      }
+    }
+    return (trackCounts: tracks, albumCounts: albums);
+  }
+
   /// 解析 `POST /api/library/cover-ticket` 响应（纯函数，便于单测）。
   static _DaoliyuCoverTicket? parseAlbumCoverTicket(
     Map<String, dynamic>? data,
@@ -916,14 +976,14 @@ class SubsonicService {
 
   /// 道理鱼自研流端点：`GET /api/tracks/{id}/stream?token=<JWT>[&timeOffset=<秒>]`。
   ///
-  /// 服务端在 `/stream` 内部转封装/转码（实测固定 AAC 192k），但**始终支持
-  /// HTTP Range（206）** ⇒ 普通 seek 交给 ExoPlayer 原生定位即可，不必重建
-  /// 音频源（2026-10-20 实测，见 `docs/道理鱼接入技术方案.md` §13.2-A）。
+  /// 服务端在 `/stream` 内部转封装/转码（实测固定 AAC 192k）。**2026-10-28 cn35
+  /// 直连实测修正**：带 `Range` 请求返回 **200 且无 `Accept-Ranges`**（不支持
+  /// Range，chunked 管道）——ExoPlayer 无法字节 seek、断线重连从 byte 0 重取
+  /// （倒带 bug 根因）。故**转码播放优先走 HLS**（`getDaoliyuHlsUrl`，§14），本端点
+  /// 仅作 HLS 不可用时的回退；详见 `docs/道理鱼接入技术方案.md` §12.1-R / §14。
   ///
-  /// `timeOffset` 仅作**兜底**：首次未缓存的转码是 200 实时管道（不可 Range），
-  /// 或要回到当前流起点之前时，重发一条从目标秒数开始的新流（2026-08-11
-  /// WebUI 实测其 seek 也走重发新流）。JWT 登录失败（无法走自研层）返回 null，
-  /// 调用方降级为 Subsonic 转码 URL。
+  /// `timeOffset` 仅作**兜底**：回退到本端点时，用从目标秒数重起新流近似 seek。
+  /// JWT 登录失败（无法走自研层）返回 null，调用方降级为 Subsonic 转码 URL。
   Future<String?> getDaoliyuApiStreamUrl(String songId,
       {int timeOffsetSeconds = 0}) async {
     if (!await loginToApi()) return null;
@@ -938,6 +998,18 @@ class SubsonicService {
         )
         .join('&');
     return '$activeBaseUrl/api/tracks/$songId/stream?$queryString';
+  }
+
+  /// 道理鱼自研 HLS 端点：`GET /api/tracks/{id}/hls?token=<JWT>`。
+  ///
+  /// 返回 VOD m3u8（3s 分片、`#EXT-X-ENDLIST`、分片 `206`/可 Range，2026-10-28
+  /// cn35 实测）。转码播放改走它 ⇒ 播放器按分片原生 seek、断线重连按分片重取，
+  /// 根治 `/stream` 的「不可 seek + 倒带」。分片 URL 自带同一 token。JWT 登录
+  /// 失败返回 null，调用方回退 [getDaoliyuApiStreamUrl]。见 §14。
+  Future<String?> getDaoliyuHlsUrl(String songId) async {
+    if (!await loginToApi()) return null;
+    final token = Uri.encodeComponent(_apiJwt ?? '');
+    return '$activeBaseUrl/api/tracks/$songId/hls?token=$token';
   }
 
   Future<List<Artist>> getArtists() async {
@@ -1185,7 +1257,7 @@ class SubsonicService {
       final data = await _apiGet('/api/tracks/random?limit=$size');
       final items = data?['items'] as List<dynamic>? ?? [];
       return items
-          .map((e) => _daoliyuTrackToSong(e as Map<String, dynamic>))
+          .map((e) => songFromDaoliyuTrack(e as Map<String, dynamic>))
           .whereType<Song>()
           .toList();
     }
@@ -1206,7 +1278,7 @@ class SubsonicService {
   /// 字段对照（api_random.body 实测）：id/title、artist{id,name}、album{id,title}、
   /// durationSeconds→duration、trackNumber→track、bitrate→bitRate、
   /// genres[]→genre(取首)、coverArt(路径式，见方案 §8 坑，保留原值)。
-  Song? _daoliyuTrackToSong(Map<String, dynamic> t) {
+  Song? songFromDaoliyuTrack(Map<String, dynamic> t) {
     final id = t['id']?.toString();
     if (id == null || id.isEmpty) return null;
     final artist = t['artist'] as Map<String, dynamic>?;
@@ -1236,6 +1308,113 @@ class SubsonicService {
           ? DateTime.tryParse(t['createdAt'].toString())
           : null,
     );
+  }
+
+  // ── 心动歌单（道理鱼自研 /api 层）─────────────────────────────────────
+  // 实测（2026-10-27）：
+  //   列表 GET /api/library/heart-playlists?count=12[&refresh=<ms>-<rand>]
+  //   详情 GET /api/library/heart-playlists/{id}
+  // `count` 是「选哪一批预生成歌单」的规模（12 = 用户指定），不是返回条数。
+  // 不传 refresh 时同一 count 稳定返回同一批，因此列表页打开不会反复生成。
+
+  /// 心动歌单列表。非道理鱼 / 失败返回 null（调用方据此展示空态/错误）。
+  Future<HeartPlaylistBatch?> getHeartPlaylists({
+    int count = 12,
+    String? refresh,
+  }) async {
+    if (!isDaoliyu) return null;
+    final query = <String>['count=$count'];
+    if (refresh != null && refresh.isNotEmpty) {
+      query.add('refresh=${Uri.encodeQueryComponent(refresh)}');
+    }
+    final data = await _apiGet(
+      '/api/library/heart-playlists?${query.join('&')}',
+    );
+    if (data == null) return null;
+    return HeartPlaylistBatch.fromJson(data);
+  }
+
+  /// 心动歌单详情（含全部曲目）。
+  Future<HeartPlaylist?> getHeartPlaylistDetail(String playlistId) async {
+    if (!isDaoliyu || playlistId.isEmpty) return null;
+    final data = await _apiGet('/api/library/heart-playlists/$playlistId');
+    if (data == null) return null;
+    final rawTracks = jsonList(data['tracks']);
+    final tracks = rawTracks
+        .whereType<Map>()
+        .map((e) => songFromDaoliyuTrack(Map<String, dynamic>.from(e)))
+        .whereType<Song>()
+        .toList();
+    return HeartPlaylist.fromDetailJson(data, tracks: tracks);
+  }
+
+  /// 批量申请道理鱼封面票据，返回 `path → 绝对 URL`。
+  ///
+  /// 列表接口的 `coverUrls` 不带 ticket，直接加载会 401/403；这里按 path 批量
+  /// 换票（`{items:[{path,size}]}`），票据 120s 有效，缓存到过期前 15s。
+  ///
+  /// ⚠️ 服务端单次最多 **32 个 item**（实测 32 → 200，33+ → 400 INVALID_INPUT），
+  /// 这里内部按 32 个一批兜底；调用方也可以更小粒度分批（列表页按 12 个一批，
+  /// 让前 3 行先出封面）。
+  Future<Map<String, String>> fetchDaoliyuCoverTickets(
+    List<String> paths, {
+    int size = 100,
+  }) async {
+    if (!isDaoliyu || paths.isEmpty) return {};
+    final now = DateTime.now();
+    final result = <String, String>{};
+    final missing = <String>[];
+
+    for (final path in paths.toSet()) {
+      final cached = _pathCoverTickets[path];
+      if (cached != null &&
+          now.isBefore(
+              cached.expiresAt.subtract(const Duration(seconds: 15)))) {
+        result[path] = _absoluteDaoliyuCoverUrl(cached.url);
+      } else {
+        missing.add(path);
+      }
+    }
+    if (missing.isEmpty) return result;
+
+    // 服务端上限 32，超过直接 400 INVALID_INPUT；这里再兜一层。
+    for (var start = 0; start < missing.length; start += 32) {
+      final chunk = missing.skip(start).take(32).toList();
+      final data = await _apiPost('/api/library/cover-tickets', {
+        'items': [
+          for (final path in chunk) {'path': path, 'size': size},
+        ],
+      });
+      final items = jsonList(data?['items']);
+      if (items.isEmpty) continue;
+
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i];
+        if (item is! Map) continue;
+        final url = item['url']?.toString();
+        if (url == null || url.isEmpty) continue;
+        final index = jsonInt(item['index']) ?? i;
+        if (index < 0 || index >= chunk.length) continue;
+        final path = chunk[index];
+        final expiresAt =
+            DateTime.tryParse(item['expiresAt']?.toString() ?? '') ??
+                now.add(const Duration(seconds: 100));
+        final ticket = _DaoliyuCoverTicket(
+          url: url,
+          ticket: item['ticket']?.toString() ?? '',
+          expiresAt: expiresAt,
+        );
+        _pathCoverTickets[path] = ticket;
+        result[path] = _absoluteDaoliyuCoverUrl(url);
+      }
+    }
+    return result;
+  }
+
+  String _absoluteDaoliyuCoverUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return '$activeBaseUrl$url';
+    return '$activeBaseUrl/$url';
   }
 
   // ── 有声书（道理鱼自研 /api 层，见 docs/有声书接入技术方案.md §5）─────────

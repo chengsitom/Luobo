@@ -6,11 +6,14 @@ import '../models/json_coerce.dart';
 
 /// 单本有声书的客户端进度记忆（纯客户端，服务端无进度端点）。
 ///
-/// 设计见 docs/有声书接入技术方案.md §9.1：
+/// 设计见 docs/有声书接入技术方案.md §9.1 / §15.6：
 /// - `chapterOrder` 为服务端章节序（1-based），与章节的 order 字段一致；
 /// - `completed` = 听完最后一章（**保留条目**，"已听完"由此显示；
 ///   `remove()` 仅用于书被删除/用户主动清除）；
-/// - 恢复时按 `chapterOrder` 定位，`chapterId` 仅兜底。
+/// - 恢复时按 `chapterOrder` 定位，`chapterId` 仅兜底；
+/// - 2026-10-27 新增 `chapterTitle / durationMs / episodeCount / listenedOrders`：
+///   用于全书百分比、剩多久、已听/未听筛选。**旧条目缺字段时全部可空**，
+///   读取路径与旧行为完全一致（兼容第一批安装的用户数据）。
 class AudiobookProgress {
   final String audiobookId; // abk_
   final int chapterOrder; // 1-based 服务端章节序
@@ -19,6 +22,19 @@ class AudiobookProgress {
   final bool completed;
   final DateTime updatedAt;
 
+  /// 当前章节标题（展示「第 X 章 · 标题」，去掉序号前缀由写入方负责）。
+  final String? chapterTitle;
+
+  /// 当前章节时长（毫秒），用于计算本章进度与剩余时长。
+  final int? durationMs;
+
+  /// 书的总章数（服务端可能变动；读时优先用最新的 `Audiobook.episodeCount`）。
+  final int? episodeCount;
+
+  /// 已听完的章节 order 集合（自然播完 / ≥95% / 手动标记）。
+  /// 旧数据为空，此时按 `order < chapterOrder` 估算已听章数。
+  final List<int> listenedOrders;
+
   const AudiobookProgress({
     required this.audiobookId,
     required this.chapterOrder,
@@ -26,6 +42,10 @@ class AudiobookProgress {
     required this.positionMs,
     this.completed = false,
     required this.updatedAt,
+    this.chapterTitle,
+    this.durationMs,
+    this.episodeCount,
+    this.listenedOrders = const [],
   });
 
   factory AudiobookProgress.fromJson(
@@ -40,6 +60,10 @@ class AudiobookProgress {
       completed: jsonBool(json['completed']) ?? false,
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      chapterTitle: json['chapterTitle']?.toString(),
+      durationMs: jsonInt(json['durationMs']),
+      episodeCount: jsonInt(json['episodeCount']),
+      listenedOrders: _intList(json['listenedOrders']),
     );
   }
 
@@ -50,7 +74,98 @@ class AudiobookProgress {
       'positionMs': positionMs,
       'completed': completed,
       'updatedAt': updatedAt.toUtc().toIso8601String(),
+      if (chapterTitle != null && chapterTitle!.isNotEmpty)
+        'chapterTitle': chapterTitle,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (episodeCount != null) 'episodeCount': episodeCount,
+      if (listenedOrders.isNotEmpty) 'listenedOrders': listenedOrders,
     };
+  }
+
+  /// 全书进度 0–1（用于头部百分比与列表进度条）。
+  ///
+  /// - `completed` → 1；
+  /// - 优先 `listenedOrders` 的真实已听章数（排除当前章，避免与当前章小数重复计）；
+  /// - 旧数据无集合 → 按 `chapterOrder - 1` 估算；
+  /// - 当前章小数 = `positionMs / durationMs`（缺时长时按 0）。
+  double? progressRatio({int? totalEpisodes}) {
+    final total = totalEpisodes ?? episodeCount;
+    if (completed) return 1;
+    if (total == null || total <= 0) return null;
+    final listened = listenedOrders.isNotEmpty
+        ? listenedOrders.where((o) => o >= 1 && o <= total && o != chapterOrder).length
+        : (chapterOrder - 1).clamp(0, total);
+    final chapterFraction = (durationMs != null && durationMs! > 0)
+        ? (positionMs / durationMs!).clamp(0.0, 1.0)
+        : 0.0;
+    return ((listened + chapterFraction) / total).clamp(0.0, 1.0);
+  }
+
+  /// 已听章数（不含当前章的小数部分），用于「共 N 章 · 已听 M 章」与 chip 计数。
+  int listenedCount({int? totalEpisodes}) {
+    final total = totalEpisodes ?? episodeCount;
+    if (completed) return total ?? listenedOrders.length;
+    if (listenedOrders.isNotEmpty) {
+      return total == null
+          ? listenedOrders.length
+          : listenedOrders.where((o) => o >= 1 && o <= total).length;
+    }
+    final estimated = chapterOrder - 1;
+    if (total != null) return estimated.clamp(0, total);
+    return estimated < 0 ? 0 : estimated;
+  }
+
+  /// 读完一章：写入集合（去重、升序、上限 500 条）。
+  AudiobookProgress withListenedChapter(int order) {
+    if (order <= 0 || listenedOrders.contains(order)) return this;
+    final next = [...listenedOrders, order]..sort();
+    return copyWith(
+      listenedOrders: next.length > 500 ? next.sublist(next.length - 500) : next,
+    );
+  }
+
+  /// 手动「标记未听」：从集合移除。
+  AudiobookProgress withoutListenedChapter(int order) {
+    if (!listenedOrders.contains(order)) return this;
+    return copyWith(
+      listenedOrders:
+          listenedOrders.where((o) => o != order).toList(growable: false),
+    );
+  }
+
+  AudiobookProgress copyWith({
+    int? chapterOrder,
+    String? chapterId,
+    int? positionMs,
+    bool? completed,
+    DateTime? updatedAt,
+    String? chapterTitle,
+    int? durationMs,
+    int? episodeCount,
+    List<int>? listenedOrders,
+  }) {
+    return AudiobookProgress(
+      audiobookId: audiobookId,
+      chapterOrder: chapterOrder ?? this.chapterOrder,
+      chapterId: chapterId ?? this.chapterId,
+      positionMs: positionMs ?? this.positionMs,
+      completed: completed ?? this.completed,
+      updatedAt: updatedAt ?? this.updatedAt,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      durationMs: durationMs ?? this.durationMs,
+      episodeCount: episodeCount ?? this.episodeCount,
+      listenedOrders: listenedOrders ?? this.listenedOrders,
+    );
+  }
+
+  static List<int> _intList(dynamic value) {
+    if (value is! List) return const [];
+    final out = <int>[];
+    for (final e in value) {
+      final n = e is int ? e : int.tryParse(e?.toString() ?? '');
+      if (n != null && n > 0 && !out.contains(n)) out.add(n);
+    }
+    return out;
   }
 }
 

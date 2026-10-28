@@ -17,6 +17,7 @@ import '../utils/navigation_helper.dart';
 import '../widgets/luobo/glass_pill_nav.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
+import '../models/song.dart';
 import 'home_v2_screen.dart';
 import 'library_hub_screen.dart';
 import 'library_screen.dart';
@@ -617,8 +618,16 @@ class _MainScreenState extends State<MainScreen> {
     required bool isSecondary,
     required bool hasSong,
   }) {
-    // 二级页且没有在播内容 → 条带整条不渲染（返回零高度，不挡点击）。
-    if (isSecondary && !hasSong) return const SizedBox.shrink();
+    // 有声书播放中：二级页不再显示音乐迷你播放条（用户 2026-10-27：
+    // 回到别的页面时，播放条展示的是有声书章节，视觉上属于「音乐播放条」）。
+    // 有声书自己的控制条在章节页吸底，跨页时由入口重新进入。
+    final isAudiobook =
+        Provider.of<PlayerProvider>(context).isPlayingAudiobook;
+
+    // 二级页且没有在播内容 / 正在播有声书 → 条带整条不渲染（返回零高度）。
+    if (isSecondary && (!hasSong || isAudiobook)) {
+      return const SizedBox.shrink();
+    }
 
     // 飞牛实测条底边在屏幕底上方 **34.3dp**（§6.3）；部分机型上报的底部安全区
     // 只有 ~16dp，会让条看起来「贴着底」—— 取两者较大值。
@@ -651,56 +660,80 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildBottomNav(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Selector<PlayerProvider, bool>(
-      selector: (_, p) => p.currentSong != null,
-      builder: (context, hasSong, _) => Padding(
-        // 底部安全区由 [_buildBottomStrip] 统一加，这里只管与播放条之间的间隔。
-        padding: const EdgeInsets.only(top: 6),
-        // §6.1：飞牛实测 **256dp 居中浮动**（两侧各留 52dp），单槽落到 64dp。
-        // 用 `maxWidth` 而非固定宽 —— 窄屏不溢出，宽屏（平板）也保持 256dp 居中。
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: LuoboGlass.navWidth),
-            child: GlassPillNav(
-              currentIndex: _currentIndex,
-              items: [
-                GlassPillNavItem(icon: AppIcons.home, label: l10n.home),
-                GlassPillNavItem(icon: AppIcons.library, label: l10n.library),
-                GlassPillNavItem(
-                  icon: AppIcons.settings,
-                  label: l10n.settingsTitle,
-                ),
-              ],
-              onTap: (index) {
-                final navigatorState =
-                    NavigationHelper.mobileNavigatorKey.currentState;
-                navigatorState?.popUntil((route) => route.isFirst);
-                _setTab(index);
-              },
-              art: hasSong ? const _NavAlbumArt() : null,
-              onArtTap: _openNowPlaying,
+    return Selector<PlayerProvider, (Song?, bool)>(
+      // 有声书播放/暂停期间：封面槽**不显示有声书**，改为继续显示进入有声书
+      // 之前那首歌（用户 2026-10-27：「第四个 tab 不能是之前仍在播放的歌曲吗」）。
+      selector: (_, p) => (
+        p.isPlayingAudiobook ? p.lastMusicSong : p.currentSong,
+        p.isPlayingAudiobook,
+      ),
+      builder: (context, data, _) {
+        final song = data.$1;
+        final isAudiobook = data.$2;
+        final player = context.read<PlayerProvider>();
+        return Padding(
+          // 底部安全区由 [_buildBottomStrip] 统一加，这里只管与播放条之间的间隔。
+          padding: const EdgeInsets.only(top: 6),
+          // §6.1：飞牛实测 **256dp 居中浮动**（两侧各留 52dp），单槽落到 64dp。
+          // 用 `maxWidth` 而非固定宽 —— 窄屏不溢出，宽屏（平板）也保持 256dp 居中。
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: LuoboGlass.navWidth),
+              child: GlassPillNav(
+                currentIndex: _currentIndex,
+                items: [
+                  GlassPillNavItem(icon: AppIcons.home, label: l10n.home),
+                  GlassPillNavItem(icon: AppIcons.library, label: l10n.library),
+                  GlassPillNavItem(
+                    icon: AppIcons.settings,
+                    label: l10n.settingsTitle,
+                  ),
+                ],
+                onTap: (index) {
+                  final navigatorState =
+                      NavigationHelper.mobileNavigatorKey.currentState;
+                  navigatorState?.popUntil((route) => route.isFirst);
+                  _setTab(index);
+                },
+                art: song != null
+                    ? _NavAlbumArt(
+                        song: song,
+                        useLastMusicProgress: isAudiobook,
+                      )
+                    : null,
+                onArtTap: isAudiobook
+                    ? () => player.resumeLastMusic()
+                    : _openNowPlaying,
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-/// 底栏最右的**当前专辑圆封面 + 外圈进度环**（点击进播放页）。
+/// 底栏最右的**当前专辑圆封面 + 外圈进度环**（点击进播放页 / 回到旧歌）。
 /// 无播放时由 [GlassPillNav] 的 `art == null` 决定不渲染该槽。
 class _NavAlbumArt extends StatelessWidget {
-  const _NavAlbumArt();
+  final Song song;
+
+  /// 有声书状态下展示的是「进入有声书前的那首歌」，进度用快照（不再变化）。
+  final bool useLastMusicProgress;
+
+  const _NavAlbumArt({
+    required this.song,
+    this.useLastMusicProgress = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final song = context.watch<PlayerProvider>().currentSong;
-    if (song == null) return const SizedBox.shrink();
     final coverArt = Provider.of<LibraryProvider>(context, listen: false)
         .effectiveCoverArt(song);
     // ⚠️ 进度订阅只落在这个环上（不是整条底栏）—— 否则底栏的毛玻璃会跟着每帧重建。
     return Selector<PlayerProvider, double>(
-      selector: (_, p) => p.progress,
+      selector: (_, p) =>
+          useLastMusicProgress ? p.lastMusicProgress : p.progress,
       builder: (context, progress, _) => LuoboNavArtRing(
         progress: progress,
         art: AlbumArtwork(coverArt: coverArt, size: LuoboGlass.navArtSize),

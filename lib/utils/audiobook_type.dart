@@ -35,6 +35,15 @@ AudiobookContentType classifyAudiobookType({
       : AudiobookContentType.collection;
 }
 
+/// 书封右上角类型角标用的词：`categories` 优先，其次 `tags`；都没有返回 null。
+///
+/// 只用于纯文字书封的视觉标识（§15.2），不参与编号型/合集型的判定。
+String? audiobookDisplayCategory(Audiobook book) {
+  if (book.categories.isNotEmpty) return book.categories.first;
+  if (book.tags.isNotEmpty) return book.tags.first;
+  return null;
+}
+
 /// 编号标题占比阈值：≥60% 判编号型（容忍个别非编号章节/脏数据）。
 const double numberedTitleRatio = 0.6;
 

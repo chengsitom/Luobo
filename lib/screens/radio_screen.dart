@@ -256,7 +256,9 @@ class _RadioScreenState extends State<RadioScreen> {
     return RefreshIndicator(
       onRefresh: _loadStations,
       child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 100),
+        padding: EdgeInsets.only(
+          bottom: LuoboSpacing.pageBottomWithStrip(context),
+        ),
         itemCount: _stations.length,
         itemBuilder: (context, index) {
           final station = _stations[index];

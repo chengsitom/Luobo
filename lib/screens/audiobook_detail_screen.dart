@@ -1,35 +1,44 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
-import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/player_provider.dart';
 import '../services/audiobook_progress_store.dart';
 import '../services/subsonic_service.dart';
+import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
 import '../utils/audiobook_type.dart';
 import '../utils/duration_format.dart';
 import '../widgets/audiobook_cover.dart';
+import '../widgets/audiobook_dock.dart';
 import '../widgets/load_error_view.dart';
+import '../widgets/luobo/hero_detail_header.dart';
+import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/luobo_toast.dart';
+import '../widgets/luobo/playing_bars.dart';
+import '../widgets/luobo/sheet_shell.dart';
 import 'audiobook_search_screen.dart';
 
 /// 全局路由观察者：注册进 MaterialApp.navigatorObservers（main.dart），
 /// 详情页 RouteAware 订阅它才能在从播放页 pop 回来时收到 didPopNext。
-/// C004 修复：页面自建 RouteObserver 不注册到 Navigator 时 didPopNext 永不触发。
 final RouteObserver<ModalRoute<void>> audiobookRouteObserver =
     RouteObserver<ModalRoute<void>>();
 
-/// 有声书章节列表页（道理鱼，**连续滚动**）。
+enum _ChapterFilter { all, unlistened, listened }
+
+/// 有声书章节页（道理鱼，2026-10-27 无封面改版）。
 ///
-/// 设计见 docs/有声书接入技术方案.md §7.3 + 改版讨论（2026-08-21）：
-/// - 进入一次全量拉取章节（`take: 10000`，与 playAudiobookChapter 同一条
-///   全量路径），不再页码分页——删除页码栏/请求序号防竞态/页码直跳整套；
-/// - 顶部轻量 header：封面 64 + 书名/演播者/元信息 + 紧凑续播按钮
-///   （B 档，不做大 hero 进度环）；
-/// - 有保存进度的章节行显示「已播至 mm:ss」+ 恢复图标；
-/// - 正在播放章节实时高亮（Consumer of PlayerProvider）；
-/// - 进入自动 scroll 定位到已保存章节并短暂高亮；
-/// - RouteAware.didPopNext 重读进度（从播放页返回刷新）。
+/// 设计见 docs/有声书接入技术方案.md §15.4：
+/// - 无图 hero 头：大号纯文字书封 + 书名 + 元信息 + 主胶囊 + 全书进度；
+/// - `pinned` 筛选 chip 行（全部/未听/已听 + 重播本章），滚到顶栏下沿吸顶；
+/// - 72dp 章节行 + 分隔线 + 行内进度条；快滑条每 50 集刻度；
+/// - 滚动态返回圆钮长成「返回 + 书名」胶囊；
+/// - 底部听书控制条：±15s / 播放暂停 / 倍速 / 睡眠定时。
 class AudiobookDetailScreen extends StatefulWidget {
   final Audiobook book;
   final String? serverKey; // 由列表页传入；null 时自行计算
@@ -47,81 +56,125 @@ class AudiobookDetailScreen extends StatefulWidget {
 class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     with RouteAware {
   List<AudiobookChapter> _chapters = [];
+  List<AudiobookChapter> _visible = [];
   bool _isLoading = true;
   bool _isError = false;
 
-  /// 本书内容类型（§7.4）：决定 AppBar 显示章节直跳（编号型）还是搜索（合集型）。
-  AudiobookContentType? _contentType;
+  _ChapterFilter _filter = _ChapterFilter.all;
+  int _listenedTotal = 0;
 
   String? _serverKey;
   final AudiobookProgressStore _store = AudiobookProgressStore.instance;
   bool _storeLoaded = false;
-  AudiobookProgress? _progress; // 本书已保存的进度（用于"已播至"/恢复图标）
+  AudiobookProgress? _progress;
 
-  /// 进入页面时短暂高亮的章节 order（~1.5s 淡出）。
   int? _highlightOrder;
   bool _highlightVisible = false;
-
-  /// 进入时定位的章节 order（保存进度的章节），用于滚动定位 + 高亮。
   int? _targetOrder;
-
-  /// 目标 order 是否在列表内**唯一**：服务端异常返回重复 order 时，
-  /// 若仍把单一 GlobalKey 挂到多行会抛 Duplicate GlobalKey 崩溃（P3 修复）。
   bool _targetUnique = true;
 
   final GlobalKey _targetRowKey = GlobalKey();
 
-  /// 设置定位目标并预计算唯一性（避免每行构建时 O(n) 扫描）。
-  void _setTargetOrder(int? order, {List<AudiobookChapter>? chapters}) {
-    _targetOrder = order;
-    final list = chapters ?? _chapters;
-    if (order == null) {
-      _targetUnique = true;
-      return;
-    }
-    _targetUnique = list.where((c) => c.order == order).length == 1;
-  }
+  /// 头部（书封/书名/进度）测量用；定位时据其高度计算是否需要滚动。
+  final GlobalKey _heroKey = GlobalKey();
 
-  /// 章节行基础高度（系统字号 1.0 时）。ListView 用 itemExtent 固定行高，
-  /// 进入定位可按 `index * 实际行高` **精确** jumpTo（P2 修复：此前按平均行高
-  /// 估算，长书末尾章节误差累积导致目标行未构建、定位+高亮静默失效）。
+  /// 章节行基础高度（itemExtent，快滑/定位按 index×行高精确计算）。
   static const double _baseRowExtent = 72.0;
 
-  /// 章节行实际高度：随系统字号放宽（上限 1.5×）。行内含标题+副标题+尾部
-  /// 按钮，大字号下 72px 会 RenderFlex 溢出；与列表页网格的 textScalerOf
-  /// 处理保持一致。所有 `index × 行高` 的定位计算必须复用本方法。
+  static const int _fastScrollMinChapters = 30;
+  int _positionTaskEpoch = 0;
+
+  static final Map<String, _ChapterCacheEntry> _chapterCache = {};
+  static const Duration _chapterCacheTtl = Duration(seconds: 60);
+  static const int _chapterCacheMaxEntries = 3;
+
+  /// 章节列表独立 controller。
+  ///
+  /// 2026-10-27 最终：**头部与筛选 chip 固定，只有章节列表滚动**（进入定位
+  /// 与手动滑动都不动头部）。NestedScrollView/CustomScrollView 的联动滚动
+  /// 无法同时满足「进入头部不动」与「手动头部滚动」，用户要求前者，故固定头部。
+  final ScrollController _listController = ScrollController();
+  final ValueNotifier<bool> _showQuickNav = ValueNotifier(false);
+
+  /// 头部（书封）是否已基本滚出视口 → 顶栏返回钮长成「返回 + 书名」胶囊。
+  final ValueNotifier<bool> _collapsed = ValueNotifier(false);
+
+  /// 快捷按钮「滚动中显示、停下 1.8s 后消失」的定时器。
+  Timer? _quickNavTimer;
+
+  /// 快滑索引条正在拖动：此时强制隐藏快捷按钮（用户 2026-10-27）。
+  bool _fastScrolling = false;
+
+  /// 进入自动定位期间抑制快捷按钮（jumpTo 会触发滚动通知，否则一进来就冒出来）。
+  bool _suppressQuickNav = false;
+
+  /// 进入页面且有定位目标时先隐身：定位完成（或超时）再显示，
+  /// 避免「先停在第 1 章顶部、再跳到目标章」的一帧闪烁（用户 2026-10-27）。
+  bool _awaitingInitialLocate = false;
+
   double _rowExtentOf(BuildContext context) =>
       _baseRowExtent *
       MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.5);
 
-  /// 快滑索引条显示阈值：章节数 ≥ 此值才显示（§7.4；2026-08-21 真机调低：
-  /// 三体 42 章也值得有索引条，30 章 ≈ 2160px 列表）。
-  static const int _fastScrollMinChapters = 30;
+  /// 头部实测高度（book cover + 标题 + 进度条），定位计算用；未测到时为 null。
+  double? get _heroHeight {
+    final box = _heroKey.currentContext?.findRenderObject() as RenderBox?;
+    return (box != null && box.hasSize) ? box.size.height : null;
+  }
 
-  /// 定位任务世代：重试连点/重入时递增，旧任务在异步间隙放弃（P3 修复）。
-  int _positionTaskEpoch = 0;
+  /// 列表前的内容总高 = 头部（筛选已移到右上角弹窗，不再占列表高度）。
+  double get _headerExtent => _heroHeight ?? 0;
 
-  /// 会话内章节缓存：详情页重进/重试避免重复全量拉取（R002 修复）。
-  /// key = serverKey|bookId；TTL 60s——连载书内容可能更新，不做永久缓存。
-  static final Map<String, _ChapterCacheEntry> _chapterCache = {};
-  static const Duration _chapterCacheTtl = Duration(seconds: 60);
-
-  /// 缓存条数上限：TTL 清理只在插入时触发，长会话里浏览多本大书后不再进新书
-  /// 会一直留着过期条目（单条目是 take:10000 的全量章节，可达 MB 级），
-  /// 因此按条数封顶，超出时按插入时间淘汰最旧的一本。
-  static const int _chapterCacheMaxEntries = 3;
-
-  final ScrollController _scrollController = ScrollController();
+  /// 把第 index 章定位到的目标滚动偏移：
+  /// - 已在视口内（含头部未滚走）→ 0，不做无谓滚动（用户：第 2 章不该滚）；
+  /// - 否则滚到该章紧贴透明顶栏下方（头部滚走）。
+  double? _targetOffsetFor(int index, double viewport, double max) {
+    final hero = _heroHeight;
+    if (hero == null) return null;
+    final rows = _rowExtentOf(context);
+    // 顶部透明 pinned 占位（statusBar+56）算进滚动内容，viewport 也是整屏，
+    // 故可见判定把这段净空计回；目标偏移 hero+index*rows（占位高在行绝对位
+    // 与吸顶区各出现一次、相减抵消）。
+    final topInset = MediaQuery.paddingOf(context).top + 56;
+    final restTop = topInset + hero + index * rows; // s=0 时该章顶部的 y
+    if (restTop + rows <= viewport + 1) return 0; // 已完整可见 → 不滚
+    return (hero + index * rows).clamp(0.0, max);
+  }
 
   @override
   void initState() {
     super.initState();
+    _listController.addListener(_onListScroll);
     _init();
   }
 
-  /// C001 修复：必须先 await serverKey 初始化（加载进度），再加载章节——
-  /// 否则 _loadChapters 读 _progress 时必为 null，定位到保存章节
-  /// 的功能 100% 失效。
+  /// 头部滚出 → 顶栏显示书名胶囊（阈值 = 头部高度 − 40，留一点提前量）。
+  void _onListScroll() {
+    if (!_listController.hasClients) return;
+    final hero = _heroHeight;
+    if (hero == null) return;
+    _collapsed.value = _listController.offset > (hero - 40);
+  }
+
+  /// 列表滚动：超过阈值时**临时**浮出快捷按钮，停下 1.8s 后自动消失。
+  void _updateQuickNav(double offset) {
+    if (_suppressQuickNav || _fastScrolling) {
+      _quickNavTimer?.cancel();
+      _showQuickNav.value = false;
+      return;
+    }
+    if (offset <= 300) {
+      _quickNavTimer?.cancel();
+      _showQuickNav.value = false;
+      return;
+    }
+    _showQuickNav.value = true;
+    _quickNavTimer?.cancel();
+    _quickNavTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) _showQuickNav.value = false;
+    });
+  }
+
   Future<void> _init() async {
     await _initServerKey();
     await _loadChapters();
@@ -154,29 +207,60 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     if (mounted) {
       setState(() {
         _progress = _store.load(serverKey, widget.book.id);
+        _rebuildVisible();
       });
     }
   }
 
-  /// 一次全量拉取全书章节（连续滚动，无分页）。
+  void _rebuildVisible() {
+    final p = _progress;
+    _listenedTotal = _chapters.where((c) => _isListened(c, p)).length;
+    if (_filter == _ChapterFilter.all) {
+      _visible = _chapters;
+    } else {
+      _visible = _chapters.where((c) {
+        final listened = _isListened(c, p);
+        return _filter == _ChapterFilter.listened ? listened : !listened;
+      }).toList();
+    }
+  }
+
+  bool _isListened(AudiobookChapter chapter, AudiobookProgress? p) {
+    if (p == null) return false;
+    if (p.listenedOrders.contains(chapter.order)) return true;
+    // 旧数据没有集合 → 按「上次听到之前都算听过」估算。
+    if (p.listenedOrders.isEmpty) return chapter.order < p.chapterOrder;
+    return false;
+  }
+
+  /// 进入时定位到哪一章：**正在播本书时优先播放器的当前章**，否则用保存进度。
+  ///
+  /// store 进度是 5s 节流写入的，切章后可能还停留在上一章；直接用 store 会
+  /// 定位到「上一章」（用户 2026-10-27：从书库进入没定位到正在播放的章节）。
+  int? _readingOrder() {
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    final isPlayingThisBook = player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == widget.book.id;
+    if (isPlayingThisBook) {
+      return player.audiobookChapterOrder ?? _progress?.chapterOrder;
+    }
+    return _progress?.chapterOrder;
+  }
+
   Future<void> _loadChapters() async {
-    // 复审 P2：_init 在 await _initServerKey 之后才调 _loadChapters，间隙中
-    // 用户可能已 pop 页面 → setState 前必须检查 mounted（与 _loadProgress 一致）。
     if (!mounted) return;
 
-    // 会话内缓存命中（R002）：TTL 内直接复用，跳过加载态与网络请求。
     final cacheKey = '${_serverKey ?? ''}|${widget.book.id}';
     final cached = _chapterCache[cacheKey];
     if (cached != null &&
         DateTime.now().difference(cached.at) < _chapterCacheTtl) {
-      final savedOrder = _progress?.chapterOrder;
+      final savedOrder = _readingOrder();
       setState(() {
         _chapters = cached.chapters;
         _isLoading = false;
         _isError = false;
-        // 类型判断：缓存路径同样需要（§7.4）。
-        _contentType =
-            classifyAudiobookType(book: widget.book, chapters: cached.chapters);
+        _awaitingInitialLocate = savedOrder != null && savedOrder > 0;
+        _rebuildVisible();
       });
       if (savedOrder != null && savedOrder > 0) {
         _setTargetOrder(savedOrder, chapters: cached.chapters);
@@ -191,8 +275,7 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       _isError = false;
     });
 
-    // 有保存进度 → 进入时定位到该章节（scroll + 高亮）。
-    final savedOrder = _progress?.chapterOrder;
+    final savedOrder = _readingOrder();
 
     try {
       final subsonicService =
@@ -206,11 +289,10 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
 
       final chapters = result.chapters
         ..sort((a, b) => a.order.compareTo(b.order));
-      // 写入缓存并顺手清理过期条目（防无限增长）。
+
       _chapterCache.removeWhere(
         (_, e) => DateTime.now().difference(e.at) > _chapterCacheTtl,
       );
-      // 条数封顶：保留最近插入的 _chapterCacheMaxEntries 本（含本次）。
       if (_chapterCache.length >= _chapterCacheMaxEntries) {
         final oldest = _chapterCache.entries.toList()
           ..sort((a, b) => a.value.at.compareTo(b.value.at));
@@ -220,17 +302,14 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
         }
       }
       _chapterCache[cacheKey] = _ChapterCacheEntry(DateTime.now(), chapters);
-      // 定位目标（唯一性基于最新全量列表计算）。
       _setTargetOrder(savedOrder, chapters: chapters);
 
       setState(() {
         _chapters = chapters;
         _isLoading = false;
-        // 类型判断（§7.4）：编号型→章节直跳，合集型→书内搜索。
-        _contentType =
-            classifyAudiobookType(book: widget.book, chapters: chapters);
+        _awaitingInitialLocate = savedOrder != null && savedOrder > 0;
+        _rebuildVisible();
       });
-
       if (savedOrder != null) {
         _triggerHighlight(savedOrder);
         _scrollToSavedChapter();
@@ -242,98 +321,243 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
         _isLoading = false;
       });
       showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!.failedToLoadChapters,
-      tone: LuoboToastTone.info,
-    );
+        context,
+        message: AppLocalizations.of(context)!.failedToLoadChapters,
+        tone: LuoboToastTone.info,
+      );
     }
   }
 
+  void _setTargetOrder(int? order, {List<AudiobookChapter>? chapters}) {
+    _targetOrder = order;
+    final list = chapters ?? _chapters;
+    if (order == null) {
+      _targetUnique = true;
+      return;
+    }
+    _targetUnique = list.where((c) => c.order == order).length == 1;
+  }
+
   void _triggerHighlight(int order) {
-    // 章节可能已被服务端下架 → 只高亮当前列表里还存在的。
     if (!_chapters.any((c) => c.order == order)) return;
     setState(() {
       _highlightOrder = order;
       _highlightVisible = true;
     });
     Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() => _highlightVisible = false);
-      }
+      if (mounted) setState(() => _highlightVisible = false);
     });
   }
 
-  /// 滚动定位到保存章节。ListView 用 itemExtent 固定行高（_rowExtentOf），
-  /// 可按 `index * 行高` **精确** jumpTo，目标行必然进入构建范围
-  /// （P2 修复：不再按平均行高估算，长书末尾章节不再失效）。
-  /// 必须在 post-frame 执行：setState 后 ListView 尚未挂载，
-  /// 此时 hasClients 为 false，直接执行会静默失效。
-  /// epoch 世代取消：重试连点产生的新定位任务会作废旧任务（P3 修复）。
+  /// 进入时定位：只 `jumpTo` 内层列表，头部不动（NestedScrollView 内层）。
   void _scrollToSavedChapter() {
+    _suppressQuickNav = true;
+    _quickNavTimer?.cancel();
+    _showQuickNav.value = false;
     final epoch = ++_positionTaskEpoch;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || epoch != _positionTaskEpoch) return;
-      final index = _chapters.indexWhere((c) => c.order == _targetOrder);
-      if (index < 0 || !_scrollController.hasClients) return;
-
-      _scrollController.jumpTo(
-        (index * _rowExtentOf(context))
-            .clamp(0.0, _scrollController.position.maxScrollExtent),
-      );
-      _refineScrollToTarget(epoch);
+      _tryScrollToSaved(epoch, 0);
     });
   }
 
-  /// 行已精确落在视口内，这里只做对齐微调（等目标行 build 后 ensureVisible）。
-  /// 250ms 动画期间页面可能被 pop，此时 _scrollController 已 dispose，
-  /// 因此每个 await 后复查 mounted/hasClients 并整体吞错，避免未处理异步异常。
-  Future<void> _refineScrollToTarget(int epoch) async {
-    try {
-      for (var i = 0; i < 3; i++) {
-        await Future.delayed(const Duration(milliseconds: 60));
-        if (!mounted || epoch != _positionTaskEpoch) return;
-        final ctx = _targetRowKey.currentContext;
-        if (ctx != null && ctx.mounted && _scrollController.hasClients) {
-          await Scrollable.ensureVisible(
-            ctx,
-            duration: const Duration(milliseconds: 250),
-            alignment: 0.3,
-          );
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint('AudiobookDetail: refine scroll failed – $e');
+  void _endQuickNavSuppression() {
+    // 定位结束 → 显示列表（若之前为隐身）。
+    if (_awaitingInitialLocate && mounted) {
+      setState(() => _awaitingInitialLocate = false);
     }
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _suppressQuickNav = false;
+    });
   }
 
-  /// 点击章节：从 0 播；点击恢复图标：从保存进度续播。
-  Future<void> _playChapter(AudiobookChapter chapter,
-      {AudiobookProgress? progress}) async {
-    final index = _chapters.indexWhere((c) => c.id == chapter.id);
-    if (index < 0) return;
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    // C006 修复：全量章节拉取失败时 playAudiobookChapter 返回 false，
-    // 弹 snackbar 提示（不清当前播放状态）。
-    final ok = await playerProvider.playAudiobookChapter(
+  Future<void> _tryScrollToSaved(int epoch, int attempt) async {
+    if (!mounted || epoch != _positionTaskEpoch) return;
+    final index = _visible.indexWhere((c) => c.order == _targetOrder);
+    final list = _listController;
+
+    if (index < 0 ||
+        !list.hasClients ||
+        list.position.viewportDimension <= 0 ||
+        _heroHeight == null) {
+      if (attempt < 12) {
+        await Future.delayed(const Duration(milliseconds: 60));
+        return _tryScrollToSaved(epoch, attempt + 1);
+      }
+      debugPrint(
+        '[Audiobook] locate failed: index=$index '
+        'hasClients=${list.hasClients} hero=$_heroHeight '
+        'visible=${_visible.length} targetOrder=$_targetOrder',
+      );
+      _endQuickNavSuppression();
+      return;
+    }
+
+    final target = _targetOffsetFor(
+      index,
+      list.position.viewportDimension,
+      list.position.maxScrollExtent,
+    );
+    if (target == null) {
+      _endQuickNavSuppression();
+      return;
+    }
+    if ((list.offset - target).abs() > 1) list.jumpTo(target);
+    debugPrint(
+      '[Audiobook] locate ok: index=$index target=$target '
+      'offset=${list.offset} hero=$_heroHeight',
+    );
+    _endQuickNavSuppression();
+  }
+
+  Future<void> _playChapter(
+    AudiobookChapter chapter, {
+    AudiobookProgress? progress,
+  }) async {
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    final ok = await player.playAudiobookChapter(
       widget.book,
       _chapters,
-      index,
+      _chapters.indexWhere((c) => c.id == chapter.id),
       resumePositionMs: (progress != null && !progress.completed)
           ? progress.positionMs
           : null,
-      chaptersComplete: true, // _chapters 是 take:10000 的全量列表
+      chaptersComplete: true,
     );
     if (!ok && mounted) {
       showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!.failedToLoadChapters,
-      tone: LuoboToastTone.info,
-    );
+        context,
+        message: AppLocalizations.of(context)!.failedToLoadChapters,
+        tone: LuoboToastTone.info,
+      );
     }
   }
 
-  // ── RouteAware：从播放页返回时重读进度（§7.3 onResume）──────────────
+  /// 重播本章：正在播本书 → 当前章 seek(0)；否则取保存章节从 0 播。
+  Future<void> _replayChapter() async {
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    if (player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == widget.book.id) {
+      await player.seek(Duration.zero);
+      return;
+    }
+    final order = _progress?.chapterOrder;
+    if (order == null) return;
+    final index = _chapters.indexWhere((c) => c.order == order);
+    if (index >= 0) await _playChapter(_chapters[index]);
+  }
+
+  Future<void> _showChapterActions(AudiobookChapter chapter) async {
+    final l10n = AppLocalizations.of(context)!;
+    final listened = _isListened(chapter, _progress);
+    final action = await showLuoboSheet<String>(
+      context: context,
+      title: chapter.title,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LuoboSheetRow(
+            title: l10n.playFromHere,
+            showChevron: false,
+            onTap: () => Navigator.of(ctx).pop('play'),
+          ),
+          LuoboSheetRow(
+            title: listened ? l10n.markUnlistened : l10n.markListened,
+            showChevron: false,
+            onTap: () => Navigator.of(ctx).pop('toggle'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'play') {
+      await _playChapter(chapter);
+    } else if (action == 'toggle') {
+      _toggleListened(chapter);
+    }
+  }
+
+  void _toggleListened(AudiobookChapter chapter) {
+    final serverKey = _serverKey;
+    if (serverKey == null) return;
+    final current = _progress ??
+        AudiobookProgress(
+          audiobookId: widget.book.id,
+          chapterOrder: 1,
+          positionMs: 0,
+          episodeCount: widget.book.episodeCount,
+          updatedAt: DateTime.now(),
+        );
+    final listened = _isListened(chapter, current);
+    final next = listened
+        ? current.withoutListenedChapter(chapter.order)
+        : current.withListenedChapter(chapter.order);
+    final saved = next.copyWith(updatedAt: DateTime.now());
+    _store.save(serverKey, saved);
+    setState(() {
+      _progress = saved;
+      _rebuildVisible();
+    });
+  }
+
+  void _setFilter(_ChapterFilter filter) {
+    if (_filter == filter) return;
+    setState(() {
+      _filter = filter;
+      _rebuildVisible();
+    });
+    // 若当前进度章仍在结果内，滚回它；否则停留在顶部。
+    final target = _progress?.chapterOrder;
+    if (target != null) {
+      final index = _visible.indexWhere((c) => c.order == target);
+      if (index >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_listController.hasClients) return;
+          final target = _targetOffsetFor(
+            index,
+            _listController.position.viewportDimension,
+            _listController.position.maxScrollExtent,
+          );
+          if (target != null) _listController.jumpTo(target);
+        });
+      }
+    }
+  }
+
+  /// 书内搜索：返回纯数字时直接跳到该集（合集型按标题搜，编号型按号跳）。
+  Future<void> _openSearch() async {
+    final order = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) => AudiobookSearchScreen(
+          book: widget.book,
+          chapters: _chapters,
+        ),
+      ),
+    );
+    if (!mounted || order == null) return;
+    _jumpToOrder(order);
+  }
+
+  void _jumpToOrder(int order) {
+    var index = _visible.indexWhere((c) => c.order == order);
+    if (index < 0) {
+      index = _visible.indexWhere((c) => c.order >= order);
+    }
+    if (index < 0) return;
+    final targetOrder = _visible[index].order;
+    _setTargetOrder(targetOrder);
+    _triggerHighlight(targetOrder);
+    if (!_listController.hasClients) return;
+    // 手动跳转（搜索/目录）：目标在前几章时不滚（_targetOffsetFor 返回 0），
+    // 否则滚到紧贴吸顶 chip 下方。
+    final target = _targetOffsetFor(
+      index,
+      _listController.position.viewportDimension,
+      _listController.position.maxScrollExtent,
+    );
+    if (target != null) _listController.jumpTo(target);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -345,21 +569,24 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
 
   @override
   void didPopNext() {
-    // 播放页 pop 回来 → 重读进度（"已播至"防过期）。
-    if (_storeLoaded) {
-      final serverKey = _serverKey;
-      if (serverKey != null && mounted) {
-        setState(() {
-          _progress = _store.load(serverKey, widget.book.id);
-        });
-      }
+    if (!_storeLoaded) return;
+    final serverKey = _serverKey;
+    if (serverKey != null && mounted) {
+      setState(() {
+        _progress = _store.load(serverKey, widget.book.id);
+        _rebuildVisible();
+      });
     }
   }
 
   @override
   void dispose() {
     audiobookRouteObserver.unsubscribe(this);
-    _scrollController.dispose();
+    _quickNavTimer?.cancel();
+    _listController.removeListener(_onListScroll);
+    _listController.dispose();
+    _showQuickNav.dispose();
+    _collapsed.dispose();
     super.dispose();
   }
 
@@ -368,319 +595,688 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.book.title),
-        // 类型感知工具（§7.4）：编号型显示章节直跳，合集型显示书内搜索。
-        actions: [
-          if (_contentType == AudiobookContentType.numbered)
-            IconButton(
-              icon: const Icon(Icons.numbers_rounded),
-              tooltip: l10n.jumpToChapter,
-              onPressed: _jumpToChapterDialog,
-            )
-          else if (_contentType == AudiobookContentType.collection)
-            IconButton(
-              icon: const Icon(Icons.search),
-              tooltip: l10n.searchChapters,
-              onPressed: _openSearch,
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildHeader(isDark, l10n),
-          Expanded(child: _buildBody(isDark, l10n)),
-        ],
-      ),
-    );
-  }
-
-  /// 轻量 header（B 档）：封面 64 + 书名/演播者/元信息 + 紧凑续播按钮。
-  /// 取代旧的「继续收听」banner——有进度时按钮即续播入口。
-  Widget _buildHeader(bool isDark, AppLocalizations l10n) {
-    final book = widget.book;
-    final durationText = formatDuration(book.totalDurationSeconds);
-    final meta = [
-      l10n.chapterCount(book.episodeCount),
-      if (durationText.isNotEmpty) durationText,
-    ].join(' · ');
-    final showResume = _progress != null && !_progress!.completed;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Row(
-        children: [
-          AudiobookCover(title: book.title, width: 64, height: 64, radius: 10),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  book.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (book.narrator != null && book.narrator!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    book.narrator!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white70 : Colors.black54,
-                    ),
-                  ),
-                ],
-                if (meta.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white54 : Colors.black45,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (showResume) ...[
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: () => _resumePlayback(_progress!),
-              icon: const Icon(CupertinoIcons.play_fill, size: 16),
-              label: Text(l10n.continueListening),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// 点击「继续收听」按钮：直接按保存章节续播（全量列表在手，无需翻页）。
-  Future<void> _resumePlayback(AudiobookProgress progress) async {
-    final index = _chapters.indexWhere((c) => c.order == progress.chapterOrder);
-    if (index >= 0) {
-      await _playChapter(_chapters[index], progress: progress);
-    }
-  }
-
-  /// 章节直跳（编号型，§7.4）：输入 1..N → 精确 jumpTo + 高亮。
-  Future<void> _jumpToChapterDialog() async {
-    final total = _chapters.length;
-    if (total <= 0) return;
-    final l10n = AppLocalizations.of(context)!;
-    final value = await showDialog<int>(
-      context: context,
-      builder: (_) => _JumpToChapterDialog(
-        title: l10n.jumpToChapter,
-        hintText: '1 - $total',
-      ),
-    );
-    if (!mounted) return; // P3 修复：对话框期间页面可能被路由清理
-    if (value != null && value >= 1 && value <= total) {
-      _jumpToOrder(value);
-    }
-  }
-
-  /// 精确跳到某章：itemExtent 下 `index×行高` 即达 + 高亮（直跳/索引条共用）。
-  /// 直跳传入的是 1..N 章节序号，而服务端 order 可能非连续（增删章节）或某章
-  /// 缺失回落为 0，按 order 查不到时回退为 1-based 下标，避免静默失效。
-  void _jumpToOrder(int order) {
-    var index = _chapters.indexWhere((c) => c.order == order);
-    if (index < 0) index = order - 1;
-    if (index < 0 || index >= _chapters.length) return;
-    if (!_scrollController.hasClients) return;
-    // 高亮/目标用命中的那一章真实 order（回退分支下 order 与下标不等价）。
-    final targetOrder = _chapters[index].order;
-    _setTargetOrder(targetOrder);
-    _triggerHighlight(targetOrder);
-    _scrollController.jumpTo(
-      (index * _rowExtentOf(context))
-          .clamp(0.0, _scrollController.position.maxScrollExtent),
-    );
-    final epoch = ++_positionTaskEpoch;
-    _refineScrollToTarget(epoch);
-  }
-
-  /// 书内搜索（合集型，§7.4）：全量列表在内存，纯前端标题过滤，零服务端接口。
-  void _openSearch() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AudiobookSearchScreen(
-          book: widget.book,
-          chapters: _chapters,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody(bool isDark, AppLocalizations l10n) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: const LuoboListTopBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_isError && _chapters.isEmpty) {
-      return LoadErrorView(
-        title: l10n.failedToLoadChapters,
-        retryLabel: l10n.retry,
-        onRetry: _loadChapters,
-      );
-    }
-
-    if (_chapters.isEmpty) {
-      return Center(
-        child: Text(
-          l10n.noSongsFound,
-          style: TextStyle(color: Colors.grey[600]),
+      return Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: const LuoboListTopBar(),
+        body: LoadErrorView(
+          title: l10n.failedToLoadChapters,
+          retryLabel: l10n.retry,
+          onRetry: _loadChapters,
         ),
       );
     }
 
-    return Stack(
-      children: [
-        Consumer<PlayerProvider>(
-          builder: (context, player, _) {
-            final isCurrentBook = player.isPlayingAudiobook &&
-                player.currentAudiobook?.id == widget.book.id;
-            final currentOrder =
-                isCurrentBook ? player.audiobookChapterOrder : null;
+    return Scaffold(
+      body: Consumer<PlayerProvider>(
+        builder: (context, player, _) {
+          final isCurrentBook = player.isPlayingAudiobook &&
+              player.currentAudiobook?.id == widget.book.id;
+          final hasDock = isCurrentBook;
+          final rowExtent = _rowExtentOf(context);
+          final bottomInset = hasDock
+              ? 90 + MediaQuery.paddingOf(context).bottom
+              : 24.0;
 
-            return ListView.builder(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              // 统一行高：支撑进入定位按 index 精确 jumpTo（P2 修复），
-              // 随系统字号放宽以免大字号溢出。
-              itemExtent: _rowExtentOf(context),
-              // 右侧留出快滑索引条命中区（§7.4）。
-              padding: const EdgeInsets.only(right: 24),
-              itemCount: _chapters.length,
-              itemBuilder: (context, index) {
-                final chapter = _chapters[index];
-                return _buildChapterTile(
-                  isDark,
-                  chapter,
-                  isCurrent: currentOrder == chapter.order,
-                  progress: _progress?.chapterOrder == chapter.order
-                      ? _progress
-                      : null,
-                  highlight:
-                      _highlightVisible && _highlightOrder == chapter.order,
-                );
-              },
-            );
-          },
-        ),
-        // 快滑索引条（§7.4）：章节数达到阈值才显示，避免短列表噪音。
-        if (_chapters.length >= _fastScrollMinChapters)
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: _FastScrollBar(
-              itemCount: _chapters.length,
-              itemExtent: _rowExtentOf(context),
-              controller: _scrollController,
-              labelBuilder: (index) => _chapters[index].title,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildChapterTile(
-    bool isDark,
-    AudiobookChapter chapter, {
-    required bool isCurrent,
-    required AudiobookProgress? progress,
-    required bool highlight,
-  }) {
-    final l10n = AppLocalizations.of(context)!;
-    final accentColor = Theme.of(context).colorScheme.primary;
-
-    // 已完成：显示"已听完"；有进度：显示"已播至 mm:ss"。
-    String? subtitle;
-    if (progress?.completed == true) {
-      subtitle = l10n.finished;
-    } else if (progress != null && progress.positionMs > 0) {
-      // <0.5s 时 formatDurationMs 四舍五入为 0 秒返回空串，此时不拼"已播至 "，
-      // 否则出现"已播至  · mm:ss"的悬空文案。
-      final played = _formatMs(progress.positionMs);
-      if (played.isNotEmpty) subtitle = l10n.playedTo(played);
-    }
-    if (chapter.durationSeconds != null && chapter.durationSeconds! > 0) {
-      final durationText = _formatSeconds(chapter.durationSeconds!);
-      subtitle = subtitle == null ? durationText : '$subtitle · $durationText';
-    }
-
-    // Apple §5.2：当前播放项用较亮/半粗标题低调标识，不用红色/等化器/波形
-    // 图标制造噪声；序号列保持一致，仅当前项着色+加粗。
-    final titleColor =
-        isCurrent ? accentColor : (isDark ? Colors.white : Colors.black);
-    final orderColor =
-        isCurrent ? accentColor : (isDark ? Colors.white54 : Colors.black45);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      // 仅当目标 order 唯一时挂定位 key（P3 修复：重复 order 会 Duplicate GlobalKey）。
-      key:
-          _targetUnique && chapter.order == _targetOrder ? _targetRowKey : null,
-      color:
-          highlight ? accentColor.withValues(alpha: 0.12) : Colors.transparent,
-      child: ListTile(
-        leading: SizedBox(
-          width: 32,
-          child: Center(
-            child: Text(
-              '${chapter.order}',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
-                color: orderColor,
+          return Stack(
+            children: [
+              // 单层 CustomScrollView：hero + pinned chips + 列表**一起滚动**
+              // （用户 2026-10-27：接受整体滚动，拒绝固定头部）。
+              // 进入定位期间隐身（仍布局以测量/跳转），定位完成淡入，去掉跳闪。
+              // 透明顶栏：内容从顶栏（透明）后穿过滚动，和歌手/专辑详情一致。
+              // 顶部净空用**首个透明 pinned 占位**（statusBar+56 高）承担，而不是
+              // 外层 Padding —— 外层 Padding 会把滚动视图整体下移、内容在栏下沿被
+              // 硬裁断，看起来就是「一条不透明导航栏」（list_top_bar.dart 已记此坑）。
+              // 占位排在最前 → 筛选 chip 吸顶位置天然落在它（= 顶栏）下方。
+              AnimatedOpacity(
+                opacity: _awaitingInitialLocate ? 0 : 1,
+                duration: const Duration(milliseconds: 120),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (n) {
+                    if (n.metrics.axis == Axis.vertical) {
+                      _updateQuickNav(n.metrics.pixels);
+                    }
+                    return false;
+                  },
+                  child: CustomScrollView(
+                    controller: _listController,
+                    slivers: [
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _PinnedHeaderDelegate(
+                          height: MediaQuery.paddingOf(context).top + 56,
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: KeyedSubtree(
+                          key: _heroKey,
+                          child: _buildHeroHeader(l10n, isDark, player),
+                        ),
+                      ),
+                      SliverFixedExtentList(
+                        itemExtent: rowExtent,
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => _buildChapterRow(
+                            _visible[index],
+                            index,
+                            player,
+                            isDark,
+                            l10n,
+                          ),
+                          childCount: _visible.length,
+                        ),
+                      ),
+                      SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-        title: Text(
-          chapter.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 16,
-            color: titleColor,
-            fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-        subtitle: subtitle != null
-            ? Text(subtitle, style: TextStyle(fontSize: 13))
-            : null,
-        trailing: progress != null && !progress.completed && !isCurrent
-            ? IconButton(
-                icon: Icon(CupertinoIcons.play_fill, color: accentColor),
-                tooltip: l10n.continueListening,
-                onPressed: () => _playChapter(chapter, progress: progress),
-              )
-            : null,
-        onTap: () => _playChapter(chapter),
+              // 快滑索引条（列表内容区右侧）。
+              if (_visible.length >= _fastScrollMinChapters)
+                Positioned(
+                  right: 0,
+                  top: MediaQuery.paddingOf(context).top + 56,
+                  bottom: 0,
+                  child: _FastScrollBar(
+                    itemCount: _visible.length,
+                    itemExtent: rowExtent,
+                    controller: _listController,
+                    headerExtent: _headerExtent,
+                    onDragStateChanged: (dragging) {
+                      _fastScrolling = dragging;
+                      _quickNavTimer?.cancel();
+                      _showQuickNav.value = false;
+                    },
+                    labelBuilder: (index) {
+                      final c = _visible[index];
+                      return '第 ${c.order} 集 · ${c.title}';
+                    },
+                    tickEvery: _visible.length >= 200 ? 50 : 0,
+                    tickLabelBuilder: (index) => '${_visible[index].order}',
+                  ),
+                ),
+              _buildTopBar(context, l10n),
+              // 滑动超过一屏：靠边浮出「到顶 / 到底 / 到播放章」三个按钮。
+              ValueListenableBuilder<bool>(
+                valueListenable: _showQuickNav,
+                builder: (context, show, _) {
+                  if (!show) return const SizedBox.shrink();
+                  return Positioned(
+                    // 贴右边缘；与快滑索引条有约 24dp 重叠（按钮在上层，
+                    // 快滑条上下大部分仍可拖动）。放左侧会长期挡住章节序号。
+                    right: 12,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _QuickNavButton(
+                            icon: AppIcons.arrowUp,
+                            onTap: _scrollToTop,
+                          ),
+                          const SizedBox(height: 10),
+                          _QuickNavButton(
+                            icon: Icons.my_location_rounded,
+                            onTap: _scrollToPlayingChapter,
+                          ),
+                          const SizedBox(height: 10),
+                          _QuickNavButton(
+                            icon: AppIcons.arrowDown,
+                            onTap: _scrollToBottom,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (hasDock)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AudiobookDock(
+                    player: player,
+                    book: widget.book,
+                    onTitleTap: _scrollToPlayingChapter,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  // 时长格式化统一走共享工具（R002 修复，移除第 4/5 份副本）。
-  String _formatMs(int ms) => formatDurationMs(ms);
-  String _formatSeconds(int seconds) => formatDuration(seconds);
+  // ── 快捷跳转（到顶 / 到底 / 到播放章）───────────────────────────────
+
+  /// 到顶部：**先内层归零，再外层归零**（同时 animate 会互相打断，导致「差一点」）。
+  /// 到顶部：只滚章节列表（头部固定不动）。
+  Future<void> _scrollToTop() async {
+    if (!_listController.hasClients) return;
+    await _listController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  /// 到底部：只滚章节列表。
+  Future<void> _scrollToBottom() async {
+    if (!_listController.hasClients) return;
+    await _listController.animateTo(
+      _listController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _scrollToPlayingChapter() {
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    final isThisBook = player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == widget.book.id;
+    final order = isThisBook
+        ? player.audiobookChapterOrder
+        : _progress?.chapterOrder;
+    if (order == null) return;
+
+    // 当前筛选可能把目标章排除了 → 先切回「全部」再定位（否则点了没反应）。
+    if (_filter != _ChapterFilter.all &&
+        !_visible.any((c) => c.order == order)) {
+      setState(() {
+        _filter = _ChapterFilter.all;
+        _rebuildVisible();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToOrder(order));
+      return;
+    }
+    _jumpToOrder(order);
+  }
+
+  // ── 头部 ──────────────────────────────────────────────────────────────
+
+  Widget _buildHeroHeader(
+    AppLocalizations l10n,
+    bool isDark,
+    PlayerProvider player,
+  ) {
+    final c = LuoboColors.of(context);
+    final book = widget.book;
+    final meta = [
+      if (book.narrator != null && book.narrator!.isNotEmpty) book.narrator!,
+      if (audiobookDisplayCategory(book) != null)
+        audiobookDisplayCategory(book)!,
+      l10n.chapterCount(book.episodeCount),
+      if (book.totalDurationSeconds != null && book.totalDurationSeconds! > 0)
+        _humanDuration(l10n, book.totalDurationSeconds!),
+    ].join(' · ');
+
+    final progress = _progress;
+    final isThisBook = player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == book.id;
+    final ratio = _liveRatio(player);
+    final remaining = _remainingSeconds(book, progress, ratio);
+    final hasProgress =
+        (progress != null && !progress.completed) || isThisBook;
+    final displayOrder = isThisBook
+        ? (player.audiobookChapterOrder ?? progress?.chapterOrder)
+        : progress?.chapterOrder;
+
+    return Padding(
+      // 顶部留白给悬浮顶栏（状态栏 + 56）让位。
+      // CustomScrollView 已被外层 Padding 下移 statusBar+56，这里只留小间距。
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          AudiobookCover(
+            title: book.title,
+            size: AudiobookCoverSize.large,
+            narrator: book.narrator,
+            category: audiobookDisplayCategory(book),
+            elevated: true,
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              book.title,
+              style: LuoboType.navTitle.copyWith(fontSize: 25, color: c.fg),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              meta,
+              style: LuoboType.caption.copyWith(color: c.fg2),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 150),
+            child: LuoboHeroCapsule(
+              icon: AppIcons.play,
+              label: hasProgress && displayOrder != null
+                  ? '${l10n.continueListening} · ${l10n.chapterX(displayOrder)}'
+                  : l10n.play,
+              onTap: hasProgress && displayOrder != null
+                  ? () {
+                      final index = _chapters
+                          .indexWhere((c) => c.order == displayOrder);
+                      if (index >= 0) {
+                        _playChapter(
+                          _chapters[index],
+                          progress: (progress != null &&
+                                  progress.chapterOrder == displayOrder)
+                              ? progress
+                              : null,
+                        );
+                      }
+                    }
+                  : () {
+                      if (_chapters.isNotEmpty) _playChapter(_chapters.first);
+                    },
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (ratio != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text(
+                    l10n.listenedPercent((ratio * 100).round()),
+                    style: LuoboType.caption.copyWith(color: c.fg2),
+                  ),
+                  const Spacer(),
+                  if (remaining != null)
+                    Text(
+                      l10n.remainingTime(_humanDuration(l10n, remaining)),
+                      style: LuoboType.caption.copyWith(color: c.fg2),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 7),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _RatioBar(value: ratio, height: 4),
+            ),
+            // 进度条到 chip 的间距由 chip 行的 14dp 内边距承担（两侧对称）。
+          ] else
+            // 无整本书进度时也别加额外间距：否则 chip 距上 28、距下 14，
+            // 看起来就像贴着分割线（用户 2026-10-27）。
+            const SizedBox.shrink(),
+        ],
+      ),
+    );
+  }
+
+  // ── 悬浮顶栏 ──────────────────────────────────────────────────────────
+
+  /// 悬浮顶栏：头部可见时左侧是返回圆钮；头部滚出后长成「返回 + 书名」胶囊
+  /// （同歌手详情折叠形态，用户 2026-10-27）。右侧始终是搜索圆钮。
+  Widget _buildTopBar(BuildContext context, AppLocalizations l10n) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: _collapsed,
+                  builder: (context, collapsed, _) => AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    // 左对齐：AnimatedSwitcher 无 alignment，默认 layoutBuilder 用
+                    // center Stack，会把 40dp 圆钮居中摆在胶囊宽度里，胶囊移除、
+                    // Stack 宽度塌回 40 时圆钮从中间跳回最左 → 用户看到的「跳变」。
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        ...previous,
+                        if (current != null) current,
+                      ],
+                    ),
+                    child: collapsed
+                        ? ConstrainedBox(
+                            key: const ValueKey('pill'),
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width - 120,
+                            ),
+                            child: LuoboBackTitlePill(title: widget.book.title),
+                          )
+                        : LuoboTopCircleButton(
+                            key: const ValueKey('circle'),
+                            icon: AppIcons.back,
+                            onTap: () => Navigator.of(context).maybePop(),
+                          ),
+                  ),
+                ),
+                const Spacer(),
+                LuoboTopCircleButton(
+                  icon: AppIcons.filter,
+                  onTap: _showFilterSheet,
+                ),
+                const SizedBox(width: 10),
+                LuoboTopCircleButton(
+                  icon: AppIcons.search,
+                  onTap: _openSearch,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── 筛选弹窗（右上角入口）──────────────────────────────────────────────
+
+  /// 右上角筛选钮 → 底部单选面板（飞牛同款）：全部 / 未听 / 已听 三档带计数，
+  /// 底部附「重播本章」（有未完成进度时）。原吸顶 chip 行在透明顶栏下显得悬空，
+  /// 改为弹窗（用户 2026-10-27）。
+  Future<void> _showFilterSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    final total = _chapters.length;
+    final unlistened = math.max(0, total - _listenedTotal);
+    final canReplay = _progress != null && !_progress!.completed;
+
+    await showLuoboSheet<void>(
+      context: context,
+      title: l10n.chapterFilter,
+      builder: (ctx) {
+        final c = LuoboColors.of(ctx);
+        Widget countBadge(int n) => Text(
+              '$n',
+              style: LuoboType.caption.copyWith(color: c.fg2),
+            );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LuoboSheetRow(
+              title: l10n.filterAll,
+              trailing: countBadge(total),
+              selected: _filter == _ChapterFilter.all,
+              showChevron: false,
+              onTap: () {
+                _setFilter(_ChapterFilter.all);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            LuoboSheetRow(
+              title: l10n.filterUnlistened,
+              trailing: countBadge(unlistened),
+              selected: _filter == _ChapterFilter.unlistened,
+              showChevron: false,
+              onTap: () {
+                _setFilter(_ChapterFilter.unlistened);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            LuoboSheetRow(
+              title: l10n.filterListened,
+              trailing: countBadge(_listenedTotal),
+              selected: _filter == _ChapterFilter.listened,
+              showChevron: false,
+              onTap: () {
+                _setFilter(_ChapterFilter.listened);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            if (canReplay) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
+                child: Divider(height: 0.5, thickness: 0.5, color: c.divider),
+              ),
+              LuoboSheetRow(
+                title: l10n.replayChapter,
+                leading: const Icon(
+                  CupertinoIcons.arrow_counterclockwise,
+                  size: 18,
+                  color: LuoboAccent.accent,
+                ),
+                showChevron: false,
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _replayChapter();
+                },
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  // ── 章节行 ────────────────────────────────────────────────────────────
+
+  Widget _buildChapterRow(
+    AudiobookChapter chapter,
+    int index,
+    PlayerProvider player,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
+    final c = LuoboColors.of(context);
+    final p = _progress;
+    final isCurrentBook = player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == widget.book.id;
+    final isCurrent = isCurrentBook &&
+        player.audiobookChapterOrder == chapter.order;
+    final listened = _isListened(chapter, p);
+    final isSavedChapter = p != null && p.chapterOrder == chapter.order;
+    // 「上次播放章」样式只在**本书未在播放**时出现（冷启 / 在播别的书）：用来
+    // 指示「从这里续听」。本书正在播时只有真正在播的那一章高亮——否则缓存的
+    // `_progress`（_playChapter 不会即时刷新）还停在旧章，会和当前章一起高亮
+    // （用户 2026-10-27：在播第 3 章、点了第 4 章，3、4 两行都高亮）。
+    final isResumeChapter =
+        !isCurrentBook && isSavedChapter && !p.completed;
+    // 高亮：当前播放章 + 上次播放章都用同一套「正在播放」样式。
+    final shouldHighlight = isCurrent || isResumeChapter;
+    // 只有「既非当前、也非上次播放章」的已听章才显示 ✓/已听完。
+    final showListened = listened && !isCurrent && !isResumeChapter;
+    // 行内进度/「已播至」也只在未播本书时显示：本书在播时进度看吸底条，
+    // 行上再按旧快照画一条就是过期信息。
+    final playedMs =
+        !isCurrentBook && isSavedChapter && !p.completed ? p.positionMs : 0;
+    final durationMs = !isCurrentBook && isSavedChapter ? p.durationMs : null;
+    final showBar = playedMs > 0 && (durationMs ?? 0) > 0;
+
+    final durationText = (chapter.durationSeconds != null &&
+            chapter.durationSeconds! > 0)
+        ? formatDuration(chapter.durationSeconds!)
+        : '';
+    String? state;
+    if (showListened) {
+      state = l10n.finished;
+    } else if (playedMs > 0) {
+      final played = formatDurationMs(playedMs);
+      if (played.isNotEmpty) state = l10n.playedTo(played);
+    }
+    final subtitle = [
+      if (state != null) state,
+      if (durationText.isNotEmpty) durationText,
+    ].join(' · ');
+
+    final accent = LuoboAccent.accent;
+    final highlight = _highlightVisible && _highlightOrder == chapter.order;
+
+    return Container(
+      key: _targetUnique && chapter.order == _targetOrder
+          ? _targetRowKey
+          : null,
+      decoration: BoxDecoration(
+        color: highlight
+            ? accent.withValues(alpha: 0.12)
+            : (shouldHighlight
+                // 暗色下 5% 几乎看不见（用户 2026-10-27），提到 16%。
+                ? accent.withValues(alpha: isDark ? 0.16 : 0.06)
+                : Colors.transparent),
+        border: Border(
+          left: shouldHighlight
+              ? const BorderSide(color: LuoboAccent.accent, width: 3)
+              : BorderSide.none,
+          bottom: BorderSide(
+            color: c.divider.withValues(alpha: 0.6),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: InkWell(
+        // 点击「上次播放章」续播到保存位置（冷启/在播别的书时）；点其它章从 0 起。
+        // 否则冷启点进度章会从 0:00 重放（用户 2026-10-28：记录了 12 分却从头播）。
+        onTap: () => _playChapter(chapter, progress: isResumeChapter ? p : null),
+        onLongPress: () => _showChapterActions(chapter),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 32,
+                child: Center(
+                  child: isCurrent
+                      ? (player.isPlaying
+                          ? PlayingBars(size: 14, color: accent)
+                          : Icon(AppIcons.play, size: 13, color: accent))
+                      // 上次播放章：沿用「正在播放」底色/竖条/红标题，
+                      // 左侧用**红色三角**（用户 2026-10-27）。
+                      : isResumeChapter
+                          ? Icon(AppIcons.play, size: 12, color: accent)
+                          : showListened
+                              ? Icon(AppIcons.check, size: 13, color: c.fg3)
+                              : Text(
+                                    '${chapter.order}',
+                                    style: LuoboType.body.copyWith(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: c.fg2,
+                                    ),
+                                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      chapter.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.body.copyWith(
+                        fontSize: 16,
+                        color: shouldHighlight ? accent : c.fg,
+                        fontWeight: shouldHighlight
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.caption.copyWith(color: c.fg2),
+                    ),
+                    if (showBar) ...[
+                      const SizedBox(height: 5),
+                      _RatioBar(
+                        value: (playedMs / durationMs!).clamp(0.0, 1.0),
+                        height: 2,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // 行尾不再重复放播放三角：左侧状态列已经表达了「当前/上次位置」，
+              // 点整行即播放（用户 2026-10-27：左右两边都有一个红色三角）。
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 全书进度：正在播本书时用**播放器实时位置**重算，否则用保存进度。
+  ///
+  /// 用户 2026-10-27：「播放时有声书的进度条没有进度」——原实现只读进入页面时
+  /// 的 `_progress`，播放过程中不更新。gapless 下必须用章节内位置。
+  double? _liveRatio(PlayerProvider player) {
+    final p = _progress;
+    final total = widget.book.episodeCount;
+    if (total <= 0) return null;
+
+    final isThisBook = player.isPlayingAudiobook &&
+        player.currentAudiobook?.id == widget.book.id;
+    final chapterDuration = player.chapterDuration;
+    if (!isThisBook || chapterDuration.inMilliseconds <= 0) {
+      return p?.progressRatio(totalEpisodes: total);
+    }
+
+    final currentOrder =
+        player.audiobookChapterOrder ?? p?.chapterOrder ?? 1;
+    var listened = 0;
+    if (p != null && p.listenedOrders.isNotEmpty) {
+      listened = p.listenedOrders
+          .where((o) => o != currentOrder && o >= 1 && o <= total)
+          .length;
+    } else {
+      listened = (currentOrder - 1).clamp(0, total);
+    }
+    final fraction = (player.chapterPosition.inMilliseconds /
+            chapterDuration.inMilliseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    return ((listened + fraction) / total).clamp(0.0, 1.0).toDouble();
+  }
+
+  int? _remainingSeconds(
+    Audiobook book,
+    AudiobookProgress? progress,
+    double? liveRatio,
+  ) {
+    final total = book.totalDurationSeconds;
+    if (total == null || total <= 0) return null;
+    final ratio = liveRatio ??
+        progress?.progressRatio(totalEpisodes: book.episodeCount) ??
+        0;
+    return (total * (1 - ratio)).round().clamp(0, total);
+  }
+
+  String _humanDuration(AppLocalizations l10n, int seconds) {
+    if (seconds <= 0) return l10n.durationMinutes(0);
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) return l10n.durationHoursMinutes(h, m);
+    return l10n.durationMinutes(m);
+  }
 }
 
-/// 章节列表会话内缓存条目（R002 修复）。
+/// 章节列表会话内缓存条目。
 class _ChapterCacheEntry {
   final DateTime at;
   final List<AudiobookChapter> chapters;
@@ -688,66 +1284,112 @@ class _ChapterCacheEntry {
   const _ChapterCacheEntry(this.at, this.chapters);
 }
 
-/// 章节直跳输入对话框：controller 生命周期随对话框 State（route **完全移除后**
-/// 才 dispose），避免 pop 后立即手动 dispose 在键盘收起重建时触发
-/// used-after-dispose 断言崩溃（P2 修复）。
-class _JumpToChapterDialog extends StatefulWidget {
-  final String title;
-  final String hintText;
+/// 固定高度的 pinned sliver（筛选 chip 吸顶用）。
+class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Widget child;
 
-  const _JumpToChapterDialog({required this.title, required this.hintText});
+  const _PinnedHeaderDelegate({required this.height, required this.child});
 
   @override
-  State<_JumpToChapterDialog> createState() => _JumpToChapterDialogState();
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) =>
+      child;
+
+  @override
+  bool shouldRebuild(covariant _PinnedHeaderDelegate old) =>
+      old.height != height || old.child != child;
 }
 
-class _JumpToChapterDialogState extends State<_JumpToChapterDialog> {
-  final TextEditingController _controller = TextEditingController(text: '1');
+/// 长列表快捷跳转圆钮（到顶 / 到底 / 到播放章）。
+class _QuickNavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  const _QuickNavButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        keyboardType: TextInputType.number,
-        autofocus: true,
-        decoration: InputDecoration(hintText: widget.hintText),
+    final c = LuoboColors.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: c.card,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: c.isDark ? 0.5 : 0.16),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 19, color: c.fg),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(AppLocalizations.of(context)!.cancel),
-        ),
-        TextButton(
-          onPressed: () =>
-              Navigator.pop(context, int.tryParse(_controller.text)),
-          child: Text(AppLocalizations.of(context)!.ok),
-        ),
-      ],
     );
   }
 }
 
-/// 右侧快滑索引条（§7.4）：拖拽快速滑过几百条内容，拖动时气泡显示章节标题。
-/// 精确跳转依赖 itemExtent 固定行高（`index × itemExtent` 即达）。
+/// 细进度条（4dp/3dp/2dp 共用）。
+class _RatioBar extends StatelessWidget {
+  final double value;
+  final double height;
+
+  const _RatioBar({required this.value, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(height),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          children: [
+            Positioned.fill(child: ColoredBox(color: c.divider)),
+            Positioned.fill(
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: value.clamp(0.0, 1.0),
+                child: const ColoredBox(color: LuoboAccent.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 右侧快滑索引条：拖动气泡显示「第 N 集 · 标题」，每 [tickEvery] 项一个刻度。
 class _FastScrollBar extends StatefulWidget {
   final int itemCount;
   final double itemExtent;
   final ScrollController controller;
+  final double headerExtent;
   final String Function(int index) labelBuilder;
+  final int tickEvery;
+  final String Function(int index)? tickLabelBuilder;
+
+  /// 拖动开始/结束回调（用于隐藏快捷跳转按钮）。
+  final ValueChanged<bool>? onDragStateChanged;
 
   const _FastScrollBar({
     required this.itemCount,
     required this.itemExtent,
     required this.controller,
+    required this.headerExtent,
     required this.labelBuilder,
+    this.tickEvery = 0,
+    this.tickLabelBuilder,
+    this.onDragStateChanged,
   });
 
   @override
@@ -755,7 +1397,6 @@ class _FastScrollBar extends StatefulWidget {
 }
 
 class _FastScrollBarState extends State<_FastScrollBar> {
-  /// 拖动中悬停的章节 index（null = 未在拖动）。
   int? _hoverIndex;
 
   int _indexForDy(double dy, double height) {
@@ -766,14 +1407,13 @@ class _FastScrollBarState extends State<_FastScrollBar> {
   void _jump(int index) {
     if (!widget.controller.hasClients) return;
     widget.controller.jumpTo(
-      (index * widget.itemExtent)
+      (widget.headerExtent + index * widget.itemExtent)
           .clamp(0.0, widget.controller.position.maxScrollExtent),
     );
   }
 
   void _handle(double dy, double height) {
     final index = _indexForDy(dy, height);
-    // P3 性能修复：index 未变化（如 120Hz 连续采样同章节）时跳过重建与跳转。
     if (index == _hoverIndex) return;
     setState(() => _hoverIndex = index);
     _jump(index);
@@ -781,65 +1421,91 @@ class _FastScrollBarState extends State<_FastScrollBar> {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = Theme.of(context).colorScheme.primary;
+    final c = LuoboColors.of(context);
+    final accent = LuoboAccent.accent;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = constraints.maxHeight;
-        // P3 修复：极矮视口（<56px）不绘制，规避 clamp min>max 抛 ArgumentError
-        // （thumbH clamp(40,height)、气泡 top clamp(4,height-36) 在 height<40 时越界）。
-        if (height < 56) return const SizedBox(width: 24);
+        if (height < 56) return const SizedBox(width: 36);
 
         final total = widget.itemCount;
         final hover = _hoverIndex;
-
-        // 拇指高度 = 视口占比示意（最小 40dp）；位置 = 悬停章节比例。
-        final thumbH = (height * (height / (total * widget.itemExtent)))
-            .clamp(40.0, height);
+        final thumbH =
+            (height * (height / (total * widget.itemExtent))).clamp(40.0, height);
         final thumbTop =
             hover == null ? 0.0 : (height - thumbH) * (hover / (total - 1));
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onVerticalDragStart: (d) => _handle(d.localPosition.dy, height),
+          onVerticalDragStart: (d) {
+            widget.onDragStateChanged?.call(true);
+            _handle(d.localPosition.dy, height);
+          },
           onVerticalDragUpdate: (d) => _handle(d.localPosition.dy, height),
-          onVerticalDragEnd: (_) => setState(() => _hoverIndex = null),
+          onVerticalDragEnd: (_) {
+            widget.onDragStateChanged?.call(false);
+            setState(() => _hoverIndex = null);
+          },
           onTapDown: (d) => _jump(_indexForDy(d.localPosition.dy, height)),
           child: SizedBox(
-            width: 24,
+            width: 36,
             child: Stack(
               alignment: Alignment.center,
+              // ⚠️ 气泡（宽 220）超出 36 宽容器，默认硬裁剪会只剩贴边一小条红块
+              // （用户 2026-10-27 截图反馈的「异常红色」）。
+              clipBehavior: Clip.none,
               children: [
-                // 轨道：拖动时亮起提示可拖区域。
                 Container(
                   width: 3,
                   height: double.infinity,
+                  margin: const EdgeInsets.only(right: 0),
                   decoration: BoxDecoration(
                     color: hover == null
                         ? Colors.transparent
-                        : accentColor.withValues(alpha: 0.25),
+                        : accent.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                // 拇指。
+                // 刻度（每 50 集）。
+                if (widget.tickEvery > 0)
+                  for (var i = 0; i < total; i += widget.tickEvery)
+                    Positioned(
+                      right: 15,
+                      top: (i / (total - 1) * height - 5)
+                          .clamp(0.0, height - 10),
+                      child: Text(
+                        widget.tickLabelBuilder?.call(i) ??
+                            widget.labelBuilder(i),
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          color: c.fg3,
+                          height: 1,
+                        ),
+                      ),
+                    ),
                 Positioned(
                   top: thumbTop,
+                  // 居中于轨道（容器宽 36、轨道中心 18）。
+                  right: hover == null ? 13 : 12,
                   child: Container(
-                    width: 5,
+                    // 拖动时加宽（10 → 12），更跟手、不像一个「半圆点」。
+                    width: hover == null ? 10 : 12,
                     height: thumbH,
                     decoration: BoxDecoration(
                       color: hover == null
-                          ? Colors.grey.withValues(alpha: 0.45)
-                          : accentColor,
-                      borderRadius: BorderRadius.circular(3),
+                          ? c.fg3.withValues(alpha: 0.75)
+                          : accent,
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                 ),
-                // 拖动气泡：显示章节标题。
                 if (hover != null && hover < total)
                   Positioned(
-                    right: 18,
-                    top: (thumbTop + thumbH / 2 - 16).clamp(4.0, height - 36),
+                    // 紧贴 thumb 左缘，避免中间露出「半圆形红色」的错觉。
+                    right: 22,
+                    top: (thumbTop + thumbH / 2 - 16)
+                        .clamp(4.0, height - 36),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 220),
                       child: Container(
@@ -848,7 +1514,7 @@ class _FastScrollBarState extends State<_FastScrollBar> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: accentColor,
+                          color: accent,
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(

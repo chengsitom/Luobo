@@ -52,7 +52,10 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
   }
 
   void _navigateToAudiobooks() {
-    _push(MaterialPageRoute(builder: (_) => const AudiobookListScreen()));
+    // 有声书页面全屏覆盖（根导航）：不展示音乐迷你播放条/底栏。
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(builder: (_) => const AudiobookListScreen()),
+    );
   }
 
   void _navigateToSettings() {

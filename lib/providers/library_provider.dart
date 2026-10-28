@@ -230,6 +230,14 @@ class LibraryProvider extends ChangeNotifier {
   /// 1. `artistImageUrl` 直链（Navidrome last.fm/deezer 大图）→ 2. `coverArt` id →
   /// 3. 专辑封面单图 → 4. 2×2 专辑封面拼贴 → 5. 渐变首字母占位。
   /// 组件按 `ArtistCover` 的字段择一渲染，保证无任何图源时页面也不素。
+  /// 道理鱼服务端的艺人统计（`trackCount` / `albumCount`，登录后预取）。
+  /// 非道理鱼 / 预取失败时为空 Map，调用方回退本地启发式。
+  Map<String, int> get daoliyuArtistTrackCounts =>
+      _subsonicService.daoliyuArtistTrackCounts;
+
+  Map<String, int> get daoliyuArtistAlbumCounts =>
+      _subsonicService.daoliyuArtistAlbumCounts;
+
   ArtistCover resolveArtistCover(Artist artist) {
     // 级 1/2：外部直链（artistImageUrl，last.fm/deezer）或服务端 coverArt id。
     String? primaryUrl;

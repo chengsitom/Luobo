@@ -130,6 +130,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Audiobook? _currentAudiobook; // 当前播放的有声书（进度记忆的归属）
   int? _audiobookChapterOrder; // 当前章节 order（1-based，bookmark 用，取自 Song.track）
 
+  /// 进入有声书前正在播放的歌曲快照：底栏封面槽在有声书播放/暂停时
+  /// 继续显示这首歌（用户 2026-10-27：「第四个 tab 不能是之前仍在播放的歌曲吗」）。
+  Song? _lastMusicSong;
+  List<Song>? _lastMusicQueue;
+  int _lastMusicIndex = 0;
+  Duration _lastMusicPosition = Duration.zero;
+
   /// 进入有声书前的 shuffle/repeat 设置（退出时恢复，Bug B6/B10）。
   bool? _savedShuffleBeforeAudiobook;
   RepeatMode? _savedRepeatBeforeAudiobook;
@@ -1132,10 +1139,50 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  /// 道理鱼转码播放优先走 HLS（§14）：`HlsAudioSource(/api/tracks/{id}/hls)`，
+  /// VOD 分片、播放器原生可 seek、断线重连按分片重取（不再倒带）。成功置
+  /// `_isHlsSource=true` 并清 `_streamBaseOffsetMs`，返回 true；非转码或 JWT 失败
+  /// （url 为 null）返回 false，由调用方回退 `/stream`。
+  Future<bool> _trySetDaoliyuHlsSource(Song song) async {
+    if (!_hlsPlaybackEnabled || !_isDaoliyuTranscodeRequested) return false;
+    final hlsUrl = await _subsonicService.getDaoliyuHlsUrl(song.id);
+    if (hlsUrl == null) return false;
+    await _audioPlayer.setAudioSource(
+      HlsAudioSource(Uri.parse(hlsUrl), tag: song.id),
+    );
+    _isHlsSource = true;
+    _streamBaseOffsetMs = 0; // HLS 原生 seek，无需基准偏移
+    return true;
+  }
+
   bool get shuffleEnabled => _shuffleEnabled;
   bool get gaplessEnabled => _gaplessEnabled;
   RepeatMode get repeatMode => _repeatMode;
   Duration get position => _position;
+
+  /// 当前**章节内**位置（有声书专用）。
+  ///
+  /// gapless 模式下 `_position` 是**整本书序列**的位置（ConcatenatingAudioSource），
+  /// 直接拿它除以章节时长会得到错误的进度（用户 2026-10-27：吸底条/头部进度不动）。
+  /// 这里减去前序章节时长，得到章节内位置；非 gapless / 非有声书原样返回。
+  Duration get chapterPosition {
+    if (!_isPlayingAudiobook) return _position;
+    final index = _currentIndex;
+    if (_concatenatingSource == null || index <= 0) return _position;
+    var offsetMs = 0;
+    for (var i = 0; i < index && i < _queue.length; i++) {
+      offsetMs += (_queue[i].duration ?? 0) * 1000;
+    }
+    final ms = _position.inMilliseconds - offsetMs;
+    return Duration(milliseconds: ms < 0 ? 0 : ms);
+  }
+
+  /// 当前章节时长（有声书优先用 Song.duration；gapless 下 `_duration` 是整本书）。
+  Duration get chapterDuration {
+    final seconds = _currentSong?.duration ?? 0;
+    if (seconds > 0) return Duration(seconds: seconds);
+    return _duration;
+  }
   Duration get duration => _duration;
 
   /// Track duration for progress UI. Falls back to the server-reported
@@ -1180,6 +1227,31 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 队列持久化 / 车载守卫 / shuffle/repeat 全按此判断。
   bool get isPlayingAudiobook => _isPlayingAudiobook;
 
+  /// 进入有声书前正在播放的歌曲（底栏封面槽在有声书状态下继续展示）。
+  Song? get lastMusicSong => _lastMusicSong;
+
+  /// 那首歌切走时的进度 0–1（有声书播放中它处于暂停，进度不再变化）。
+  double get lastMusicProgress {
+    final seconds = (_lastMusicSong?.duration ?? 0).toDouble();
+    if (seconds <= 0) return 0;
+    return (_lastMusicPosition.inMilliseconds / 1000 / seconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  /// 从有声书回到那首歌（从切走时的位置继续），会退出有声书状态。
+  Future<void> resumeLastMusic() async {
+    final song = _lastMusicSong;
+    if (song == null) return;
+    await playSong(
+      song,
+      playlist: _lastMusicQueue,
+      startIndex: _lastMusicIndex,
+      resumePositionMs: _lastMusicPosition.inMilliseconds,
+      forcePlay: true,
+    );
+  }
+
   /// 当前播放的有声书（进度记忆的归属）。
   Audiobook? get currentAudiobook => _currentAudiobook;
 
@@ -1208,6 +1280,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 重起一条带 timeOffset=X 的自研流后，ExoPlayer 的位置从 0 计起，而歌曲
   /// 实际位置 = 流位置 + 基准。位置流/Windows 轮询据此换算显示位置。
   int _streamBaseOffsetMs = 0;
+
+  /// 当前音源是否为道理鱼 HLS（`HlsAudioSource`，§14）。为真时 seek 走播放器
+  /// 原生分片定位、不设 `_streamBaseOffsetMs`、不走 timeOffset 重起流，断线重连
+  /// 由播放器按分片重取（不再倒带）。切歌/换源时复位。
+  bool _isHlsSource = false;
+
+  /// HLS 播放总开关（§14）。实测本服务器 `/hls` **冷启动约 7s**（m3u8 ~4s + 首段
+  /// ~3s，见 §14.9 与「起播慢」反馈），用户 2026-10-28 选 **方案 A**：起播回退
+  /// `/stream`（快），暂不启用 HLS；§13.14 倒带自愈继续兜底。管线全部保留，待
+  /// **方案 B**（仅 seek 时切 HLS、起播仍走 /stream）再开。
+  final bool _hlsPlaybackEnabled = false;
+
+  /// 转码流「断线重连倒带」自愈的最近一次触发时刻（防抖，避免密集重起）。
+  /// 见 positionStream 监听里的 `transcodeReconnectRewind` 处理。
+  DateTime? _lastTranscodeRewindRecovery;
 
   /// 道理鱼转码 seek 重起流的竞态令牌：每次重起/切歌自增，异步流程在提交
   /// 前校验令牌，被更新的操作取代（连续快速拖动、切歌中途）时直接放弃。
@@ -1539,6 +1626,43 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final positionJumpedBack = _position.inMilliseconds > 0 &&
             effective.inMilliseconds < _position.inMilliseconds - 1000;
 
+        // 转码流「断线重连倒带」自愈：道理鱼转码流不支持 Range，ExoPlayer 断线
+        // 重连会从 byte 0 重取 → 引擎位置归 0 → effective = 0 + 基准 = 原 timeOffset
+        // 起播点，表现为「播到一半突然跳回起播点」（用户 2026-10-27：12 分起播、
+        // 放到 16 分又跳回 12 分）。识别这类「大幅回跳到 ≈ 流起点」的签名，按回跳
+        // 前的真实位置重起一条新流续回原处，而不是任由它倒带重放。
+        if (positionJumpedBack &&
+            _streamBaseOffsetMs > 0 &&
+            isActiveStreamTranscoded &&
+            _isPlaying &&
+            // 回跳目标 ≈ 流起点（基准），正是重连重取的签名，排除普通小抖动。
+            effective.inMilliseconds <= _streamBaseOffsetMs + 1500 &&
+            // 确有实质前进才值得救（> 5s），否则忽略。
+            _position.inMilliseconds - effective.inMilliseconds > 5000) {
+          final now = DateTime.now();
+          final debounced = _lastTranscodeRewindRecovery != null &&
+              now.difference(_lastTranscodeRewindRecovery!).inMilliseconds <
+                  4000;
+          if (!debounced) {
+            _lastTranscodeRewindRecovery = now;
+            final resumeAt = _position; // 回跳前的真实位置
+            DiagnosticsService.instance.record(
+              EventType.audioPlayerAction,
+              LogLevel.warn,
+              {
+                'action': 'transcodeReconnectRewind',
+                'songId': _currentSong?.id,
+                'rewoundToMs': effective.inMilliseconds,
+                'resumeAtMs': resumeAt.inMilliseconds,
+                'baseOffsetMs': _streamBaseOffsetMs,
+              },
+            );
+            // 不把 _position 覆盖成回跳值（UI 不闪 12 分）；直接按原处重起新流。
+            unawaited(_restartDaoliyuStream(resumeAt));
+            return;
+          }
+        }
+
         _position = effective;
         _positionController.add(effective);
 
@@ -1856,6 +1980,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         chapterOrder: isLast ? currentOrder : currentOrder + 1,
         positionMs: 0,
         completed: isLast,
+        markListenedOrder: currentOrder,
       );
 
       if (_sleepTimerEndCurrentSong) {
@@ -1972,6 +2097,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _saveAudiobookProgress();
       _restorePlaybackSettingsAfterAudiobook();
     }
+    // 从普通歌曲**首次**切到有声书：记下这首歌/队列/位置，底栏封面槽继续
+    // 展示它（有声书状态下音乐槽不空）。
+    if (audiobook &&
+        !_isPlayingAudiobook &&
+        _currentSong != null &&
+        !_isPlayingRadio) {
+      _lastMusicSong = _currentSong;
+      _lastMusicQueue = List.from(_queue);
+      _lastMusicIndex = _currentIndex;
+      _lastMusicPosition = _position;
+    }
     // Only treat tapping the currently-playing song as pause/resume when the
     // request comes from the UI. Automatic transitions (skipNext/skipToIndex)
     // pass forcePlay: true so a duplicate song id never replays the same track
@@ -2036,6 +2172,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 恢复续播：resumePositionMs 直接赋给 _position，复用 _prepareCurrentSong
       // 的恢复 seek 路径（B5）。普通歌曲仍从 0 开始。
       _position = Duration(milliseconds: resumePositionMs ?? 0);
+      // 有声书：**立即写入当前章**。只在切章/播完时写会让 store 停留在旧章，
+      // 页面出现「当前播放章」和「保存章」两行同时高亮（用户 2026-10-27）。
+      if (audiobook) {
+        _saveAudiobookChapterProgress(
+          chapterOrder: _audiobookChapterOrder ?? 1,
+          positionMs: _position.inMilliseconds,
+          completed: false,
+        );
+      }
       // 新歌：清掉上一首的转码 seek 基准与竞态令牌，废弃仍在途的重起流。
       _streamBaseOffsetMs = 0;
       _seekRestartToken++;
@@ -2124,6 +2269,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _isPlaying = true;
       } else {
         _isRenderingRemotely = false;
+        _isHlsSource = false; // 本地渲染新建源前复位；仅道理鱼转码 HLS 会再置真
 
         // For YouTube, pre-fetch the manifest then hand a StreamAudioSource
         // to just_audio so ExoPlayer never touches the YouTube URL directly.
@@ -2184,40 +2330,38 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // （走 _handleEndOfQueue → 不切歌、停在 completed），或对单音源执行
           // seek(index:)。gapless 关闭与道理鱼转码都走这里。
           _concatenatingSource = null;
-          final String playUrl;
-          if (song.isLocal == true && song.path != null) {
-            playUrl = Uri.file(song.path!).toString();
+          _isHlsSource = false;
+          final offlinePath = song.isLocal == true
+              ? null
+              : _offlineService.getLocalPath(song.id);
+          final localPlayUrl = (song.isLocal == true && song.path != null)
+              ? Uri.file(song.path!).toString()
+              : (offlinePath != null ? 'file://$offlinePath' : null);
+          if (localPlayUrl != null) {
+            // 本地/离线文件：直接 setUrl。
+            await _audioPlayer.setUrl(localPlayUrl);
           } else {
-            final offlinePath = _offlineService.getLocalPath(song.id);
-            if (offlinePath != null) {
-              playUrl = 'file://$offlinePath';
-            } else {
-              // Apply transcoding settings if enabled (LAN connection always
-              // resolves to null → original, rule 1).
-              final maxBitRate = _transcodingService.getCurrentBitrate();
-              final format = _transcodingService.getCurrentFormat();
-              _setActiveStream(maxBitRate, format);
-              // 道理鱼转码走自研 /api/tracks/{id}/stream（JWT），seek 用
-              // timeOffset 重起流；JWT 失败回退 Subsonic 转码 URL。
-              playUrl = (await _buildDaoliyuAwareStreamUrl(song,
+            // Apply transcoding settings if enabled (LAN connection always
+            // resolves to null → original, rule 1).
+            final maxBitRate = _transcodingService.getCurrentBitrate();
+            final format = _transcodingService.getCurrentFormat();
+            _setActiveStream(maxBitRate, format);
+            // 道理鱼转码优先 HLS（§14）：VOD 分片、原生可 seek、断线重连按分片
+            // 重取、无倒带。HLS 不可用（非转码 / JWT 失败）回退自研 /stream。
+            final usedHls = await _trySetDaoliyuHlsSource(song);
+            if (!usedHls) {
+              final playUrl = (await _buildDaoliyuAwareStreamUrl(song,
                       maxBitRate: maxBitRate, format: format))
                   .url;
+              // Route straight to ExoPlayer so seeking keeps the target
+              // position. LockCachingAudioSource would downgrade range
+              // requests to a full 200 response and restart playback from the
+              // beginning — including on LAN, where the server often omits the
+              // Accept-Ranges header and seek visibly rewinds to 0:00.
+              await _audioPlayer.setAudioSource(
+                AudioSource.uri(Uri.parse(playUrl), tag: song.id),
+              );
             }
-          }
-          // Cache remote streams locally so seeking works even when the
-          // server transcodes and doesn't support HTTP range requests (#170).
-          if (song.isLocal == true ||
-              _offlineService.getLocalPath(song.id) != null) {
-            await _audioPlayer.setUrl(playUrl);
-          } else {
-            // Route straight to ExoPlayer so seeking keeps the target
-            // position. LockCachingAudioSource would downgrade range
-            // requests to a full 200 response and restart playback from the
-            // beginning — including on LAN, where the server often omits the
-            // Accept-Ranges header and seek visibly rewinds to 0:00.
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(Uri.parse(playUrl), tag: song.id),
-            );
           }
           await _applyReplayGain(song);
           await _ensureAudioFocus();
@@ -2428,6 +2572,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (!_isPlayingAudiobook || book == null || order == null) return;
     if (serverKey == null) return;
 
+    // 2026-10-27：保留已有 listenedOrders（整条覆盖会让筛选/百分比丢失）。
+    final existing = _audiobookProgressStore.load(serverKey, book.id);
+    final listened = <int>{...?existing?.listenedOrders};
+
     var chapterOrder = order;
     var positionMs = _position.inMilliseconds;
     if (positionMs < 0) positionMs = 0;
@@ -2438,9 +2586,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 否则写入 lastOrder+1 恢复时定位失败。
     final durationMs = _duration.inMilliseconds;
     final isLast = _currentIndex >= _queue.length - 1;
+    var currentDurationMs = durationMs > 0 ? durationMs : null;
+    String? chapterTitle = _currentSong?.title;
+    var chapterId = _currentSong?.id;
     if (durationMs > 0 && positionMs >= durationMs * 0.95 && !isLast) {
+      listened.add(order);
       chapterOrder = order + 1;
       positionMs = 0;
+      currentDurationMs = null;
+      chapterTitle = null; // 下一章标题未知，切章后由播放回调补齐
+      chapterId = null;
     }
 
     // 记录真正落盘的位置，供 seek 去抖判断（见 seek()）。
@@ -2451,33 +2606,61 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       AudiobookProgress(
         audiobookId: book.id,
         chapterOrder: chapterOrder,
-        chapterId: _currentSong?.id,
+        chapterId: chapterId,
         positionMs: positionMs,
         updatedAt: DateTime.now(),
+        chapterTitle: chapterTitle,
+        durationMs: currentDurationMs,
+        episodeCount: book.episodeCount,
+        listenedOrders: _capListened(listened),
       ),
     );
   }
 
   /// 保存指定章节/位置的进度（章节播完推进 bookmark 用，§8.3/§9.2-4）。
+  ///
+  /// [markListenedOrder]：本次真正听完的章节 order（自然播完 / gapless 切走的上一章）。
   void _saveAudiobookChapterProgress({
     required int chapterOrder,
     required int positionMs,
     required bool completed,
+    int? markListenedOrder,
   }) {
     final book = _currentAudiobook;
     final serverKey = _audiobookServerKey;
     if (book == null || serverKey == null) return;
+
+    final existing = _audiobookProgressStore.load(serverKey, book.id);
+    final listened = <int>{...?existing?.listenedOrders};
+    if (markListenedOrder != null && markListenedOrder > 0) {
+      listened.add(markListenedOrder);
+    }
+
+    // 只有 bookmark 仍指向当前 Song 时才写标题/时长（切章后当前 Song 已是新章）。
+    final sameAsCurrent = chapterOrder == _audiobookChapterOrder;
+    final durationMs = _duration.inMilliseconds;
+
     _audiobookProgressStore.save(
       serverKey,
       AudiobookProgress(
         audiobookId: book.id,
         chapterOrder: chapterOrder,
-        chapterId: _currentSong?.id,
+        chapterId: sameAsCurrent ? _currentSong?.id : null,
         positionMs: positionMs,
         completed: completed,
         updatedAt: DateTime.now(),
+        chapterTitle: sameAsCurrent ? _currentSong?.title : null,
+        durationMs: sameAsCurrent && durationMs > 0 ? durationMs : null,
+        episodeCount: book.episodeCount,
+        listenedOrders: _capListened(listened),
       ),
     );
+  }
+
+  /// listenedOrders 去重排序 + 上限 500（超出丢最旧）。
+  List<int> _capListened(Set<int> listened) {
+    final sorted = listened.where((o) => o > 0).toList()..sort();
+    return sorted.length > 500 ? sorted.sublist(sorted.length - 500) : sorted;
   }
 
   /// 退出有声书（切普通歌/电台/停止）时恢复用户原 shuffle/repeat 设置（B6/B10）。
@@ -3068,10 +3251,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 真机结果是播放器位置落到目标、**音频却从 0s 重放**（位置校验骗人，服务端
     // 的 Range 只对浏览器成立）。所以道理鱼转码流默认回到「服务端重起流」，
     // 只有确认可 seek 的源才走 native。见 `docs/道理鱼接入技术方案.md` §13.3。
-    final plan = decideSeekPlan(
-      isDaoliyu: _subsonicService.isDaoliyu,
-      streamTranscoded: isActiveStreamTranscoded,
-    );
+    //
+    // §14：HLS 源（道理鱼转码已改走 HlsAudioSource）原生按分片定位，直接 native，
+    // 不再 timeOffset 重起流、不设基准偏移。
+    final plan = _isHlsSource
+        ? SeekPlan.native
+        : decideSeekPlan(
+            isDaoliyu: _subsonicService.isDaoliyu,
+            streamTranscoded: isActiveStreamTranscoded,
+          );
     DiagnosticsService.instance.record(
       EventType.audioPlayerAction,
       LogLevel.info,
@@ -3134,6 +3322,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _restartDaoliyuStream(Duration position) async {
     final song = _currentSong;
     if (song == null) return;
+    _isHlsSource = false; // 重起流建的是 /stream 单源，非 HLS
     // 快照播放态：await setAudioSource 期间 playerStateStream 会把 _isPlaying
     // 刷成 false，之后再读会把「拖动时在播」误判成「暂停」→ 重起后不续播。
     final wasPlaying = _isPlaying || _audioPlayer.playing;
@@ -3851,6 +4040,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 恢复当前歌：清掉旧基准与竞态令牌，位置恢复在下面按场景处理
     // （道理鱼转码用 timeOffset 起播，其余用原生 seek）。
     _streamBaseOffsetMs = 0;
+    _isHlsSource = false;
     _seekRestartToken++;
     var restoredViaTimeOffset = false; // 道理鱼转码按 timeOffset 起播时置位
     Duration? loadedDuration; // 起播流的时长，用于校验 timeOffset 是否生效
@@ -3863,51 +4053,48 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // 单一音源模式（gapless 关闭 / 道理鱼转码）：清掉拼接音源标记，避免
         // 完成事件与切歌逻辑误走 concat 分支（详见 playSong 同处注释）。
         _concatenatingSource = null;
-        final String playUrl;
-        if (_currentSong!.isLocal == true && _currentSong!.path != null) {
-          playUrl = Uri.file(_currentSong!.path!).toString();
+        final offlinePath = _currentSong!.isLocal == true
+            ? null
+            : _offlineService.getLocalPath(_currentSong!.id);
+        final localPlayUrl =
+            (_currentSong!.isLocal == true && _currentSong!.path != null)
+                ? Uri.file(_currentSong!.path!).toString()
+                : (offlinePath != null ? 'file://$offlinePath' : null);
+        if (localPlayUrl != null) {
+          loadedDuration = await _audioPlayer.setUrl(localPlayUrl);
         } else {
-          final offlinePath = _offlineService.getLocalPath(_currentSong!.id);
-          if (offlinePath != null) {
-            playUrl = 'file://$offlinePath';
-          } else {
-            // Apply transcoding settings if enabled, matching playSong's
-            // stream URL so the restore path honors the same bitrate/format.
-            // (LAN connection always resolves to null → original, rule 1.)
-            final maxBitRate = _transcodingService.getCurrentBitrate();
-            final format = _transcodingService.getCurrentFormat();
-            _setActiveStream(maxBitRate, format);
-            // 道理鱼转码恢复：直接带 timeOffset=<上次位置秒> 起播，避免先起流
-            // 再 seek（转码流 seek 无效）；JWT 失败回退 Subsonic URL（从头播）。
+          // Apply transcoding settings if enabled, matching playSong's
+          // stream URL so the restore path honors the same bitrate/format.
+          // (LAN connection always resolves to null → original, rule 1.)
+          final maxBitRate = _transcodingService.getCurrentBitrate();
+          final format = _transcodingService.getCurrentFormat();
+          _setActiveStream(maxBitRate, format);
+          // 道理鱼转码恢复优先 HLS（§14）：原生分片 seek 恢复到 _position；
+          // HLS 不可用（非转码 / JWT 失败）回退自研 /stream + timeOffset 起播。
+          final usedHls = await _trySetDaoliyuHlsSource(_currentSong!);
+          if (!usedHls) {
             final result = await _buildDaoliyuAwareStreamUrl(
               _currentSong!,
               maxBitRate: maxBitRate,
               format: format,
               timeOffsetSeconds: _position.inSeconds,
             );
-            playUrl = result.url;
             restoredViaTimeOffset = result.viaTimeOffset;
+            // Route straight to ExoPlayer so seeking keeps the target position.
+            loadedDuration = await _audioPlayer.setAudioSource(
+              AudioSource.uri(Uri.parse(result.url), tag: _currentSong!.id),
+            );
           }
-        }
-        if (_currentSong!.isLocal == true ||
-            _offlineService.getLocalPath(_currentSong!.id) != null) {
-          loadedDuration = await _audioPlayer.setUrl(playUrl);
-        } else {
-          // Route straight to ExoPlayer so seeking keeps the target position.
-          // LockCachingAudioSource would downgrade range requests to a full
-          // 200 response and restart playback from the beginning — including
-          // on LAN, where the server often omits the Accept-Ranges header and
-          // seek visibly rewinds to 0:00.
-          loadedDuration = await _audioPlayer.setAudioSource(
-            AudioSource.uri(Uri.parse(playUrl), tag: _currentSong!.id),
-          );
         }
       }
       // Seek to the restored position after the source is loaded. 道理鱼转码
       // 流已按 timeOffset 起播（ExoPlayer 位置从 0 计起）→ 只设基准偏移不再
       // seek；其余场景用原生 seek 恢复。
       if (_position.inMilliseconds > 0) {
-        if (restoredViaTimeOffset) {
+        if (_isHlsSource) {
+          // HLS 源：原生按分片定位恢复到上次位置（§14）。
+          await _audioPlayer.seek(_position);
+        } else if (restoredViaTimeOffset) {
           // 与 seek 重起流同一套校验：timeOffset 被忽略时拿到的仍是完整时长，
           // 此时绝不能套基准（否则进度从目标走、声音从 0 播）。
           final songTotalMs = (_currentSong!.duration ?? 0) * 1000;
@@ -3958,6 +4145,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _bufferStartAt = null; // 切歌：复位缓冲检测，避免旧歌 buffering 残留
     _position = Duration.zero; // 同步归零，避免 stall 判定误用旧曲位置
     _streamBaseOffsetMs = 0; // 切歌：清掉上一首的转码 seek 基准
+    _isHlsSource = false; // 切歌：concat 源非 HLS（HLS 仅单曲转码）
     _seekRestartToken++; // 切歌：废弃仍在途的重起流
     DiagnosticsService.instance.record(
       EventType.trackNext,
@@ -3981,16 +4169,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 有声书 gapless 切章（B3/B7/B9/B16）：跳过 scrobble/_recordSongEnd/
     // AutoDJ/歌词加载；bookmark 推进到新章 order、position=0。
     if (_isPlayingAudiobook) {
+      final previousChapterOrder = _audiobookChapterOrder;
       _currentIndex = newIndex;
       _currentSong = _queue[_currentIndex];
       _audiobookChapterOrder = _currentSong?.track;
       _resolvedArtworkUrl = null;
       notifyListeners();
-      // 新章从 0 开始（position 已归零），写入进度。
+      // 新章从 0 开始（position 已归零），写入进度；上一章记为已听完。
       _saveAudiobookChapterProgress(
         chapterOrder: _audiobookChapterOrder ?? 1,
         positionMs: 0,
         completed: false,
+        markListenedOrder: previousChapterOrder,
       );
       return;
     }

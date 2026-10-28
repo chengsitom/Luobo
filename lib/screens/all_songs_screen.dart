@@ -190,7 +190,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                   //（与歌手/专辑列表一致）。
                   padding: EdgeInsets.only(
                     top: listTopInset(context),
-                    bottom: 100,
+                    bottom: LuoboSpacing.pageBottomWithStrip(context),
                   ),
                   itemCount: _sortedSongs.length + 1,
                   itemBuilder: (context, index) {

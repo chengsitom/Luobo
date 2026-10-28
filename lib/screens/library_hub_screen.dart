@@ -68,10 +68,16 @@ class LibraryHubScreen extends StatelessWidget {
         title: isDaoliyu ? l10n.audiobooks : l10n.categoryRadio,
         icon: isDaoliyu ? Icons.menu_book_rounded : Icons.radio_rounded,
         colors: const [Color(0xFF4A7DFF), Color(0xFF5B45D6)],
-        onTap: () => _push(
-          context,
-          isDaoliyu ? const AudiobookListScreen() : const RadioScreen(),
-        ),
+        onTap: () {
+          // 有声书页面全屏覆盖（根导航）：不展示音乐迷你播放条/底栏。
+          if (isDaoliyu) {
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(builder: (_) => const AudiobookListScreen()),
+            );
+          } else {
+            _push(context, const RadioScreen());
+          }
+        },
       ),
     ];
 

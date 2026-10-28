@@ -12,6 +12,7 @@ import '../providers/providers.dart';
 import '../services/subsonic_service.dart';
 import '../services/local_music_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/pressable_scale.dart';
 import '../widgets/artist_grid_card.dart';
@@ -370,11 +371,11 @@ class _LibraryScreenState extends State<LibraryScreen>
             ListView(
               controller: _artistsScrollController,
               // 右侧留 44 给字母索引条；左 16 对齐网格 padding；
-              // 底部 150 避让迷你播放器。
-              padding: const EdgeInsets.only(
+              // 底部用统一 helper 避让底栏 / 播放条，不要写死 150。
+              padding: EdgeInsets.only(
                 left: 16,
                 right: 44,
-                bottom: 150,
+                bottom: LuoboSpacing.pageBottomWithStrip(context),
               ),
               children: [
                 if (topArtists.isNotEmpty) ...[
@@ -532,12 +533,18 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ? AppLocalizations.of(context)!.audiobooks
                       : AppLocalizations.of(context)!.internetRadio,
                   isGradient: false,
-                  onTap: () => _navigate(
-                    context,
-                    isDaoliyu
-                        ? const AudiobookListScreen()
-                        : const RadioScreen(),
-                  ),
+                  onTap: () {
+                    // 有声书页面全屏覆盖（根导航）：不展示音乐迷你播放条/底栏。
+                    if (isDaoliyu) {
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AudiobookListScreen(),
+                        ),
+                      );
+                    } else {
+                      _navigate(context, const RadioScreen());
+                    }
+                  },
                 ),
               ),
             ],

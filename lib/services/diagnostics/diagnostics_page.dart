@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../widgets/luobo/list_top_bar.dart';
+import '../../widgets/luobo/scroll_reveal_scaffold.dart';
 import 'diagnostic_event.dart';
 import 'diagnostics_service.dart';
 import 'event_types.dart';
@@ -82,10 +83,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
         if (!mounted) return;
         if (path != null) {
           showLuoboToast(
-      context,
-      message: l10n.diagnosticsExported(path),
-      tone: LuoboToastTone.info,
-    );
+            context,
+            message: l10n.diagnosticsExported(path),
+            tone: LuoboToastTone.info,
+          );
         }
         return;
       }
@@ -94,20 +95,20 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       if (!mounted) return;
       if (path != null) {
         showLuoboToast(
-      context,
-      message: l10n.diagnosticsExported(path),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.diagnosticsExported(path),
+          tone: LuoboToastTone.info,
+        );
       } else {
         _copyToClipboard();
       }
     } catch (_) {
       if (!mounted) return;
       showLuoboToast(
-      context,
-      message: l10n.diagnosticsExportFailed,
-      tone: LuoboToastTone.info,
-    );
+        context,
+        message: l10n.diagnosticsExportFailed,
+        tone: LuoboToastTone.info,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -154,9 +155,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final l10n = AppLocalizations.of(context)!;
     final diag = DiagnosticsService.instance;
     final events = _filtered;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(title: l10n.diagnosticsTitle),
+    return ScrollRevealScaffold(
+      title: l10n.diagnosticsTitle,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Padding(
         // 本页顶部是固定指标卡（不是滚动内容），用外层 Padding 即可。
         padding: EdgeInsets.only(top: listTopInset(context)),

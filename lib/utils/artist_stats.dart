@@ -57,14 +57,19 @@ class ArtistStats {
       }
     }
 
+    // 道理鱼：服务端 `trackCount` 是权威值（抓包 api_artists.body 每个条目都有），
+    // 有就优先用；其它服务器 / 预取失败才回退四口径启发式。
+    final serverCounts = libraryProvider.daoliyuArtistTrackCounts;
     return {
       for (final artist in artists)
-        artist.id: _max4(
-          idCounts[artist.id] ?? 0,
-          nameCounts[artist.name.trim().toLowerCase()] ?? 0,
-          albumIdSums[artist.id] ?? 0,
-          albumNameSums[artist.name.trim().toLowerCase()] ?? 0,
-        ),
+        artist.id: serverCounts.containsKey(artist.id)
+            ? serverCounts[artist.id]!
+            : _max4(
+                idCounts[artist.id] ?? 0,
+                nameCounts[artist.name.trim().toLowerCase()] ?? 0,
+                albumIdSums[artist.id] ?? 0,
+                albumNameSums[artist.name.trim().toLowerCase()] ?? 0,
+              ),
     };
   }
 
@@ -84,9 +89,11 @@ class ArtistStats {
         nameCounts[name] = (nameCounts[name] ?? 0) + 1;
       }
     }
+    final serverCounts = libraryProvider.daoliyuArtistAlbumCounts;
     return {
       for (final artist in artists)
-        artist.id: artist.albumCount ??
+        artist.id: serverCounts[artist.id] ??
+            artist.albumCount ??
             _max(
               idCounts[artist.id] ?? 0,
               nameCounts[artist.name.trim().toLowerCase()] ?? 0,

@@ -55,10 +55,12 @@ Future<T?> showLuoboPickerSheet<T>({
   required String title,
   required List<({T value, String label})> options,
   required T? selected,
+  bool isScrollControlled = false,
 }) {
   return showLuoboSheet<T>(
     context: context,
     title: title,
+    isScrollControlled: isScrollControlled,
     builder: (ctx) => Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -186,7 +186,14 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     return out;
   }
 
-  Future<void> _removeSongFromPlaylist(int index) async {
+  Future<void> _removeSongFromPlaylist(Song song) async {
+    // 按 song.id 定位服务端原序下标，不能直接用展示下标——列表排序后展示顺序
+    // ≠ _playlist!.songs 原序，拿展示下标去 updatePlaylist 会删错歌。
+    final all = _playlist?.songs;
+    if (all == null) return;
+    final index = all.indexWhere((s) => s.id == song.id);
+    if (index < 0) return;
+
     final subsonicService = Provider.of<SubsonicService>(
       context,
       listen: false,
@@ -523,7 +530,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             const Divider(),
             Expanded(
               child: ReorderableListView.builder(
-                padding: const EdgeInsets.only(bottom: 100),
+                padding: EdgeInsets.only(
+                  bottom: LuoboSpacing.pageBottomWithStrip(context),
+                ),
                 itemCount: _playlist!.songs!.length,
                 buildDefaultDragHandles: false,
                 onReorder: _onSongReordered,
@@ -595,15 +604,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     // ⋮ 菜单变体 C（设计稿/09）：歌单内 = 横排 + 收藏 + 从当前歌单移除。
                     menuContext: SongMenuContext.playlist,
                     onRemoveFromPlaylist: () {
-                      _removeSongFromPlaylist(index);
+                      _removeSongFromPlaylist(song);
                     },
                     // 逐首播放也记录「最近播放的歌单」。
                     onTap: () {
                       _recordPlayback();
+                      // 队列必须用展示顺序 songs（= _displaySongs，可能已排序），
+                      // 而不是服务端原序 _playlist!.songs——否则 startIndex(展示位)
+                      // 落到原序列表上会指向另一首歌，底栏显示选中歌、实际播放却是
+                      // 另一首（排序开启时必现）。
                       Provider.of<PlayerProvider>(context, listen: false)
                           .playSong(
                         song,
-                        playlist: _playlist!.songs,
+                        playlist: songs,
                         startIndex: index,
                       );
                     },
@@ -632,7 +645,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                           ) ??
                           false;
                     },
-                    onDismissed: (_) => _removeSongFromPlaylist(index),
+                    onDismissed: (_) => _removeSongFromPlaylist(song),
                     child: Column(
                       children: [
                         tile,

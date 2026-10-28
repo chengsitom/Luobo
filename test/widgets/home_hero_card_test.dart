@@ -164,10 +164,10 @@ void main() {
     expect(title.maxLines, 2);
   });
 
-  testWidgets('alignEnd：长标题换行时第二行优先占满、第一行留短', (tester) async {
+  testWidgets('alignEnd：长标题换行时两行均衡（5 + 5）', (tester) async {
     // 卡宽 151、左右 padding 16 → 内容宽 119；测试字体每个字宽 = fontSize(19)
     // + letterSpacing(-0.2) ≈ 18.8 → 一行最多 6 个汉字。
-    // 10 个字应拆成「4 + 6」：第二行占满、第一行留短（常规贪心会拆成 6 + 4）。
+    // 2026-10-23 改为「均衡换行」：10 个字拆 5 + 5（旧的贪心是 4 + 6）。
     const longName = '一二三四五六七八九十';
     await pumpCard(
       tester,
@@ -179,7 +179,65 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('一二三四\n五六七八九十'), findsOneWidget);
+    expect(find.text('一二三四五\n六七八九十'), findsOneWidget);
+  });
+
+  testWidgets('换行优先断在分隔符之后', (tester) async {
+    // 有分隔符时优先在「·」后断，而不是机械对半。
+    const name = '我的收藏·喜欢的音乐';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: name, titleMaxLines: 2, alignEnd: true),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('我的收藏·\n喜欢的音乐'), findsOneWidget);
+  });
+
+  testWidgets('分隔符优先于两行均衡', (tester) async {
+    // 10 个字：均衡拆法是 5+5（晚安曲·深 / 夜电台精选），但「·」后断更自然 →
+    // 取 4+6。证明 boundaryChars 的 +10 权重确实压过均衡度。
+    const name = '晚安曲·深夜电台精选';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: name, titleMaxLines: 2, alignEnd: true),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('晚安曲·\n深夜电台精选'), findsOneWidget);
+  });
+
+  testWidgets('中英交界优先断行（cheng / 喜欢的音乐）', (tester) async {
+    // 用户反馈：`cheng喜欢的音乐` 被切成 `cheng喜 / 欢的音乐`。中英交界是天然断点，
+    // 权重应压过宽度均衡。
+    const name = 'cheng喜欢的音乐';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: name, titleMaxLines: 2, alignEnd: true),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('cheng\n喜欢的音乐'), findsOneWidget);
+  });
+
+  testWidgets('两行排不下时只留「·」前的主标题（道理鱼心动歌单）', (tester) async {
+    // 真实名字：21 个字，151dp 卡两行只装得下约 12 字 —— 硬换行只能从词中间切，
+    // 所以退到「·」前的主标题（7 字 → 4+3）。
+    const name = '下班后的慢慢走·今日流行、华语、第1815辑';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: name, titleMaxLines: 2, alignEnd: true),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('下班后的\n慢慢走'), findsOneWidget);
+    expect(find.text(name), findsNothing);
+  });
+
+  testWidgets('主标题一行放得下时不拆（心动歌单）', (tester) async {
+    const name = '出发就现在·今日摇滚、电子、第1815辑';
+    await pumpCard(
+      tester,
+      const HomeHeroCard(title: name, titleMaxLines: 2, alignEnd: true),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('出发就现在'), findsOneWidget);
   });
 
   testWidgets('alignEnd：短标题不拆行且文字块贴右（距右 16）', (tester) async {

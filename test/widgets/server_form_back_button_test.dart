@@ -59,17 +59,34 @@ void main() {
     expect(tester.getTopLeft(pill).dy, closeTo((56 - pillHeight) / 2, 0.01));
   }
 
-  testWidgets('添加服务器第 1 步（类型网格）页头 = 返回+标题胶囊', (tester) async {
+  /// 2026-10-27：设置页返回钮改成「上滑才带标题」。
+  /// 可滚动页面先断言只有返回圆钮，上滑 120dp 后再断言标题胶囊；
+  /// 内容不满一屏的短页面没有上滑机会，标题会一直显示（壳的兜底）。
+  Future<void> expectTitleAfterScroll(
+    WidgetTester tester,
+    String title,
+  ) async {
+    final scrollableFinder = find.byType(Scrollable).first;
+    final position = tester.state<ScrollableState>(scrollableFinder).position;
+    if (position.maxScrollExtent > 0) {
+      expect(find.byType(LuoboBackTitlePill), findsNothing);
+      await tester.drag(scrollableFinder, const Offset(0, -120));
+      await tester.pump();
+    }
+    expectDesignBackPill(tester, title);
+  }
+
+  testWidgets('添加服务器第 1 步（类型网格）页头 = 上滑后返回+标题胶囊', (tester) async {
     await pumpLogin(tester);
 
     await tester.tap(find.text('Add Server'));
     await tester.pumpAndSettle();
 
     expect(find.text('Subsonic'), findsOneWidget); // 确认停在类型网格步
-    expectDesignBackPill(tester, 'Add Server');
+    await expectTitleAfterScroll(tester, 'Add Server');
   });
 
-  testWidgets('添加服务器第 2 步（表单）页头 = 返回+标题胶囊', (tester) async {
+  testWidgets('添加服务器第 2 步（表单）页头 = 上滑后返回+标题胶囊', (tester) async {
     await pumpLogin(tester);
 
     await tester.tap(find.text('Add Server'));
@@ -78,6 +95,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Server URL'), findsOneWidget); // 确认已进表单步
-    expectDesignBackPill(tester, 'Add Server');
+    await expectTitleAfterScroll(tester, 'Add Server');
   });
 }

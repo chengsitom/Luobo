@@ -232,6 +232,12 @@ abstract class AppLocalizations {
   /// **'Recently Played'**
   String get recentlyPlayed;
 
+  /// Home section: albums derived from recently played songs
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Played Albums'**
+  String get recentlyListenedAlbums;
+
   /// Your playlists section title
   ///
   /// In en, this message translates to:
@@ -1101,6 +1107,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Audiobooks'**
   String get audiobooks;
+
+  /// Audiobook library shelf section title
+  ///
+  /// In en, this message translates to:
+  /// **'My bookshelf'**
+  String get myBookshelf;
+
+  /// Audiobook library shelf count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 book} other{{count} books}}'**
+  String booksCount(int count);
+
+  /// Audiobook listening progress percentage
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% listened'**
+  String listenedPercent(int percent);
+
+  /// Audiobook remaining listening time
+  ///
+  /// In en, this message translates to:
+  /// **'{time} left'**
+  String remainingTime(String time);
+
+  /// Audiobook detail: replay current chapter from 0:00
+  ///
+  /// In en, this message translates to:
+  /// **'Replay chapter'**
+  String get replayChapter;
+
+  /// Audiobook detail: title of the chapter filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get chapterFilter;
+
+  /// Audiobook chapter long-press menu: start from this chapter
+  ///
+  /// In en, this message translates to:
+  /// **'Play from here'**
+  String get playFromHere;
+
+  /// Audiobook chapter long-press menu: mark listened
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as listened'**
+  String get markListened;
+
+  /// Audiobook chapter long-press menu: clear listened mark
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as unlistened'**
+  String get markUnlistened;
+
+  /// Audiobook chapter filter chip: unlistened only
+  ///
+  /// In en, this message translates to:
+  /// **'Unlistened'**
+  String get filterUnlistened;
+
+  /// Audiobook chapter filter chip: listened only
+  ///
+  /// In en, this message translates to:
+  /// **'Listened'**
+  String get filterListened;
+
+  /// Audiobook long list: jump back to the saved episode
+  ///
+  /// In en, this message translates to:
+  /// **'Back to {order}'**
+  String jumpBackTo(int order);
+
+  /// Audiobook in-book search: numeric input jumps to episode
+  ///
+  /// In en, this message translates to:
+  /// **'Go to episode {order}'**
+  String jumpToEpisode(int order);
+
+  /// Audiobook in-book search result count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} results'**
+  String searchResultsCount(int count);
+
+  /// Audiobook dock: current chapter / total
+  ///
+  /// In en, this message translates to:
+  /// **'Ch. {current} of {total}'**
+  String chapterOfTotal(int current, int total);
 
   /// Audiobook chapter progress subtitle
   ///

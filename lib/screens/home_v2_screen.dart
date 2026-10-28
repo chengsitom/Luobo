@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
+import '../providers/auth_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/auto_dj_service.dart';
@@ -28,6 +29,7 @@ import 'ai_playlist_screen.dart';
 import 'album_screen.dart';
 import 'discover_screen.dart';
 import 'favorites_screen.dart';
+import 'heart_playlists_screen.dart';
 import 'history_screen.dart';
 import 'playlist_screen.dart';
 import 'search_screen.dart';
@@ -450,8 +452,9 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
 
     return _heroRow(
       hPad: hPad,
-      // 2026-10-24 用户拍板：加「最近播放」→ 3 张**横滑**（不再铺满整行）。
-      // 3 张 × 151 + 2 × 12 + 左右 16 ≈ 509dp > 360，右侧自然露出第 3 张。
+      // 2026-10-24 用户拍板：加「最近播放」→ 3 张**横滑**（不再铺满整行）；
+      // 2026-10-27 道理鱼再加「心动歌单」→ 最多 4 张，仍然横滑。
+      // 3 张 × 151 + 2 × 12 + 左右 16 ≈ 509dp > 360，右侧自然露出下一张。
       fillWidth: false,
       cards: [
         // 顺序（用户指定）：漫游 → 收藏。
@@ -486,7 +489,23 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
           seed: FluidBackground.seedForIndex(1),
           onTap: () => NavigationHelper.push(context, const FavoritesScreen()),
         ),
-        // 第 3 张：最近播放（2026-10-24 用户拍板，对齐飞牛首屏 3 张横滑）——
+        // 第 3 张：心动歌单（2026-10-27，仅道理鱼）——
+        // 放在收藏与最近播放之间；飞牛 / 其它服务器不构建这张卡。
+        if (isDaoliyuServer(context.watch<AuthProvider>().config))
+          HomeHeroCard(
+            icon: AppIcons.ai,
+            title: '心动歌单',
+            subtitle: '12 组 · 每日更新',
+            // 落日橙：与漫游（随机）/ 收藏（封面取色）/ 最近播放（抹茶绿）
+            // 区分开，四张并排时不会撞色。
+            colors: RoamingPalettes.all[2],
+            seed: FluidBackground.seedForIndex(3),
+            onTap: () => NavigationHelper.push(
+              context,
+              const HeartPlaylistsScreen(),
+            ),
+          ),
+        // 第 4 张：最近播放（2026-10-24 用户拍板，对齐飞牛首屏 3 张横滑）——
         // 原顶栏的「最近播放」圆钮已删除，入口收进这张卡。
         // 配色固定取 `RoamingPalettes` 的「抹茶绿」：飞牛这张卡就是绿底 + 时钟，
         // 也避免落到 `FluidPalette.defaultColors` 的深蓝紫（与相邻彩卡不搭）。
@@ -789,7 +808,9 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: l10n.recentlyPlayed,
+          // 2026-10-27 用户拍板：这块是「最近播放的**歌曲**所在的专辑」，不是播放过的
+          // 专辑本体；原来也叫「最近播放」，与上方歌曲行区块重名。
+          title: l10n.recentlyListenedAlbums,
           padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
         ),
         const SizedBox(height: 8),
@@ -875,7 +896,7 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
         for (var i = 0; i < playlists.length; i++)
           HomeHeroCard(
             // 2026-10-24 用户拍板：**砍掉卡面中间的字母牌**，只留流体底 + 文字；
-            // 文字整体靠右，长名称换行时**第二行优先占满**（见 `_HeroTitleText`）。
+            // 文字整体靠右，长名称走智能断行（中英交界 / 分隔符优先，见 `_HeroTitleText`）。
             title: playlists[i].name,
             titleMaxLines: 2,
             alignEnd: true,

@@ -60,4 +60,39 @@ void main() {
     });
   });
 
+
+  group('parseArtistStats', () {
+    test('解析 trackCount / albumCount', () {
+      final parsed = SubsonicService.parseArtistStats({
+        'items': [
+          {'id': 'art_1', 'name': 'A', 'trackCount': 202, 'albumCount': 33},
+          {'id': 'art_2', 'name': 'B', 'trackCount': 0, 'albumCount': 1},
+        ],
+      });
+      expect(parsed.trackCounts['art_1'], 202);
+      expect(parsed.albumCounts['art_1'], 33);
+      expect(parsed.trackCounts['art_2'], 0);
+    });
+
+    test('缺字段 / 非法条目跳过', () {
+      final parsed = SubsonicService.parseArtistStats({
+        'items': [
+          {'id': 'art_3', 'trackCount': 'x'},
+          {'name': 'NoId', 'trackCount': 1},
+          'garbage',
+        ],
+      });
+      expect(parsed.trackCounts, isEmpty);
+      expect(parsed.albumCounts, isEmpty);
+    });
+
+    test('null / 非列表 → 空 Map', () {
+      expect(SubsonicService.parseArtistStats(null).trackCounts, isEmpty);
+      expect(SubsonicService.parseArtistStats({}).trackCounts, isEmpty);
+      expect(
+        SubsonicService.parseArtistStats({'items': 'x'}).trackCounts,
+        isEmpty,
+      );
+    });
+  });
 }

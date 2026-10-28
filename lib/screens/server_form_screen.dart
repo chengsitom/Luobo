@@ -19,6 +19,7 @@ import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 import '../widgets/luobo/sheet_shell.dart';
 import 'qr_scanner_screen.dart';
 
@@ -188,10 +189,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       debugPrint('[ServerForm] save music folder failed: $e');
       if (!mounted) return;
       showLuoboToast(
-      context,
-      message: l10n.operationFailed,
-      tone: LuoboToastTone.info,
-    );
+        context,
+        message: l10n.operationFailed,
+        tone: LuoboToastTone.info,
+      );
       return;
     }
     if (!mounted) return;
@@ -332,22 +333,19 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       );
     }
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
+    return ScrollRevealScaffold(
+      title: l10n.addServer,
       backgroundColor: c.bg,
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(
-        // 与设置页其余子页面同款：透明顶栏 +「返回 + 标题」胶囊。
-        // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
-        //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
-        title: l10n.addServer,
-        actions: [
-          LuoboTopCircleButton(
-            icon: AppIcons.scan,
-            onTap: _scanToPrefill,
-          ),
-        ],
-      ),
+      resizeToAvoidBottomInset: false,
+      // 与设置页其余子页面同款：透明顶栏 +「返回 + 标题」胶囊。
+      // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
+      //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
+      actions: [
+        LuoboTopCircleButton(
+          icon: AppIcons.scan,
+          onTap: _scanToPrefill,
+        ),
+      ],
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           LuoboSpacing.pageX,
@@ -553,10 +551,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
       showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!.connectedSuccessfully,
-      tone: LuoboToastTone.success,
-    );
+        context,
+        message: AppLocalizations.of(context)!.connectedSuccessfully,
+        tone: LuoboToastTone.success,
+      );
     } else {
       setState(
         () => _loginError = authProvider.error ??
@@ -583,11 +581,11 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     } catch (e) {
       if (mounted) {
         showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!
-                  .failedToSelectClientCert(e.toString()),
-      tone: LuoboToastTone.error,
-    );
+          context,
+          message: AppLocalizations.of(context)!
+              .failedToSelectClientCert(e.toString()),
+          tone: LuoboToastTone.error,
+        );
       }
     }
   }
@@ -609,13 +607,13 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     } catch (e) {
       if (mounted) {
         showLuoboToast(
-      context,
-      message: AppLocalizations.of(
-                context,
-              )!
-                  .failedToSelectCertificate(e.toString()),
-      tone: LuoboToastTone.error,
-    );
+          context,
+          message: AppLocalizations.of(
+            context,
+          )!
+              .failedToSelectCertificate(e.toString()),
+          tone: LuoboToastTone.error,
+        );
       }
     }
   }
@@ -723,18 +721,15 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     // `MediaQuery.padding.top`，在 body 内算会重复一次）。
     final topInset = listTopInset(context);
 
-    return Scaffold(
+    return ScrollRevealScaffold(
+      title: _isEdit ? l10n.editServer : l10n.addServer,
+      backgroundColor:
+          _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
       // 与搜索页一致：窗口不随键盘缩放（resize 在此设备上会留下「键盘上方
       // 空白带 + 内容被顶起」）。底部字段可见性改由滚动区键盘高度留白 +
       // 输入框 scrollPadding 保证。
       resizeToAvoidBottomInset: false,
-      backgroundColor:
-          _isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
-      extendBodyBehindAppBar: true,
-      appBar: LuoboListTopBar(
-        // 与设置页其余子页面同款（同路由的类型网格步骤用的是同一套页头）。
-        title: _isEdit ? l10n.editServer : l10n.addServer,
-      ),
+      // 与设置页其余子页面同款（同路由的类型网格步骤用的是同一套页头）。
       body: GestureDetector(
         // 点击空白区域收起键盘（输入框等子级点击优先命中，不受影响）。
         behavior: HitTestBehavior.opaque,
@@ -1506,10 +1501,10 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: error));
                     showLuoboToast(
-      context,
-      message: l10n.errorCopiedToClipboard,
-      tone: LuoboToastTone.info,
-    );
+                      context,
+                      message: l10n.errorCopiedToClipboard,
+                      tone: LuoboToastTone.info,
+                    );
                   },
                 ),
               ],
