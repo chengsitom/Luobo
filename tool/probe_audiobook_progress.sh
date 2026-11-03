@@ -6,7 +6,7 @@
 #       `AudiobookProgress.fromServerJson`（现在是按字段名猜测）。
 #
 # 用法（在家里/能访问服务器时跑）：
-#   export DL_BASE="http://192.168.31.142:4000"     # 或 https://你的域名:10010
+#   export DL_BASE="http://192.168.1.10:4000"     # 或 https://你的域名:10010
 #   export DL_USER="chengsitom"
 #   export DL_PASS="你的密码"
 #   ./tool/probe_audiobook_progress.sh
@@ -20,7 +20,7 @@
 
 set -uo pipefail
 
-BASE="${DL_BASE:-http://192.168.31.142:4000}"
+BASE="${DL_BASE:-http://192.168.1.10:4000}"
 USER_NAME="${DL_USER:-}"
 PASS="${DL_PASS:-}"
 TOKEN="${DL_TOKEN:-}"

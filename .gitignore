@@ -56,3 +56,17 @@ app.*.map.json
 # 子包（packages/*）的构建产物
 **/build/
 
+# ── 签名与本地凭据：绝对不要提交（2026-11-03 补，此前缺失）────────────────
+# 仓库是公开的：android/key.properties 里是 keystore 的 store/key 密码。
+android/key.properties
+**/key.properties
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+*.provisionprofile
+# 本地服务器配置 / 抓包素材 / 诊断导出（含真实账号、内网地址、播放记录）
+test_server_config.json
+**/luobo_diagnostics_*.txt
+**/diagnostics/
+
