@@ -56,6 +56,8 @@ class EventType {
   static const String restoreEnd = 'restore.end';
   static const String restoreError = 'restore.error';
   static const String trackNext = 'track.next';
+  /// 有声书进度云同步（跟进度 / 合并结果 / 响应形态）。
+  static const String audiobookProgressSync = 'audiobook.progressSync';
   static const String cachePrune = 'cache.prune';
   static const String taskBpm = 'task.bpm';
   static const String remoteConnect = 'remote.connect';

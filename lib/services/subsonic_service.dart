@@ -432,6 +432,21 @@ class SubsonicService {
     }
   }
 
+  /// 丢掉缓存的 JWT，重新登录一次（换票）。
+  ///
+  /// 为什么需要：转码播放把 token 放在**媒体流 URL 的查询参数**里
+  /// （`/api/tracks/{id}/stream?token=<JWT>`，见 [getDaoliyuApiStreamUrl]），
+  /// 播放器没有「401 后重登再重试」的能力 —— token 一到期，表现就是长音频
+  /// （有声书章节）播到一半**连接被服务端掐断**，播放器报流末尾。
+  /// 断流自愈续播前调它换一张新票，否则新流会立刻再被拒。
+  ///
+  /// 只清 JWT 与永久失败标记，不动 Subsonic 层凭据。
+  Future<bool> refreshApiJwt() async {
+    _apiJwt = null;
+    _apiLoginFailed = false;
+    return loginToApi();
+  }
+
   Future<bool> _performApiLogin() async {
     try {
       final resp = await _dio.post(
@@ -520,6 +535,48 @@ class SubsonicService {
         ),
       );
       return resp.data as Map<String, dynamic>;
+    }
+
+    try {
+      return await send();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        _apiJwt = null;
+        _apiLoginFailed = false;
+        if (await loginToApi()) {
+          try {
+            return await send();
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// PATCH 自研层（部分更新）。401 重登一次；失败返回 null。
+  Future<Map<String, dynamic>?> _apiPatch(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    if (!await loginToApi()) return null;
+    Future<Map<String, dynamic>?> send() async {
+      final resp = await _dio.patch(
+        '$activeBaseUrl$path',
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $_apiJwt',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      return resp.data is Map
+          ? Map<String, dynamic>.from(resp.data as Map)
+          : null;
     }
 
     try {
@@ -1455,6 +1512,156 @@ class SubsonicService {
       // count 是当页条数，非总数；仅作无 episodeCount 时的兜底。
       total: jsonInt(data?['count']) ?? 0,
     );
+  }
+
+  /// 有声书进度（云端）：`GET /api/library/audiobooks/progress`（无必填参数，
+  /// 实测清单里是**列表式**——一次返回该账号在多本书上的进度）。
+  ///
+  /// 用途见 `docs/有声书接入技术方案.md` §15.12：本地 `AudiobookProgressStore`
+  /// 仍是读取权威（离线/首屏 0 延迟），云端只做“比本地新就覆盖”的合并源。
+  ///
+  /// ⚠️ 响应形态尚未抓包确认（清单只记了路径 + 用途）：这里不硬编码结构，
+  /// 依次尝试 `List` / `{items|progress|list|data|audiobooks: [...]}` / 单键列表，
+  /// 并把**原始形态与首条样例**写进诊断事件，下一次真机运行即可据此收紧解析。
+  Future<List<Map<String, dynamic>>?> fetchAudiobookProgress() async {
+    if (!isDaoliyu) return null;
+    final raw = await _apiGetAny('/api/library/audiobooks/progress');
+    final items = _extractProgressItems(raw);
+    try {
+      String? sample;
+      if (items != null && items.isNotEmpty) {
+        final encoded = jsonEncode(items.first);
+        sample = encoded.length > 400 ? encoded.substring(0, 400) : encoded;
+      }
+      DiagnosticsService.instance.record(
+        EventType.audiobookProgressSync,
+        LogLevel.info,
+        {
+          'phase': 'fetch',
+          'ok': raw != null,
+          'root': raw == null
+              ? 'null'
+              : (raw is List ? 'list' : raw.runtimeType.toString()),
+          if (raw is Map) 'keys': raw.keys.take(8).join(','),
+          'count': items?.length,
+          if (sample != null) 'sample': sample,
+        },
+      );
+    } catch (_) {}
+    return items;
+  }
+
+  /// 上报有声书进度（**写接口已实测可用**，2026-11-02 在 Web 端验证）。
+  ///
+  /// `PATCH /api/library/audiobooks/{abk}/progress`
+  /// body `{episodeId, progressSeconds, durationSeconds, completed}`
+  /// → 200 + 完整进度对象，`revision` 递增、`updatedAt` 刷新。
+  ///
+  /// 注意：空 body 也会被接受并**写一次**（revision 会涨，值不变），所以调用方
+  /// 必须带齐四个字段，别拿它做探测。返回 null 表示失败（网络/登录/服务端）。
+  Future<Map<String, dynamic>?> saveAudiobookProgress({
+    required String audiobookId,
+    required String episodeId,
+    required int positionMs,
+    int? durationMs,
+    bool completed = false,
+  }) async {
+    if (!isDaoliyu) return null;
+    if (audiobookId.isEmpty || episodeId.isEmpty) return null;
+    final seconds = positionMs < 0 ? 0 : positionMs ~/ 1000;
+    final body = <String, dynamic>{
+      'episodeId': episodeId,
+      'progressSeconds': seconds,
+      if (durationMs != null && durationMs > 0)
+        'durationSeconds': durationMs ~/ 1000,
+      'completed': completed,
+    };
+    final data =
+        await _apiPatch('/api/library/audiobooks/$audiobookId/progress', body);
+    try {
+      DiagnosticsService.instance.record(
+        EventType.audiobookProgressSync,
+        data == null ? LogLevel.warn : LogLevel.info,
+        {
+          'phase': 'report',
+          'audiobookId': audiobookId,
+          'episodeId': episodeId,
+          'progressSeconds': seconds,
+          'completed': completed,
+          'ok': data != null,
+          if (data != null) 'revision': data['revision'],
+        },
+      );
+    } catch (_) {}
+    return data;
+  }
+
+  /// 从任意形态的响应里捞进度条目（容错，见 [fetchAudiobookProgress]）。
+  List<Map<String, dynamic>>? _extractProgressItems(Object? raw) {
+    Iterable<dynamic>? list;
+    if (raw is List) {
+      list = raw;
+    } else if (raw is Map) {
+      for (final key in const [
+        'items',
+        'progress',
+        'list',
+        'data',
+        'audiobooks',
+      ]) {
+        final v = raw[key];
+        if (v is List) {
+          list = v;
+          break;
+        }
+      }
+      if (list == null) {
+        // 单键包裹（{ "abc123": [...] }）
+        for (final v in raw.values) {
+          if (v is List) {
+            list = v;
+            break;
+          }
+        }
+      }
+      if (list == null) list = [raw];
+    }
+    if (list == null) return null;
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  /// GET 自研层，容忍顶层是数组（[_apiGet] 只接受 Map）。401 重登一次。
+  Future<Object?> _apiGetAny(String path) async {
+    if (!await loginToApi()) return null;
+    Future<Object?> send() async {
+      final resp = await _dio.get(
+        '$activeBaseUrl$path',
+        options: Options(headers: {'Authorization': 'Bearer $_apiJwt'}),
+      );
+      return resp.data;
+    }
+
+    try {
+      return await send();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        _apiJwt = null;
+        _apiLoginFailed = false;
+        if (await loginToApi()) {
+          try {
+            return await send();
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 章节对象 → Song 模型（复用现有播放栈）。

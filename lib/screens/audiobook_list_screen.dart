@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -64,6 +66,8 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
           _isLoading = false;
         });
       }
+      // 云端进度合并：**不阻塞首屏**（本地先出，合并完再刷新一次）。
+      unawaited(_syncCloudProgress(subsonicService));
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -87,6 +91,42 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     final store = AudiobookProgressStore.instance;
     await store.ensureLoaded(serverKey);
     _recents = store.recent(serverKey, limit: 3);
+  }
+
+  /// 拉云端进度并按「比本地新才覆盖」合并（`docs/有声书接入技术方案.md` §15.12）。
+  ///
+  /// 纯增量、失败静默：连不上 / 没有读接口 / 解析不出 → 什么都不做，本地照旧。
+  /// 正在播的那本跳过，否则云端旧值会把实时位置拽回去。
+  Future<void> _syncCloudProgress(SubsonicService subsonicService) async {
+    final serverKey = _serverKey;
+    if (serverKey == null) return;
+    // await 之前先取 provider，避免跨异步边界用 context。
+    final playingBookId =
+        Provider.of<PlayerProvider>(context, listen: false)
+            .currentAudiobook
+            ?.id;
+    try {
+      final raw = await subsonicService.fetchAudiobookProgress();
+      if (raw == null || raw.isEmpty) return;
+      final parsed = raw
+          .map(AudiobookProgress.fromServerJson)
+          .whereType<AudiobookProgress>()
+          .toList();
+      if (parsed.isEmpty) return;
+      final applied = AudiobookProgressStore.instance.mergeRemote(
+        serverKey,
+        parsed,
+        skip: {if (playingBookId != null) playingBookId},
+      );
+      if (applied > 0 && mounted) {
+        setState(() {
+          _recents =
+              AudiobookProgressStore.instance.recent(serverKey, limit: 3);
+        });
+      }
+    } catch (_) {
+      // 云端进度是锦上添花，任何异常都不该影响书库可用性。
+    }
   }
 
   Audiobook? _bookById(String id) {

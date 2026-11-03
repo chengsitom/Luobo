@@ -26,6 +26,7 @@ import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../services/audio_handler.dart';
 import '../services/audio_interruption_policy.dart';
+import '../services/audiobook_end_policy.dart';
 import '../services/daoliyu_seek_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
@@ -129,6 +130,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isPlayingAudiobook = false;
   Audiobook? _currentAudiobook; // 当前播放的有声书（进度记忆的归属）
   int? _audiobookChapterOrder; // 当前章节 order（1-based，bookmark 用，取自 Song.track）
+
+  /// 当前章节「断流自愈」已尝试次数（切章/真正播完时复位）。
+  ///
+  /// 转码流无 Content-Length，服务端一关连接就被播放器报成 `completed`；
+  /// 见 `services/audiobook_end_policy.dart`。自愈失败次数设上限，避免服务器
+  /// 持续掐断时无限重起流（也覆盖「章节时长元数据偏长」导致的误判）。
+  int _chapterStreamRescueCount = 0;
+
+  /// 每章最多重起几次流来续播（超过就认为音频确实到末尾，按播完处理）。
+  static const int _maxChapterStreamRescues = 3;
 
   /// 进入有声书前正在播放的歌曲快照：底栏封面槽在有声书播放/暂停时
   /// 继续显示这首歌（用户 2026-10-27：「第四个 tab 不能是之前仍在播放的歌曲吗」）。
@@ -1113,6 +1124,33 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _transcodingService.getCurrentFormat() != null;
   }
 
+  /// 转码设置是否**作用于当前这一首**（与 [_isDaoliyuTranscodeRequested] 的区别：
+  /// 那个回答「用户在设置里开了转码吗」，这个回答「这首歌该不该转码」）。
+  ///
+  /// 有声书章节**永远不转码**，依据 `docs/有声书接入技术方案.md` §3：
+  /// `GET /rest/stream?id=<abe_>&format=raw` → 200 `audio/mp4` m4a 直出
+  /// （明文认证、有 Content-Length + Range）。转码会把长章节塞进无 Content-Length
+  /// 的 chunked 管道：拿不到总时长、断流被播放器当成「本章播完」，还会让每次
+  /// seek 变成 timeOffset 重起流（用户 2026-10-30 真机缺陷的根因）。
+  ///
+  /// 注意：**路由仍按 [_isDaoliyuTranscodeRequested] 走单曲模式**（不发 concat
+  /// 预建），这里只决定「取流 URL / 是否 HLS / activeStream 快照」，改动面最小。
+  bool get _transcodeAppliesToCurrent {
+    if (_isPlayingAudiobook) return false;
+    return _isDaoliyuTranscodeRequested;
+  }
+
+  /// 当前曲目实际要用的转码参数：章节恒为 null（→ 道理鱼 `format=raw` 直出）。
+  ({int? maxBitRate, String? format}) get _effectiveTranscodeParams {
+    if (!_transcodeAppliesToCurrent) {
+      return (maxBitRate: null, format: null);
+    }
+    return (
+      maxBitRate: _transcodingService.getCurrentBitrate(),
+      format: _transcodingService.getCurrentFormat(),
+    );
+  }
+
   /// 道理鱼感知的流 URL 构建（playSong / _prepareCurrentSong 共用）：转码场景
   /// 优先自研 /api/tracks/{id}/stream（JWT + timeOffset 重起流），JWT 失败回退
   /// Subsonic 转码 URL（seek 不可用、从头播）；非转码场景走常规 getStreamUrl
@@ -1125,7 +1163,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? format,
     int timeOffsetSeconds = 0,
   }) async {
-    if (_isDaoliyuTranscodeRequested) {
+    // 有声书章节不走自研转码端点（见 _transcodeAppliesToCurrent）。
+    if (_transcodeAppliesToCurrent) {
       final apiUrl = await _subsonicService.getDaoliyuApiStreamUrl(song.id,
           timeOffsetSeconds: timeOffsetSeconds);
       if (apiUrl != null) {
@@ -1144,7 +1183,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// `_isHlsSource=true` 并清 `_streamBaseOffsetMs`，返回 true；非转码或 JWT 失败
   /// （url 为 null）返回 false，由调用方回退 `/stream`。
   Future<bool> _trySetDaoliyuHlsSource(Song song) async {
-    if (!_hlsPlaybackEnabled || !_isDaoliyuTranscodeRequested) return false;
+    if (!_hlsPlaybackEnabled || !_transcodeAppliesToCurrent) return false;
     final hlsUrl = await _subsonicService.getDaoliyuHlsUrl(song.id);
     if (hlsUrl == null) return false;
     await _audioPlayer.setAudioSource(
@@ -1184,6 +1223,28 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     return _duration;
   }
   Duration get duration => _duration;
+
+  /// 本章「已播位置 / 本章时长」（毫秒）——**唯一口径**。
+  ///
+  /// 两处历史坑，任何判「这一章播到哪了」的代码都不能再用裸 `_position` /
+  /// `_duration`：
+  /// 1. **转码 timeOffset 重起流**后 `_duration` 只是「剩余时长」，必须用
+  ///    [effectiveDuration]（含 `_streamBaseOffsetMs`）补回基准；
+  /// 2. **gapless 拼接源**下 `_position` / `_duration` 是**整本书**的，必须换
+  ///    成 [chapterPosition]（已减去前序章节时长）。
+  ///
+  /// `durationMs` 为 0 表示本章时长未知（元数据缺失 / chunked 流解析不出）——
+  /// 调用方按「无法判定」处理，不要拿 0 去做比例计算。
+  ({int positionMs, int durationMs}) get chapterProgressSnapshot {
+    final positionMs = chapterPosition.inMilliseconds;
+    final fromSong = (_currentSong?.duration ?? 0) * 1000;
+    final durationMs = fromSong > 0
+        ? fromSong
+        // 拼接源下 `_duration` 是整本书，不能当本章时长；单源下
+        // `effectiveDuration` 才是本章（含重起流基准）。
+        : (_concatenatingSource != null ? 0 : effectiveDuration.inMilliseconds);
+    return (positionMs: positionMs, durationMs: durationMs);
+  }
 
   /// Track duration for progress UI. Falls back to the server-reported
   /// metadata when the player can't resolve it (e.g. on-the-fly transcoded
@@ -1967,6 +2028,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             identical(_audioPlayer.audioSource, _concatenatingSource),
         'posMs': _position.inMilliseconds,
         'durationMs': _duration.inMilliseconds,
+        // 本章口径（转码补基准 / gapless 减前序章）：判「真假播完」就是看这两个。
+        // durationMs=0 表示本章时长未知（chunked 流转码流解析不出）→ 无法判定。
+        if (_isPlayingAudiobook) ...{
+          'chapterPosMs': chapterProgressSnapshot.positionMs,
+          'chapterDurationMs': chapterProgressSnapshot.durationMs,
+          'transcoded': isActiveStreamTranscoded,
+          'baseOffsetMs': _streamBaseOffsetMs,
+        },
       },
     );
 
@@ -1975,6 +2044,74 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_isPlayingAudiobook) {
       final isLast = _currentIndex >= _queue.length - 1;
       final currentOrder = _audiobookChapterOrder ?? 1;
+
+      // ⚠️ 转码流「假播完」自愈：转码是无 Content-Length 的 chunked 管道，
+      // 服务端关连接（JWT 到期 / 转码管线中断 / 读超时）会被播放器当成流末尾
+      // → completed。此前这里直接推进 bookmark + skipNext，于是**没播完就进
+      // 下一章**（用户 2026-10-30 真机复现，转码下音频与 UI 一起跳）。
+      // 判定见 services/audiobook_end_policy.dart。
+      final snap = chapterProgressSnapshot;
+      if (!isGenuineChapterEnd(
+        positionMs: snap.positionMs,
+        durationMs: snap.durationMs,
+      )) {
+        // 定时关闭「播完本章」到点：断流正好发生在这一刻 → 停在原地（pause
+        // 会落盘进度），**不能**把断流当成本章听完去推进 bookmark。
+        if (_sleepTimerEndCurrentSong) {
+          DiagnosticsService.instance.record(
+            EventType.trackNext,
+            LogLevel.info,
+            {
+              'phase': 'chapterStreamCutSleepTimerStop',
+              'songId': _currentSong?.id,
+              'posMs': snap.positionMs,
+              'durationMs': snap.durationMs,
+            },
+          );
+          _doSleepTimerStop();
+          return;
+        }
+        if (_chapterStreamRescueCount < _maxChapterStreamRescues) {
+          _chapterStreamRescueCount++;
+          DiagnosticsService.instance.record(
+            EventType.trackNext,
+            LogLevel.warn,
+            {
+              'phase': 'chapterStreamCutRescue',
+              'attempt': _chapterStreamRescueCount,
+              'songId': _currentSong?.id,
+              'order': currentOrder,
+              'posMs': snap.positionMs,
+              'durationMs': snap.durationMs,
+              'transcoded': isActiveStreamTranscoded,
+              'daoliyu': _subsonicService.isDaoliyu,
+              'baseOffsetMs': _streamBaseOffsetMs,
+              'processingState': _audioPlayer.processingState.name,
+            },
+          );
+          // 停在原地续播，不推进 bookmark、不切章。
+          await _resumeChapterAfterStreamCut(
+            Duration(milliseconds: snap.positionMs < 0 ? 0 : snap.positionMs),
+          );
+          return;
+        }
+        // 连续多次都在同一位置断流，或章节时长元数据本身就偏长：放弃自愈，
+        // 信任音频（按播完处理），避免无限重起流。
+        DiagnosticsService.instance.record(
+          EventType.trackNext,
+          LogLevel.warn,
+          {
+            'phase': 'chapterStreamCutGiveUp',
+            'attempt': _chapterStreamRescueCount,
+            'songId': _currentSong?.id,
+            'order': currentOrder,
+            'posMs': snap.positionMs,
+            'durationMs': snap.durationMs,
+          },
+        );
+      }
+      _chapterStreamRescueCount = 0; // 真正播完 → 本章自愈计数复位
+
       // bookmark 推进到下一章；末章 → completed（保留条目，"已听完"显示）。
       _saveAudiobookChapterProgress(
         chapterOrder: isLast ? currentOrder : currentOrder + 1,
@@ -2167,7 +2304,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _isPlayingAudiobook = audiobook;
       _currentAudiobook = audiobook ? audiobookBook : null;
       // 章节 order 存到 Song.track（audiobookChapterToSong 映射），bookmark 用。
+      final previousChapterOrder = _audiobookChapterOrder;
       _audiobookChapterOrder = audiobook ? song.track : null;
+      // 换章才复位「断流自愈」计数；同章续播（_resumeChapterAfterStreamCut
+      // 会重走 playSong）必须保留，否则同一处反复断流会无限重试。
+      if (!audiobook || previousChapterOrder != _audiobookChapterOrder) {
+        _chapterStreamRescueCount = 0;
+      }
       _resolvedArtworkUrl = null;
       // 恢复续播：resumePositionMs 直接赋给 _position，复用 _prepareCurrentSong
       // 的恢复 seek 路径（B5）。普通歌曲仍从 0 开始。
@@ -2342,9 +2485,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             await _audioPlayer.setUrl(localPlayUrl);
           } else {
             // Apply transcoding settings if enabled (LAN connection always
-            // resolves to null → original, rule 1).
-            final maxBitRate = _transcodingService.getCurrentBitrate();
-            final format = _transcodingService.getCurrentFormat();
+            // resolves to null → original, rule 1；有声书章节恒为 null →
+            // 道理鱼 format=raw 直出，见 _transcodeAppliesToCurrent).
+            final params = _effectiveTranscodeParams;
+            final maxBitRate = params.maxBitRate;
+            final format = params.format;
             _setActiveStream(maxBitRate, format);
             // 道理鱼转码优先 HLS（§14）：VOD 分片、原生可 seek、断线重连按分片
             // 重取、无倒带。HLS 不可用（非转码 / JWT 失败）回退自研 /stream。
@@ -2584,7 +2729,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 避免恢复时先定位旧章再被自愈逻辑推走（§9.2-1）。
     // C003 修复：末章不 +1（无下一章），保持末章 order 由播完逻辑标 completed，
     // 否则写入 lastOrder+1 恢复时定位失败。
-    final durationMs = _duration.inMilliseconds;
+    // ⚠️ 分母必须是 [effectiveDuration] 而不是裸 `_duration`：转码 timeOffset
+    // 重起流后 `_duration` 只是「剩余时长」，拿它当 95% 分母会在**真播完之前**
+    // 就满足比例，把 bookmark 推到下一章 + 记「已听完」（用户 2026-10-30：
+    // 转码下有声书没播完就进下一集，进度也因此从下一章开始）。
+    final durationMs = effectiveDuration.inMilliseconds;
     final isLast = _currentIndex >= _queue.length - 1;
     var currentDurationMs = durationMs > 0 ? durationMs : null;
     String? chapterTitle = _currentSong?.title;
@@ -2638,7 +2787,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 只有 bookmark 仍指向当前 Song 时才写标题/时长（切章后当前 Song 已是新章）。
     final sameAsCurrent = chapterOrder == _audiobookChapterOrder;
-    final durationMs = _duration.inMilliseconds;
+    // 本章时长必须走统一口径：转码重起流后裸 `_duration` 只是剩余时长，
+    // 写进 store 会让详情页的「已播至 / 进度」在恢复时算错。
+    final durationMs = sameAsCurrent && _currentSong != null
+        ? chapterProgressSnapshot.durationMs
+        : 0;
 
     _audiobookProgressStore.save(
       serverKey,
@@ -2654,6 +2807,36 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         episodeCount: book.episodeCount,
         listenedOrders: _capListened(listened),
       ),
+    );
+  }
+
+  /// 断流后**停在原地**续播当前章节（不推进 bookmark、不切下一章）。
+  ///
+  /// 为什么不用 `seek()`：此刻播放器已经处于 `completed`，源已到 EOF；转码流
+  /// 又没有 Content-Length，对已结束的源做 seek 不可靠。走 [playSong] 的续播
+  /// 路径重建音源最稳（内部：转码 → `seek()` → timeOffset 重起流；其余 → 原生
+  /// seek 到 `resumePositionMs`）。
+  ///
+  /// 转码流的 token 在 URL 查询参数里，媒体流 401 播放器不会自己重登 ——
+  /// 长章节播到一半被掐断，八成就是 JWT 到期，所以续播前先换一张新票。
+  Future<void> _resumeChapterAfterStreamCut(Duration resumeAt) async {
+    final song = _currentSong;
+    final book = _currentAudiobook;
+    if (song == null || book == null) return;
+
+    if (_subsonicService.isDaoliyu && isActiveStreamTranscoded) {
+      // 失败不阻塞续播：拿不到新票就沿用旧票，再失败会走 giveUp 分支。
+      await _subsonicService.refreshApiJwt();
+    }
+
+    await playSong(
+      song,
+      playlist: _queue,
+      startIndex: _currentIndex,
+      forcePlay: true, // 同一章节重播：绝不能退化成 togglePlayPause
+      audiobook: true,
+      audiobookBook: book,
+      resumePositionMs: resumeAt.inMilliseconds,
     );
   }
 
@@ -4005,9 +4188,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return AudioSource.uri(Uri.file(offlinePath));
     }
     // Apply transcoding settings if enabled (LAN connection always resolves
-    // to null → original, rule 1).
-    final maxBitRate = _transcodingService.getCurrentBitrate();
-    final format = _transcodingService.getCurrentFormat();
+    // to null → original, rule 1；有声书章节恒为 null → format=raw).
+    final params = _effectiveTranscodeParams;
+    final maxBitRate = params.maxBitRate;
+    final format = params.format;
     // Only the current song's source reflects the actual active stream;
     // sources for other queue entries are prebuilt and must not overwrite it.
     if (song.id == _currentSong?.id) {
@@ -4065,9 +4249,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         } else {
           // Apply transcoding settings if enabled, matching playSong's
           // stream URL so the restore path honors the same bitrate/format.
-          // (LAN connection always resolves to null → original, rule 1.)
-          final maxBitRate = _transcodingService.getCurrentBitrate();
-          final format = _transcodingService.getCurrentFormat();
+          // (LAN connection always resolves to null → original, rule 1；
+          //  有声书章节恒为 null → format=raw，见 _transcodeAppliesToCurrent.)
+          final params = _effectiveTranscodeParams;
+          final maxBitRate = params.maxBitRate;
+          final format = params.format;
           _setActiveStream(maxBitRate, format);
           // 道理鱼转码恢复优先 HLS（§14）：原生分片 seek 恢复到 _position；
           // HLS 不可用（非转码 / JWT 失败）回退自研 /stream + timeOffset 起播。
@@ -4174,6 +4360,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = _queue[_currentIndex];
       _audiobookChapterOrder = _currentSong?.track;
       _resolvedArtworkUrl = null;
+      _chapterStreamRescueCount = 0; // 换章复位断流自愈计数
       notifyListeners();
       // 新章从 0 开始（position 已归零），写入进度；上一章记为已听完。
       _saveAudiobookChapterProgress(

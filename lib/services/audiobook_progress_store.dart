@@ -82,8 +82,132 @@ class AudiobookProgress {
     };
   }
 
-  /// 全书进度 0–1（用于头部百分比与列表进度条）。
+  AudiobookProgress copyWith({
+    int? chapterOrder,
+    String? chapterId,
+    int? positionMs,
+    bool? completed,
+    DateTime? updatedAt,
+    String? chapterTitle,
+    int? durationMs,
+    int? episodeCount,
+    List<int>? listenedOrders,
+  }) {
+    return AudiobookProgress(
+      audiobookId: audiobookId,
+      chapterOrder: chapterOrder ?? this.chapterOrder,
+      chapterId: chapterId ?? this.chapterId,
+      positionMs: positionMs ?? this.positionMs,
+      completed: completed ?? this.completed,
+      updatedAt: updatedAt ?? this.updatedAt,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      durationMs: durationMs ?? this.durationMs,
+      episodeCount: episodeCount ?? this.episodeCount,
+      listenedOrders: listenedOrders ?? this.listenedOrders,
+    );
+  }
+
+  /// 云端进度条目 → [AudiobookProgress]（**容错解析**，非法返回 null）。
   ///
+  /// 真实响应形态（2026-11-02 在本机 Chrome 里实测 `GET /api/library/audiobooks/progress`，
+  /// 顶层是**数组**，每项）：
+  /// ```json
+  /// {"id":"abp_e657…",                     // 进度记录 id，不是书本 id
+  ///  "audiobook":{"id":"abk_09dd…","title":"…","episodeCount":311,…},
+  ///  "episode":{"id":"abe_833b…","title":"…","order":89,"durationSeconds":886},
+  ///  "progressSeconds":630,"durationSeconds":886,
+  ///  "completed":false,"lastPlayedAt":"2026-09-24T20:13:51Z","revision":440}
+  /// ```
+  /// 注意两个坑：① 书本 id 只在 `audiobook.id` 里（顶层 `id` 是 `abp_`）；
+  /// ② 列表里时间字段叫 `lastPlayedAt`，单本读 `GET …/{abk}/progress` 叫 `updatedAt`。
+  /// 另保留字段名候选，兼容服务端后续改名。
+  static AudiobookProgress? fromServerJson(Map<String, dynamic> json) {
+    final nestedBook = json['audiobook'] ?? json['book'];
+    String? bookId = _firstString([
+      json['audiobookId'],
+      json['audiobook_id'],
+      json['bookId'],
+      json['book_id'],
+      if (nestedBook is Map) nestedBook['id'],
+      // 顶层 id 只在它本身是书本 id 时才用（进度条目自己的 id 前缀不同）
+      if (json['id']?.toString().startsWith('abk_') ?? false) json['id'],
+    ]);
+    if (bookId == null || !bookId.startsWith('abk_')) return null;
+
+    final nestedEpisode = json['episode'] ?? json['chapter'];
+    final order = jsonInt(json['chapterOrder']) ??
+        jsonInt(json['episodeOrder']) ??
+        jsonInt(json['order']) ??
+        (nestedEpisode is Map ? jsonInt(nestedEpisode['order']) : null) ??
+        1;
+
+    final positionMs = jsonInt(json['positionMs']) ??
+        _secondsToMs(json['positionSeconds']) ??
+        _secondsToMs(json['position']) ??
+        _secondsToMs(
+            nestedEpisode is Map ? nestedEpisode['positionSeconds'] : null) ??
+        0;
+
+    final updatedAt = DateTime.tryParse(
+          (json['updatedAt'] ??
+                  json['updated_at'] ??
+                  json['lastPlayedAt'] ??
+                  json['lastPlayedTime'] ??
+                  '')
+              .toString(),
+        ) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+
+    final chapterId = _firstString([
+      json['episodeId'],
+      json['episode_id'],
+      json['chapterId'],
+      if (nestedEpisode is Map) nestedEpisode['id'],
+    ]);
+
+    return AudiobookProgress(
+      audiobookId: bookId,
+      chapterOrder: order < 1 ? 1 : order,
+      chapterId: chapterId,
+      positionMs: positionMs < 0 ? 0 : positionMs,
+      completed: jsonBool(json['completed']) ??
+          jsonBool(json['finished']) ??
+          jsonBool(json['isCompleted']) ??
+          false,
+      updatedAt: updatedAt,
+      // 章节标题真实位置是 `episode.title`（实测）；`episodeTitle/chapterTitle`
+      // 是服务端可能改名的兜底。
+      chapterTitle: _firstString([
+        json['episodeTitle'],
+        json['chapterTitle'],
+        if (nestedEpisode is Map) nestedEpisode['title'],
+      ]),
+      // 本章时长优先用顶层 `durationSeconds`（实测 = 本章 886s，与 episode 内一致），
+      // 其次是 `durationMs`，最后回退 episode 内字段。
+      durationMs: jsonInt(json['durationMs']) ??
+          _secondsToMs(json['durationSeconds'] ??
+              (nestedEpisode is Map ? nestedEpisode['durationSeconds'] : null)),
+      episodeCount: jsonInt(json['episodeCount']) ??
+          jsonInt(nestedBook is Map ? nestedBook['episodeCount'] : null),
+    );
+  }
+
+  static String? _firstString(List<Object?> candidates) {
+    for (final c in candidates) {
+      if (c == null) continue;
+      final s = c.toString();
+      if (s.isNotEmpty && s != 'null') return s;
+    }
+    return null;
+  }
+
+  static int? _secondsToMs(Object? seconds) {
+    final s = jsonInt(seconds);
+    if (s == null || s <= 0) return null;
+    return s * 1000;
+  }
+
+  /// 全书进度 0–1（用于头部百分比与列表进度条）。
   /// - `completed` → 1；
   /// - 优先 `listenedOrders` 的真实已听章数（排除当前章，避免与当前章小数重复计）；
   /// - 旧数据无集合 → 按 `chapterOrder - 1` 估算；
@@ -93,7 +217,9 @@ class AudiobookProgress {
     if (completed) return 1;
     if (total == null || total <= 0) return null;
     final listened = listenedOrders.isNotEmpty
-        ? listenedOrders.where((o) => o >= 1 && o <= total && o != chapterOrder).length
+        ? listenedOrders
+            .where((o) => o >= 1 && o <= total && o != chapterOrder)
+            .length
         : (chapterOrder - 1).clamp(0, total);
     final chapterFraction = (durationMs != null && durationMs! > 0)
         ? (positionMs / durationMs!).clamp(0.0, 1.0)
@@ -120,7 +246,8 @@ class AudiobookProgress {
     if (order <= 0 || listenedOrders.contains(order)) return this;
     final next = [...listenedOrders, order]..sort();
     return copyWith(
-      listenedOrders: next.length > 500 ? next.sublist(next.length - 500) : next,
+      listenedOrders:
+          next.length > 500 ? next.sublist(next.length - 500) : next,
     );
   }
 
@@ -130,31 +257,6 @@ class AudiobookProgress {
     return copyWith(
       listenedOrders:
           listenedOrders.where((o) => o != order).toList(growable: false),
-    );
-  }
-
-  AudiobookProgress copyWith({
-    int? chapterOrder,
-    String? chapterId,
-    int? positionMs,
-    bool? completed,
-    DateTime? updatedAt,
-    String? chapterTitle,
-    int? durationMs,
-    int? episodeCount,
-    List<int>? listenedOrders,
-  }) {
-    return AudiobookProgress(
-      audiobookId: audiobookId,
-      chapterOrder: chapterOrder ?? this.chapterOrder,
-      chapterId: chapterId ?? this.chapterId,
-      positionMs: positionMs ?? this.positionMs,
-      completed: completed ?? this.completed,
-      updatedAt: updatedAt ?? this.updatedAt,
-      chapterTitle: chapterTitle ?? this.chapterTitle,
-      durationMs: durationMs ?? this.durationMs,
-      episodeCount: episodeCount ?? this.episodeCount,
-      listenedOrders: listenedOrders ?? this.listenedOrders,
     );
   }
 
@@ -260,6 +362,46 @@ class AudiobookProgressStore {
     final entries = _for(serverKey).values.where((p) => !p.completed).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return entries.take(limit).toList();
+  }
+
+  /// 合并云端进度：**只在云端比本地新时才覆盖**（last-write-wins by updatedAt）。
+  ///
+  /// 设计见 `docs/有声书接入技术方案.md` §15.12。两条硬规则：
+  /// 1. `skip` 里的书（正在播的那本）一律不覆盖 —— 否则云端旧值会把实时位置
+  ///    拽回去，这是这类同步最常见的翻车点；
+  /// 2. 云端没有 `listenedOrders`（已听集合是纯客户端字段），合并时与本地做
+  ///    **并集**，不丢已听标记；标题/时长/章数云端缺就用本地兜底。
+  ///
+  /// 返回实际被覆盖的条目数（>0 时整键落盘一次）。
+  int mergeRemote(
+    String serverKey,
+    Iterable<AudiobookProgress> remote, {
+    Set<String> skip = const {},
+  }) {
+    final map = _for(serverKey);
+    var applied = 0;
+    for (final r in remote) {
+      if (skip.contains(r.audiobookId)) continue;
+      final local = map[r.audiobookId];
+      if (local != null && !r.updatedAt.isAfter(local.updatedAt)) continue;
+      final merged = local == null
+          ? r
+          : r.copyWith(
+              listenedOrders:
+                  ({...local.listenedOrders, ...r.listenedOrders}.toList()
+                    ..sort()),
+              durationMs: r.durationMs ?? local.durationMs,
+              chapterTitle: r.chapterTitle ?? local.chapterTitle,
+              episodeCount: r.episodeCount ?? local.episodeCount,
+            );
+      map[r.audiobookId] = merged;
+      applied++;
+    }
+    if (applied > 0) {
+      _trim(serverKey, map);
+      _persist(serverKey, map);
+    }
+    return applied;
   }
 
   /// 超出上限按 updatedAt 淘汰最旧条目。
