@@ -175,8 +175,12 @@ class StorageService {
     return prefs.getBool(_neteaseFallbackKey) ?? true;
   }
 
-  /// 蓝牙/车机歌词：把歌词写进媒体**标题**（默认关，见
+  /// 蓝牙/车机歌词：把歌词写进媒体**标题**（默认开，见
   /// `services/car_lyrics_metadata.dart`）。
+  ///
+  /// 2026-11-12 按需求方决定改为默认开：目标用户就是「蓝牙车机 + 想看歌词」，
+  /// 让他们自己去设置里找开关等于功能不存在。代价（手机通知栏标题也变歌词）
+  /// 已在设置项副标题里写明，不想要可以关。
   Future<void> saveBluetoothLyricsInTitle(bool enabled) async {
     final prefs = await _prefs;
     await prefs.setBool(_bluetoothLyricsInTitleKey, enabled);
@@ -184,7 +188,7 @@ class StorageService {
 
   Future<bool> getBluetoothLyricsInTitle() async {
     final prefs = await _prefs;
-    return prefs.getBool(_bluetoothLyricsInTitleKey) ?? false;
+    return prefs.getBool(_bluetoothLyricsInTitleKey) ?? true;
   }
 
   Future<void> saveVolume(double volume) async {

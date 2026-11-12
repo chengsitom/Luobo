@@ -522,7 +522,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await _lyricsService.initialize();
     // 蓝牙/车机歌词：订阅行变化（与原生副标题那条链互不影响）。
     _lyricsService.onLineChanged = _onLyricLineChanged;
-    // 开关默认关（会在车机上顶掉专辑名），用户开过就记住。
+    // 默认开（目标用户就是蓝牙车机场景），用户关过就记住。
     _bluetoothLyricsInTitle =
         await _storageService.getBluetoothLyricsInTitle();
   }
@@ -4981,9 +4981,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Control-only devices (Garmin watch, etc.) don't set this flag.
   bool _isA2dpAudioActive = false;
 
-  /// 是否把歌词写进媒体标题（蓝牙/车机逐句显示）。默认关，见
+  /// 是否把歌词写进媒体标题（蓝牙/车机逐句显示）。默认开，见
   /// `services/car_lyrics_metadata.dart`。
-  bool _bluetoothLyricsInTitle = false;
+  bool _bluetoothLyricsInTitle = true;
 
   /// 当前歌词行（null = 前奏/间奏/无歌词），由歌词服务的行变化回调维护。
   String? _currentLyricLine;
