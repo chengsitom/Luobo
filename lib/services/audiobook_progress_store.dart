@@ -141,7 +141,10 @@ class AudiobookProgress {
         (nestedEpisode is Map ? jsonInt(nestedEpisode['order']) : null) ??
         1;
 
+    // ⚠️ 实测字段名是 **progressSeconds**（不是 positionSeconds），见 §15.12 的
+    // 真实响应样例；后面几个是服务端可能改名的兜底。
     final positionMs = jsonInt(json['positionMs']) ??
+        _secondsToMs(json['progressSeconds']) ??
         _secondsToMs(json['positionSeconds']) ??
         _secondsToMs(json['position']) ??
         _secondsToMs(
