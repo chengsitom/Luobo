@@ -2158,6 +2158,12 @@ class _SongInfoState extends State<_SongInfo> {
               context,
               song: widget.song!,
               menuContext: SongMenuContext.player,
+              // ⚠️ 播放页挂在 **root** navigator 上；不显式传嵌套导航器的话，
+              // 「专辑/歌手」会被 push 到 root（sheet 也在 root），整页盖住
+              // MainScreen → 底部播放条一起消失（用户 2026-11-12 反馈）。
+              // 传嵌套导航器后：菜单关 → 播放页关 → 详情页作为二级页打开，
+              // 播放条正常显示。详见 song_tile.dart `_dismissSheetAndResolveNavigator`。
+              originNavigator: NavigationHelper.navigatorKey.currentState,
             ),
             icon: const Icon(AppIcons.moreV, color: Colors.white, size: 24),
           ),

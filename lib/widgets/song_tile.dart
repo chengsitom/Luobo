@@ -653,8 +653,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           onTap: song.albumId == null
               ? null
               : () {
-                  final nav = widget.originNavigator ?? Navigator.of(context);
-                  Navigator.pop(context);
+                  final nav = _dismissSheetAndResolveNavigator(context);
                   nav.push(
                     MaterialPageRoute(
                       builder: (context) => AlbumScreen(albumId: song.albumId!),
@@ -672,8 +671,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
           onTap: song.artistId == null
               ? null
               : () {
-                  final nav = widget.originNavigator ?? Navigator.of(context);
-                  Navigator.pop(context);
+                  final nav = _dismissSheetAndResolveNavigator(context);
                   _navigateToArtist(nav);
                 },
         ),
@@ -913,6 +911,33 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         );
       }
     }
+  }
+
+  /// 关掉菜单，并返回**应该把详情页 push 到哪个导航器**。
+  ///
+  /// 为什么要这么绕（用户 2026-11-12：播放页 → ⋮ → 歌手，播放条不见了）：
+  /// 1. `showLuoboSheet` 走 **root** navigator（见 `sheet_shell.dart` 注释），所以
+  ///    sheet 的 builder context 里 `Navigator.of(context)` 拿到的也是 **root**；
+  ///    而播放页本身就在 root 上。两者一叠加，`ArtistScreen` 被 push 到 root，
+  ///    整页盖住 MainScreen —— 而播放条是 MainScreen 的 `bottomNavigationBar`，
+  ///    自然一起被盖掉。
+  /// 2. 正解：详情页要进**嵌套**导航器（那是"二级页"，条带由 main_screen 统一
+  ///    渲染）。所以调用方（播放页）必须显式传 `originNavigator`。
+  /// 3. 顺序不能反：菜单自己也是 root 上的路由，**先关菜单再关播放页**，否则
+  ///    关掉的是菜单之上的那一层。关完播放页再 push，详情页才不会被它压住。
+  ///
+  /// 从列表页进来时 `originNavigator` 就是嵌套导航器、root 上也压着别的全屏页
+  /// 的情况不存在（`canPop()` 为假），行为与修复前一致。
+  NavigatorState _dismissSheetAndResolveNavigator(BuildContext sheetContext) {
+    final rootNav = Navigator.of(sheetContext, rootNavigator: true);
+    Navigator.pop(sheetContext); // 1) 关菜单
+
+    final target = widget.originNavigator;
+    if (target == null || identical(target, rootNav)) return rootNav;
+
+    // 2) 目标不是 root → 说明上面压着播放页之类的全屏页，先关掉它
+    if (rootNav.canPop()) rootNav.pop();
+    return target;
   }
 
   void _navigateToArtist(NavigatorState nav) {
