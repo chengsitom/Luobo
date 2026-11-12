@@ -34,8 +34,9 @@ files() {
   fi
 }
 
-# 只扫文本类，跳过二进制与生成物
-TEXT_FILES=$(files | grep -vE '\.(png|jpg|jpeg|gif|webp|ico|ttf|otf|woff2?|mp4|mov|mp3|zip|apk|ipa|jar|so|dylib|a|pdf|chm|chls)$|^assets/|^build/|l10n/' || true)
+# 只扫文本类，跳过二进制与生成物；**跳过本脚本自己**——它的注释里必然带着
+# 待检模式（password: 'testpass' / xxx.fnos.net），否则会自己报自己。
+TEXT_FILES=$(files | grep -vE '\.(png|jpg|jpeg|gif|webp|ico|ttf|otf|woff2?|mp4|mov|mp3|zip|apk|ipa|jar|so|dylib|a|pdf|chm|chls)$|^assets/|^build/|l10n/|^tool/check_secrets\.sh$' || true)
 [ -z "$TEXT_FILES" ] && { echo "没有需要检查的文件"; exit 0; }
 
 # 「明文密码」只在文档/配置里查：Dart 源码里的 password: 'testpass' 是测试夹具，

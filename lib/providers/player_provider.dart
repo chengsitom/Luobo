@@ -27,6 +27,7 @@ import '../services/upnp_service.dart';
 import '../services/audio_handler.dart';
 import '../services/audio_interruption_policy.dart';
 import '../services/audiobook_end_policy.dart';
+import '../services/audiobook_progress_sync_policy.dart';
 import '../services/daoliyu_seek_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
@@ -162,6 +163,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// onChanged 会连续调 seek，位移不足 1s 时不重复写整表快照（§9.2-1）。
   int? _lastSavedAudiobookPositionMs;
 
+  // ---- 云端进度上报（§15.12.1，默认开）----
+  //
+  // 本地进度是权威源（离线/弱网/车机要 0 延迟），云端只做「跨端兜底」。
+  // 播放中每 5s 就会写一次本地，若同步打云 = 每分钟十几次 PATCH，所以这里
+  // 做合并：非强制时 ≥45s 且（换章 或 位移 ≥60s）才发；暂停/切章/退出/退后台
+  // 这些「要换设备了」的时刻强制 flush（force: true）。
+  /// 上次成功发起的云端上报时间 / 章节目录键（bookId|episodeId）/ 位置。
+  DateTime? _lastCloudPushAt;
+  String _lastCloudPushKey = '';
+  int _lastCloudPushPosMs = 0;
+
+  /// 在途防重：慢网下避免多个 PATCH 叠在同一章上。
+  bool _cloudPushInFlight = false;
+
   bool _hasPlayedOnce = false;
 
   SharedPreferences? _prefs;
@@ -264,8 +279,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint(
           '[Player] App lifecycle state: $state - saving queue state immediately');
       _saveQueueStateImmediate();
-      // 有声书进度兜底：退后台/暂停立即保存（§9.2-3）。
-      _saveAudiobookProgress();
+      // 有声书进度兜底：退后台/暂停立即保存（§9.2-3），并同步云端
+      // （切走 App 往往就是要换设备继续听）。
+      _saveAudiobookProgress(flushCloud: true);
       // inactive 是瞬态（通知栏/App 切换器/来电横幅），不算退后台；
       // 只有真正退后台（paused）才置位，避免瞬态回前台误触发会话重激活。
       if (state == AppLifecycleState.paused) {
@@ -1222,6 +1238,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (seconds > 0) return Duration(seconds: seconds);
     return _duration;
   }
+
   Duration get duration => _duration;
 
   /// 本章「已播位置 / 本章时长」（毫秒）——**唯一口径**。
@@ -2231,7 +2248,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     // 从有声书切到普通歌/另一本有声书：先保存上一本的进度（§9.2-2）。
     if (_isPlayingAudiobook && !audiobook) {
-      _saveAudiobookProgress();
+      _saveAudiobookProgress(flushCloud: true);
       _restorePlaybackSettingsAfterAudiobook();
     }
     // 从普通歌曲**首次**切到有声书：记下这首歌/队列/位置，底栏封面槽继续
@@ -2604,7 +2621,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     // 先保存上一本的进度（切书/切歌都不丢，§9.2-2）。
     if (_isPlayingAudiobook) {
-      _saveAudiobookProgress();
+      _saveAudiobookProgress(flushCloud: true);
     }
 
     // 同一本书内切章：复用现有队列（chapters 为空则落入下方全量拉取路径，
@@ -2710,7 +2727,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// 位置流 5s 节流 / 切歌 / 暂停 / seek / 退后台 / 章节播完 多路都会调这里；
   /// store 内部内存缓存防读-改-写竞态（P2）。
-  void _saveAudiobookProgress() {
+  ///
+  /// [flushCloud]：同时**立即**把进度推到云端（暂停 / 切章 / 切书 / 退后台 /
+  /// 退出有声书这些「可能要换设备」的时刻传 true）。默认 false 时由
+  /// [_pushAudiobookProgressToCloud] 自行节流，约 45s 才发一次。
+  void _saveAudiobookProgress({bool flushCloud = false}) {
     final book = _currentAudiobook;
     final order = _audiobookChapterOrder;
     final serverKey = _audiobookServerKey;
@@ -2750,19 +2771,66 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 记录真正落盘的位置，供 seek 去抖判断（见 seek()）。
     _lastSavedAudiobookPositionMs = positionMs;
 
-    _audiobookProgressStore.save(
-      serverKey,
-      AudiobookProgress(
-        audiobookId: book.id,
-        chapterOrder: chapterOrder,
-        chapterId: chapterId,
-        positionMs: positionMs,
-        updatedAt: DateTime.now(),
-        chapterTitle: chapterTitle,
-        durationMs: currentDurationMs,
-        episodeCount: book.episodeCount,
-        listenedOrders: _capListened(listened),
-      ),
+    final progress = AudiobookProgress(
+      audiobookId: book.id,
+      chapterOrder: chapterOrder,
+      chapterId: chapterId,
+      positionMs: positionMs,
+      updatedAt: DateTime.now(),
+      chapterTitle: chapterTitle,
+      durationMs: currentDurationMs,
+      episodeCount: book.episodeCount,
+      listenedOrders: _capListened(listened),
+    );
+    _audiobookProgressStore.save(serverKey, progress);
+    _pushAudiobookProgressToCloud(progress, force: flushCloud);
+  }
+
+  /// 把进度同步到服务器（`PATCH /api/library/audiobooks/{abk}/progress`）。
+  ///
+  /// 设计要点（§15.12.1）：
+  /// - **本地永远先写**，云端只做跨端兜底；失败静默、不重试队列（服务端
+  ///   `revision` 单调递增，下一次覆盖即可）。
+  /// - 节流：非 force 时同一章 ≥45s **且** 位移 ≥60s 才发，避免把 5s 一次的
+  ///   本地写放大成网络写；force 时无视时间窗（暂停/切章/退后台）。
+  /// - `chapterId == null`（例如拖进度条跨章后落到下一章、章节 id 未知）不发：
+  ///   写错章节比不写更糟，等下一章真正起播后补。
+  void _pushAudiobookProgressToCloud(
+    AudiobookProgress progress, {
+    bool force = false,
+  }) {
+    if (!_subsonicService.isDaoliyu) return;
+    final episodeId = progress.chapterId;
+    if (episodeId == null || episodeId.isEmpty) return;
+    final key = '${progress.audiobookId}|$episodeId';
+    final now = DateTime.now();
+    final should = shouldPushAudiobookProgress(
+      key: key,
+      positionMs: progress.positionMs,
+      lastKey: _lastCloudPushKey,
+      lastPosMs: _lastCloudPushPosMs,
+      lastAt: _lastCloudPushAt,
+      now: now,
+      force: force,
+      inFlight: _cloudPushInFlight,
+    );
+    if (!should) return;
+    _cloudPushInFlight = true;
+    _lastCloudPushAt = now;
+    _lastCloudPushKey = key;
+    _lastCloudPushPosMs = progress.positionMs;
+    final durationMs = progress.durationMs;
+    final completed = progress.completed;
+    unawaited(
+      _subsonicService
+          .saveAudiobookProgress(
+            audiobookId: progress.audiobookId,
+            episodeId: episodeId,
+            positionMs: progress.positionMs,
+            durationMs: durationMs,
+            completed: completed,
+          )
+          .whenComplete(() => _cloudPushInFlight = false),
     );
   }
 
@@ -2793,21 +2861,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? chapterProgressSnapshot.durationMs
         : 0;
 
-    _audiobookProgressStore.save(
-      serverKey,
-      AudiobookProgress(
-        audiobookId: book.id,
-        chapterOrder: chapterOrder,
-        chapterId: sameAsCurrent ? _currentSong?.id : null,
-        positionMs: positionMs,
-        completed: completed,
-        updatedAt: DateTime.now(),
-        chapterTitle: sameAsCurrent ? _currentSong?.title : null,
-        durationMs: sameAsCurrent && durationMs > 0 ? durationMs : null,
-        episodeCount: book.episodeCount,
-        listenedOrders: _capListened(listened),
-      ),
+    final progress = AudiobookProgress(
+      audiobookId: book.id,
+      chapterOrder: chapterOrder,
+      chapterId: sameAsCurrent ? _currentSong?.id : null,
+      positionMs: positionMs,
+      completed: completed,
+      updatedAt: DateTime.now(),
+      chapterTitle: sameAsCurrent ? _currentSong?.title : null,
+      durationMs: sameAsCurrent && durationMs > 0 ? durationMs : null,
+      episodeCount: book.episodeCount,
+      listenedOrders: _capListened(listened),
     );
+    _audiobookProgressStore.save(serverKey, progress);
+    // 云端：只在知道章节 id 时发（推进到下一章时 id 未知，等起播后补）。
+    // 整章听完 → 用本章长度作为位置，服务端据此标 completed。
+    if (progress.chapterId != null) {
+      _pushAudiobookProgressToCloud(
+        completed && (progress.durationMs ?? 0) > 0
+            ? progress.copyWith(positionMs: progress.durationMs!)
+            : progress,
+        force: true,
+      );
+    }
   }
 
   /// 断流后**停在原地**续播当前章节（不推进 bookmark、不切下一章）。
@@ -3286,7 +3362,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     // 暂停后位置流停止输出，5s 节流窗口内的最后位置不会被写入；暂停即落盘，
     // 避免暂停后进程被强杀时进度最多回退 5s（stop()/退后台另有保存路径）。
-    if (_isPlayingAudiobook) _saveAudiobookProgress();
+    if (_isPlayingAudiobook) _saveAudiobookProgress(flushCloud: true);
   }
 
   Future<void> stop() async {
@@ -3294,7 +3370,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _bufferStartAt = null; // 避免 buffering 状态残留误配对
     // R005 修复：有声书停止前保存当前真实位置（随后 _position 归零，
     // 若在归零后才保存会用 0 覆盖 1s 节流刚写入的真实位置）。
-    if (_isPlayingAudiobook) _saveAudiobookProgress();
+    if (_isPlayingAudiobook) _saveAudiobookProgress(flushCloud: true);
     if (_castService.isConnected) {
       await _castService.stop();
     } else if (_upnpService.isConnected) {
