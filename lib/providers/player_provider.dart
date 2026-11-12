@@ -28,6 +28,7 @@ import '../services/audio_handler.dart';
 import '../services/audio_interruption_policy.dart';
 import '../services/audiobook_end_policy.dart';
 import '../services/audiobook_progress_sync_policy.dart';
+import '../services/playback_fallback_policy.dart';
 import '../services/daoliyu_seek_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
@@ -176,6 +177,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// 在途防重：慢网下避免多个 PATCH 叠在同一章上。
   bool _cloudPushInFlight = false;
+
+  // ---- 播放失败降级（services/playback_fallback_policy.dart）----
+  //
+  // 阶梯：换票重试 → 降 128k mp3 → 原码直出 → 放弃（最多两次重试）。
+  // 只在**同一首歌的自动重试**里累加，用户切歌时全部复位。
+  /// 0 = 用户设置，1 = 降码率，2 = 原码直出。
+  int _playbackFallbackLevel = 0;
+  int _playbackFallbackAttempts = 0;
+  bool _playbackJwtRefreshed = false;
+
+  /// 本次播放请求的恢复位置（ms，0 = 从头）。降级重试沿用这个值，而不是
+  /// `_position`（加载失败时 `_position` 可能还是上一首遗留的位置）。
+  int _playbackResumeIntentMs = 0;
 
   bool _hasPlayedOnce = false;
 
@@ -1151,15 +1165,27 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// 注意：**路由仍按 [_isDaoliyuTranscodeRequested] 走单曲模式**（不发 concat
   /// 预建），这里只决定「取流 URL / 是否 HLS / activeStream 快照」，改动面最小。
+  ///
+  /// 降级到**原码直出**（`_playbackFallbackLevel >= 2`）时同样为 false：那一档要
+  /// 的就是 `format=raw` + 明文认证，不能再进自研转码端点或 HLS
+  ///（见 `services/playback_fallback_policy.dart`）。
   bool get _transcodeAppliesToCurrent {
     if (_isPlayingAudiobook) return false;
+    if (_playbackFallbackLevel >= 2) return false;
     return _isDaoliyuTranscodeRequested;
   }
 
-  /// 当前曲目实际要用的转码参数：章节恒为 null（→ 道理鱼 `format=raw` 直出）。
+  /// 当前曲目实际要用的转码参数：章节恒为 null（→ 道理鱼 `format=raw` 直出）；
+  /// 降级档位 1 → 固定 128k mp3（「先能听」，也是 ffmpeg 最不容易失败的一档）。
   ({int? maxBitRate, String? format}) get _effectiveTranscodeParams {
     if (!_transcodeAppliesToCurrent) {
       return (maxBitRate: null, format: null);
+    }
+    if (_playbackFallbackLevel == 1) {
+      return (
+        maxBitRate: kPlaybackFallbackBitrate,
+        format: kPlaybackFallbackFormat,
+      );
     }
     return (
       maxBitRate: _transcodingService.getCurrentBitrate(),
@@ -2245,7 +2271,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     Audiobook? audiobookBook,
     int? resumePositionMs,
     bool roaming = false,
+    bool fallbackRetry = false,
   }) async {
+    // 降级阶梯只在「同一首的自动重试」里累加；任何来自用户/队列的新播放都复位。
+    if (!fallbackRetry) {
+      _playbackFallbackLevel = 0;
+      _playbackFallbackAttempts = 0;
+      _playbackJwtRefreshed = false;
+    }
+    // 记住**本次请求的恢复意图**：加载失败时 `_position` 可能还是上一首的位置，
+    // 拿它当重试的恢复点会把新歌跳到错误的位置。
+    _playbackResumeIntentMs = resumePositionMs ?? 0;
     // 从有声书切到普通歌/另一本有声书：先保存上一本的进度（§9.2-2）。
     if (_isPlayingAudiobook && !audiobook) {
       _saveAudiobookProgress(flushCloud: true);
@@ -2581,6 +2617,43 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
     } catch (e) {
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
+
+      // 降级阶梯：换票 → 降 128k mp3 → 原码直出 → 放弃。
+      // 此前这里只打日志就结束，用户看到的是「突然不播了」，而其中两类失败
+      // （JWT 过期、转码管线挂了）本来都能自救 —— 见
+      // services/playback_fallback_policy.dart。
+      final params = _effectiveTranscodeParams;
+      final authError =
+          looksLikeAuthError(e) && _transcodeAppliesToCurrent;
+      final step = nextPlaybackFallbackStep(
+        attempt: _playbackFallbackAttempts,
+        wasTranscoded: _transcodeAppliesToCurrent,
+        maxBitRate: params.maxBitRate,
+        format: params.format,
+        authError: authError,
+        jwtRefreshed: _playbackJwtRefreshed,
+      );
+      if (step != PlaybackFallbackStep.giveUp) {
+        DiagnosticsService.instance.record(
+          EventType.audioError,
+          LogLevel.warn,
+          {
+            'phase': 'fallback',
+            'songId': song.id,
+            'step': step.name,
+            'attempt': _playbackFallbackAttempts + 1,
+            'level': _playbackFallbackLevel,
+            'maxBitRate': params.maxBitRate,
+            'format': params.format,
+            'authError': authError,
+            'error': e.toString(),
+          },
+        );
+        // 不在这里 await：让 finally 先复位 _isLoading，再由重试自己重新置位。
+        unawaited(_retryPlaybackAfterFailure(song, step));
+        return;
+      }
+
       _isPlaying = false;
       _position = Duration.zero;
       _updateAndroidAuto();
@@ -2588,6 +2661,37 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// 执行降级动作并重放当前曲目（阶梯由 [nextPlaybackFallbackStep] 决定）。
+  Future<void> _retryPlaybackAfterFailure(
+    Song song,
+    PlaybackFallbackStep step,
+  ) async {
+    switch (step) {
+      case PlaybackFallbackStep.refreshJwtAndRetry:
+        // 鉴权失败：参数不动，只换票（媒体流 URL 里的 token 播放器无法自行重试）。
+        _playbackJwtRefreshed = true;
+        await _subsonicService.refreshApiJwt();
+      case PlaybackFallbackStep.downgradeBitrate:
+        _playbackFallbackLevel = 1;
+      case PlaybackFallbackStep.fallbackToRaw:
+        _playbackFallbackLevel = 2;
+      case PlaybackFallbackStep.giveUp:
+        return;
+    }
+    _playbackFallbackAttempts++;
+    final resumeAt = _playbackResumeIntentMs;
+    await playSong(
+      song,
+      playlist: _queue,
+      startIndex: _currentIndex,
+      forcePlay: true, // 同一首重播，绝不能退化成 togglePlayPause
+      audiobook: _isPlayingAudiobook,
+      audiobookBook: _currentAudiobook,
+      resumePositionMs: resumeAt > 0 ? resumeAt : null,
+      fallbackRetry: true,
+    );
   }
 
   // ── 有声书播放（§8.2）─────────────────────────────────────────────────
