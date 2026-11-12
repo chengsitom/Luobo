@@ -131,6 +131,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 必须显式钉 JDK：ubuntu-latest 的默认 JDK 会随镜像升级（2026-11 已到 25），
+      # 而 AGP 8.11 / Kotlin 2.2 不接受那么新的版本 —— 失败信息是**一个裸版本号**
+      # （`* What went wrong: 25.0.5`），完全看不出是 JDK 问题。
+      # Gradle 8.14 + AGP 8.11 官方要求 JDK 17，本地也用 17，保持一致。
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Verify JDK
+        run: java -version
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
