@@ -39,6 +39,19 @@ Luobo 是一款面向个人音乐库的播放器，支持 **飞牛音乐（fnOS�
 
 ---
 
+## 📸 界面一览
+
+> 全部来自真机录屏截帧（v1.1.22），没有补图、没有设计稿。
+
+| | | |
+|:---:|:---:|:---:|
+| ![首页](docs/screenshots/01-home.jpg) | ![播放页](docs/screenshots/02-now-playing.jpg) | ![全屏歌词](docs/screenshots/03-lyrics.jpg) |
+| **首页** 漫游、继续播放、最近听的专辑 | **播放页** 大封面、转码与音质信息 | **全屏歌词** 逐行高亮 |
+| ![车机歌词](docs/screenshots/04-car-mode.jpg) | ![心动歌单](docs/screenshots/05-heart-playlist.jpg) | ![有声书](docs/screenshots/06-audiobook.jpg) |
+| **车载模式** 大字歌词，蓝牙车机可逐句显示 | **心动歌单** 按风格与场景组合的歌单 | **有声书** 继续收听 + 我的书架 |
+| ![音乐库](docs/screenshots/07-library.jpg) | ![全部歌曲](docs/screenshots/08-all-songs.jpg) | ![设置](docs/screenshots/09-settings.jpg) |
+| **音乐库** 歌曲 / 专辑 / 歌手 / 歌单 / 收藏 / 有声书 | **全部歌曲** 排序记忆、多选操作 | **设置** 服务器、播放、音质、主题 |
+
 ## 🎵 它能做什么
 
 ### 听自己的音乐
