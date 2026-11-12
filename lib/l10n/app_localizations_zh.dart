@@ -620,6 +620,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前网络不支持 IPv6：服务器地址只解析到 IPv6。请换用支持 IPv6 的网络（如手机热点），或给服务器配置局域网地址。';
 
   @override
+  String get bluetoothLyricsTitle => '蓝牙 / 车机歌词';
+
+  @override
+  String get bluetoothLyricsTitleSubtitle =>
+      '连接蓝牙音频时，把媒体标题换成当前歌词行，艺人/专辑显示「歌名-艺人」，车机屏幕即可逐句显示歌词';
+
+  @override
   String get exitAudiobookFirst => '请先退出有声书';
 
   @override

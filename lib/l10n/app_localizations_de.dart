@@ -631,6 +631,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'This network doesn\'t support IPv6, but the server address resolves to IPv6 only. Try a network with IPv6 (e.g. a phone hotspot), or set a local address for the server.';
 
   @override
+  String get bluetoothLyricsTitle => 'Lyrics on car screen (Bluetooth)';
+
+  @override
+  String get bluetoothLyricsTitleSubtitle =>
+      'Over Bluetooth, show the current lyric line as the media title and \"Song - Artist\" as artist/album, so car screens display lyrics line by line';
+
+  @override
   String get exitAudiobookFirst => 'Please exit the audiobook first';
 
   @override

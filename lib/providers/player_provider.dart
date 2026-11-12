@@ -29,6 +29,7 @@ import '../services/audio_interruption_policy.dart';
 import '../services/audiobook_end_policy.dart';
 import '../services/audiobook_progress_sync_policy.dart';
 import '../services/playback_fallback_policy.dart';
+import '../services/car_lyrics_metadata.dart';
 import '../services/daoliyu_seek_policy.dart';
 import '../services/fade_settings_service.dart';
 import '../services/lock_screen_lyrics_service.dart';
@@ -519,6 +520,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _initializeLyricsService() async {
     await _lyricsService.initialize();
+    // 蓝牙/车机歌词：订阅行变化（与原生副标题那条链互不影响）。
+    _lyricsService.onLineChanged = _onLyricLineChanged;
+    // 开关默认关（会在车机上顶掉专辑名），用户开过就记住。
+    _bluetoothLyricsInTitle =
+        await _storageService.getBluetoothLyricsInTitle();
   }
 
   Future<void> _initializeSystemServices() async {
@@ -586,6 +592,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _bluetoothService.isA2dpConnected().then((active) {
         _isA2dpAudioActive = active;
         debugPrint('Bluetooth A2DP audio active: $_isA2dpAudioActive');
+        // 刚接上车机：立刻按当前状态（可能开/关着歌词模式）重发一次媒体信息。
+        _pushBluetoothMetadata();
       });
       _updateAllServices();
     };
@@ -594,6 +602,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _bluetoothService.isA2dpConnected().then((active) {
         _isA2dpAudioActive = active;
         debugPrint('Bluetooth A2DP audio active: $_isA2dpAudioActive');
+        // 车机断开 → 让媒体标题回到歌名（手机通知栏别继续停在歌词上）。
+        _pushBluetoothMetadata();
       });
     };
 
@@ -1060,6 +1070,65 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAllServices();
   }
 
+  /// 蓝牙链路发布的媒体信息（`_updateAllServices` 与歌词行变化共用）。
+  ///
+  /// 开启「蓝牙/车机歌词」且**A2DP 音频确实在走蓝牙**时，标题换成当前歌词行、
+  /// 艺人/专辑换成「歌名 - 艺人」（见 `services/car_lyrics_metadata.dart`）；
+  /// 其余情况如实发布歌名/艺人/专辑。
+  ///
+  /// 注意：这里改的是**媒体会话**（车机与手机通知栏同源），所以开启后手机通知栏
+  /// 的标题也会变成歌词行——这是该功能的固有代价，不是 bug。
+  void _pushBluetoothMetadata({String? artworkUrl, Duration? duration}) {
+    final song = _currentSong;
+    if (song == null) return;
+
+    final car = _bluetoothLyricsInTitle && _isA2dpAudioActive
+        ? buildCarLyricMetadata(
+            line: _currentLyricLine,
+            songTitle: song.title,
+            artist: song.artist,
+          )
+        : null;
+
+    _bluetoothService.updatePlaybackState(
+      songId: song.id,
+      title: car?.title ?? song.title,
+      artist: car?.artist ?? song.artist ?? 'Unknown Artist',
+      album: car?.album ?? song.album ?? 'Unknown Album',
+      artworkUrl: artworkUrl ?? _resolveArtworkUrl(),
+      duration: duration ?? effectiveDuration,
+      position: _position,
+      isPlaying: _isPlaying,
+      trackNumber: _currentIndex + 1,
+      totalTracks: _queue.length,
+      genre: song.genre,
+      year: song.year,
+    );
+  }
+
+  /// 歌词行变化（来自 [LockScreenLyricsService.onLineChanged]）。
+  ///
+  /// 没开「蓝牙歌词」时什么都不做——原生那条副标题链路自己会处理。
+  void _onLyricLineChanged(String? line) {
+    if (_currentLyricLine == line) return;
+    _currentLyricLine = line;
+    if (!_bluetoothLyricsInTitle) return;
+    _pushBluetoothMetadata();
+  }
+
+  /// 是否把歌词写进媒体标题（蓝牙/车机逐句显示）。
+  bool get bluetoothLyricsInTitle => _bluetoothLyricsInTitle;
+
+  /// 开关「蓝牙/车机歌词」：开/关都立刻重发一次 metadata，让车机即时看到效果。
+  Future<void> setBluetoothLyricsInTitle(bool enabled) async {
+    if (_bluetoothLyricsInTitle == enabled) return;
+    _bluetoothLyricsInTitle = enabled;
+    if (!enabled) _currentLyricLine = null;
+    notifyListeners();
+    await _storageService.saveBluetoothLyricsInTitle(enabled);
+    _pushBluetoothMetadata();
+  }
+
   void _updateAllServices() {
     if (_currentSong == null) return;
 
@@ -1086,14 +1155,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       isPlaying: _isPlaying,
     );
 
-    _bluetoothService.updateFromSong(
-      song: _currentSong!,
+    // 蓝牙：走统一入口——开启「蓝牙/车机歌词」时标题会换成当前歌词行。
+    _pushBluetoothMetadata(
       artworkUrl: artworkUrl,
       duration: totalDuration,
-      position: _position,
-      isPlaying: _isPlaying,
-      currentIndex: _currentIndex,
-      queueLength: _queue.length,
     );
 
     if (_samsungService.isSamsungDevice) {
@@ -4915,6 +4980,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   // True when an A2DP audio-output device (car, speaker) is connected.
   // Control-only devices (Garmin watch, etc.) don't set this flag.
   bool _isA2dpAudioActive = false;
+
+  /// 是否把歌词写进媒体标题（蓝牙/车机逐句显示）。默认关，见
+  /// `services/car_lyrics_metadata.dart`。
+  bool _bluetoothLyricsInTitle = false;
+
+  /// 当前歌词行（null = 前奏/间奏/无歌词），由歌词服务的行变化回调维护。
+  String? _currentLyricLine;
 
   void _onUpnpStateChanged() {
     final connected = _upnpService.isConnected;

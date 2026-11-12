@@ -906,6 +906,15 @@
     "description": "Connection failure hint: server host resolves to IPv6 only (AAAA) while this device has no public IPv6 address"
   },
 
+  "bluetoothLyricsTitle": "Lyrics on car screen (Bluetooth)",
+  "@bluetoothLyricsTitle": {
+    "description": "Settings row title: push the current lyric line as the media title so car screens show lyrics"
+  },
+  "bluetoothLyricsTitleSubtitle": "Over Bluetooth, show the current lyric line as the media title and \"Song - Artist\" as artist/album, so car screens display lyrics line by line",
+  "@bluetoothLyricsTitleSubtitle": {
+    "description": "Settings row subtitle explaining the Bluetooth car lyrics option"
+  },
+
   "exitAudiobookFirst": "Please exit the audiobook first",
   "@exitAudiobookFirst": {
     "description": "Snackbar when queue operations are attempted while playing an audiobook"

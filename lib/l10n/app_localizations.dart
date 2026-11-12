@@ -1246,6 +1246,18 @@ abstract class AppLocalizations {
   /// **'This network doesn\'t support IPv6, but the server address resolves to IPv6 only. Try a network with IPv6 (e.g. a phone hotspot), or set a local address for the server.'**
   String get ipv6OnlyNetworkHint;
 
+  /// Settings row title: push the current lyric line as the media title so car screens show lyrics
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics on car screen (Bluetooth)'**
+  String get bluetoothLyricsTitle;
+
+  /// Settings row subtitle explaining the Bluetooth car lyrics option
+  ///
+  /// In en, this message translates to:
+  /// **'Over Bluetooth, show the current lyric line as the media title and \"Song - Artist\" as artist/album, so car screens display lyrics line by line'**
+  String get bluetoothLyricsTitleSubtitle;
+
   /// Snackbar when queue operations are attempted while playing an audiobook
   ///
   /// In en, this message translates to:

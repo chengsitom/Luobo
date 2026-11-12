@@ -13,6 +13,7 @@ class StorageService {
   static const String _gaplessPlaybackKey = 'gapless_playback';
   static const String _lrcLibFallbackKey = 'lrclib_fallback';
   static const String _neteaseFallbackKey = 'netease_fallback';
+  static const String _bluetoothLyricsInTitleKey = 'bluetooth_lyrics_in_title';
   static const String _volumeKey = 'volume';
   static const String _lastActiveBaseUrlKey = 'last_active_base_url';
 
@@ -172,6 +173,18 @@ class StorageService {
   Future<bool> getNeteaseFallback() async {
     final prefs = await _prefs;
     return prefs.getBool(_neteaseFallbackKey) ?? true;
+  }
+
+  /// 蓝牙/车机歌词：把歌词写进媒体**标题**（默认关，见
+  /// `services/car_lyrics_metadata.dart`）。
+  Future<void> saveBluetoothLyricsInTitle(bool enabled) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_bluetoothLyricsInTitleKey, enabled);
+  }
+
+  Future<bool> getBluetoothLyricsInTitle() async {
+    final prefs = await _prefs;
+    return prefs.getBool(_bluetoothLyricsInTitleKey) ?? false;
   }
 
   Future<void> saveVolume(double volume) async {

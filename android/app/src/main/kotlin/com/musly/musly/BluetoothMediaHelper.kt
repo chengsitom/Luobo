@@ -57,6 +57,15 @@ class BluetoothMediaHelper(private val context: Context) {
     private var currentPosition: Long = 0
     private var currentArtwork: Bitmap? = null
     private var isPlaying: Boolean = false
+
+    /**
+     * 上次已下载封面的 URL。
+     *
+     * 媒体标题会被高频重发（「蓝牙/车机歌词」每句都要改标题），若每次都
+     * `loadArtworkAsync` 就等于每几秒重新下一次封面图。同一 URL 只下一次；
+     * 换歌（URL 变化）自然重新加载。
+     */
+    private var lastLoadedArtworkUrl: String? = null
     
     private val connectedDevices = mutableListOf<BluetoothDeviceInfo>()
     
@@ -260,7 +269,11 @@ class BluetoothMediaHelper(private val context: Context) {
         }
         
         artworkUrl?.let { url ->
-            loadArtworkAsync(url)
+            // 同一张封面只加载一次：标题/副标题刷新很频繁，重复下载毫无意义。
+            if (url != lastLoadedArtworkUrl) {
+                lastLoadedArtworkUrl = url
+                loadArtworkAsync(url)
+            }
         }
     }
     

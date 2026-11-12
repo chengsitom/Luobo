@@ -222,6 +222,19 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
             },
           ),
         ),
+        _buildDivider(),
+        Consumer<PlayerProvider>(
+          builder: (context, player, _) => LuoboRow(
+            icon: CupertinoIcons.antenna_radiowaves_left_right,
+            title: AppLocalizations.of(context)!.bluetoothLyricsTitle,
+            subtitle: AppLocalizations.of(context)!.bluetoothLyricsTitleSubtitle,
+            showChevron: false,
+            trailing: LuoboSwitch(
+              value: player.bluetoothLyricsInTitle,
+              onChanged: (v) => player.setBluetoothLyricsInTitle(v),
+            ),
+          ),
+        ),
       ],
     );
   }

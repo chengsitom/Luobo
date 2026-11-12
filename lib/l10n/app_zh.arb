@@ -746,6 +746,15 @@
     "description": "Connection failure hint: server host resolves to IPv6 only (AAAA) while this device has no public IPv6 address"
   },
 
+  "bluetoothLyricsTitle": "蓝牙 / 车机歌词",
+  "@bluetoothLyricsTitle": {
+    "description": "Settings row title: push the current lyric line as the media title so car screens show lyrics"
+  },
+  "bluetoothLyricsTitleSubtitle": "连接蓝牙音频时，把媒体标题换成当前歌词行，艺人/专辑显示「歌名-艺人」，车机屏幕即可逐句显示歌词",
+  "@bluetoothLyricsTitleSubtitle": {
+    "description": "Settings row subtitle explaining the Bluetooth car lyrics option"
+  },
+
   "exitAudiobookFirst": "请先退出有声书",
   "@exitAudiobookFirst": {
     "description": "Snackbar when queue operations are attempted while playing an audiobook"

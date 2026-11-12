@@ -27,6 +27,12 @@ class LockScreenLyricsService {
   // Throttling configuration
   static const _updateInterval = Duration(milliseconds: 500);
 
+  /// 当前歌词行变化回调（`null` = 当前没有歌词行，例如前奏/已清空）。
+  ///
+  /// 供「蓝牙/车机歌词」使用：那条链要把歌词写进**媒体标题**，与这里推给原生
+  /// 副标题是两条独立的路，各自订阅同一份行变化即可。
+  ValueChanged<String?>? onLineChanged;
+
   /// Whether Live Activities (iOS 16.1+) or Android RemoteViews are supported
   /// Disabled for iOS 15 compatibility
   bool get supportsLiveActivities => !kIsWeb && Platform.isAndroid;
@@ -86,6 +92,8 @@ class LockScreenLyricsService {
 
     _currentLyrics = LyricsManager.parse(lrcContent);
     _lastSentLine = null;
+    // 换歌先让外部（车机标题）回落成歌名，避免上一首的最后一句挂在新歌上。
+    onLineChanged?.call(null);
 
     // 换歌：先清掉上一首残留在原生侧的歌词行（Android 通知栏/车机副标题），
     // 新行由 startSync 随播放位置推送，避免旧歌词挂到新歌上。
@@ -106,6 +114,7 @@ class LockScreenLyricsService {
     _lastSentLine = null;
     _updateTimer?.cancel();
     _updateTimer = null;
+    onLineChanged?.call(null);
 
     // End Live Activity removed for iOS 15 compatibility
     // if (supportsLiveActivities && _activityId != null) {
@@ -169,11 +178,15 @@ class LockScreenLyricsService {
         final currentLine = _currentLyrics!.getCurrentLine(position);
 
         // Only send if line changed
-        if (currentLine != lastLine && currentLine != null) {
+        if (currentLine != lastLine) {
           lastUpdate = now;
           lastLine = currentLine;
-          debugPrint('[Lyrics] Line changed: "$currentLine"');
-          _updateLockScreenLyrics(currentLine);
+          if (currentLine != null) {
+            debugPrint('[Lyrics] Line changed: "$currentLine"');
+            _updateLockScreenLyrics(currentLine);
+          }
+          // 无行（前奏/间奏/播完）也要通知：车机标题该回落成歌名。
+          onLineChanged?.call(currentLine);
         }
       },
       onError: (error) {
