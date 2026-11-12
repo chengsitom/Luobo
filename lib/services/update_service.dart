@@ -45,7 +45,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static const String currentVersion = '1.1.21';
+  static const String currentVersion = '1.1.22';
 
   static const String _apiUrl =
       'https://api.github.com/repos/chengsitom/Luobo/releases/latest';
