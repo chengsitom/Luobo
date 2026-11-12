@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,8 +16,10 @@ import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/luobo/glass_pill_nav.dart';
+import '../widgets/luobo/luobo_toast.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
+import '../models/playback_notice.dart';
 import '../models/song.dart';
 import 'home_v2_screen.dart';
 import 'library_hub_screen.dart';
@@ -37,6 +40,16 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _showRightSidebar = true;
+
+  /// 播放失败通知订阅（`PlayerProvider.playbackNotices`）。
+  StreamSubscription<PlaybackNotice>? _playbackNoticeSub;
+  DateTime? _lastPlaybackNoticeAt;
+
+  @override
+  void dispose() {
+    _playbackNoticeSub?.cancel();
+    super.dispose();
+  }
 
   /// 桌面端仍用「首页 / 音乐库 / 搜索」（**桌面端本轮不一起改**，见方案 §7 ⑫）。
   final List<Widget> _screens = const [
@@ -86,6 +99,27 @@ class _MainScreenState extends State<MainScreen> {
 
       playerProvider.setLibraryProvider(libraryProvider);
       playerProvider.setRecommendationService(recommendationService);
+
+      // 播放失败（降级链全部失败）→ 弹一次轻提示。此前是静默的：用户点了歌
+      // 没反应，也不知道为什么。壳层订阅而不是 Provider 直接弹：Provider 没有
+      // BuildContext，也不该依赖组件层。
+      _playbackNoticeSub ??= playerProvider.playbackNotices.listen((notice) {
+        if (!mounted) return;
+        final now = DateTime.now();
+        if (_lastPlaybackNoticeAt != null &&
+            now.difference(_lastPlaybackNoticeAt!) <
+                const Duration(seconds: 3)) {
+          return; // 连续失败（如服务端整体不可用）不刷屏
+        }
+        _lastPlaybackNoticeAt = now;
+        final l10n = AppLocalizations.of(context);
+        if (l10n == null) return;
+        showLuoboToast(
+          context,
+          message: l10n.playbackFailed(notice.songTitle),
+          tone: LuoboToastTone.error,
+        );
+      });
 
       // 冷启动时队列可能在服务器配置就绪前被恢复（persistent_queue 全局键），
       // 此处补一次归属校验：队列属于旧服务器则清空，避免旧 songId 打新服务器。

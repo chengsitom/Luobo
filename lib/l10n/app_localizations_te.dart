@@ -619,6 +619,11 @@ class AppLocalizationsTe extends AppLocalizations {
   String get failedToLoadChapters => 'Failed to load chapters, please retry';
 
   @override
+  String playbackFailed(String title) {
+    return 'Couldn\'t play \"$title\". Check your connection and try again.';
+  }
+
+  @override
   String get exitAudiobookFirst => 'Please exit the audiobook first';
 
   @override

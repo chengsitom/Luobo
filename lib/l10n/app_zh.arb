@@ -731,6 +731,16 @@
     "description": "Error state message on the audiobook detail screen"
   },
 
+  "playbackFailed": "「{title}」播放失败，请检查网络后重试",
+  "@playbackFailed": {
+    "description": "Toast shown after playback load failed and every automatic fallback (refresh token / lower bitrate / original) was exhausted",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+
   "exitAudiobookFirst": "请先退出有声书",
   "@exitAudiobookFirst": {
     "description": "Snackbar when queue operations are attempted while playing an audiobook"

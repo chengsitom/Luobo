@@ -1234,6 +1234,12 @@ abstract class AppLocalizations {
   /// **'Failed to load chapters, please retry'**
   String get failedToLoadChapters;
 
+  /// Toast shown after playback load failed and every automatic fallback (refresh token / lower bitrate / original) was exhausted
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play \"{title}\". Check your connection and try again.'**
+  String playbackFailed(String title);
+
   /// Snackbar when queue operations are attempted while playing an audiobook
   ///
   /// In en, this message translates to:

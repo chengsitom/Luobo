@@ -191,6 +191,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// `_position`（加载失败时 `_position` 可能还是上一首遗留的位置）。
   int _playbackResumeIntentMs = 0;
 
+  /// 播放失败通知（降级全部失败时发一次），由壳层订阅后弹 toast。
+  /// 用 broadcast：允许在 Provider 生命周期内晚订阅（壳层在 postFrame 才挂）。
+  final StreamController<PlaybackNotice> _playbackNoticeController =
+      StreamController<PlaybackNotice>.broadcast();
+
+  Stream<PlaybackNotice> get playbackNotices =>
+      _playbackNoticeController.stream;
+
   bool _hasPlayedOnce = false;
 
   SharedPreferences? _prefs;
@@ -2657,6 +2665,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _isPlaying = false;
       _position = Duration.zero;
       _updateAndroidAuto();
+      // 兜底也失败了 —— 这是用户唯一能感知「为什么没播」的时刻。
+      if (!_playbackNoticeController.isClosed) {
+        _playbackNoticeController.add(
+          PlaybackNotice(songTitle: song.title, reason: e.toString()),
+        );
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -4750,6 +4764,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _playbackNoticeController.close();
     _sleepTimer?.cancel();
     _sleepTimerFadeTimer?.cancel();
     _sleepTimerFadePeriodicTimer?.cancel();

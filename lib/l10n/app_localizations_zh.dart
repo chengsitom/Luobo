@@ -611,6 +611,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get failedToLoadChapters => '章节加载失败，请重试';
 
   @override
+  String playbackFailed(String title) {
+    return '「$title」播放失败，请检查网络后重试';
+  }
+
+  @override
   String get exitAudiobookFirst => '请先退出有声书';
 
   @override
