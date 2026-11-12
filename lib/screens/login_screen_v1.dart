@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/local_music_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_helper.dart';
+import '../utils/auth_error_text.dart';
 import 'qr_scanner_screen.dart';
 
 enum _LoginErrorType {
@@ -456,8 +457,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     } else if (!success && mounted) {
       setState(
-        () => _loginError = authProvider.error ??
-            AppLocalizations.of(context)!.failedToConnectToServer,
+        () => _loginError =
+            authErrorText(AppLocalizations.of(context)!, authProvider),
       );
     }
   }
@@ -497,8 +498,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!success && mounted) {
       setState(
-        () => _loginError = authProvider.error ??
-            AppLocalizations.of(context)!.failedToConnectToServer,
+        () => _loginError =
+            authErrorText(AppLocalizations.of(context)!, authProvider),
       );
     } else if (success && mounted) {
       showLuoboToast(
@@ -682,7 +683,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               await authProvider.switchProfile(profile);
                               if (mounted && authProvider.error != null) {
                                 setState(
-                                  () => _loginError = authProvider.error,
+                                  () => _loginError = authErrorText(
+                                      AppLocalizations.of(context)!,
+                                      authProvider),
                                 );
                               }
                             },

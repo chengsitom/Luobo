@@ -10,6 +10,7 @@ import '../providers/player_provider.dart';
 import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/auth_error_text.dart';
 import '../widgets/luobo/capsule_button.dart';
 import '../widgets/luobo/empty_state.dart';
 import '../widgets/luobo/hero_detail_header.dart';
@@ -299,7 +300,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
       if (mounted) {
         showLuoboToast(
       context,
-      message: authProvider.error ?? l10n.failedToConnectToServer,
+      message: authErrorText(l10n, authProvider),
       tone: LuoboToastTone.error,
     );
       }
@@ -321,7 +322,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
     if (!applied) {
       showLuoboToast(
       context,
-      message: authProvider.error ?? l10n.failedToConnectToServer,
+      message: authErrorText(l10n, authProvider),
       tone: LuoboToastTone.error,
     );
       return;

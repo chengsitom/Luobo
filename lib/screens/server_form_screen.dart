@@ -14,6 +14,7 @@ import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
 import '../utils/local_library_launcher.dart';
+import '../utils/auth_error_text.dart';
 import '../widgets/luobo/capsule_button.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/list_top_bar.dart';
@@ -557,8 +558,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
       );
     } else {
       setState(
-        () => _loginError = authProvider.error ??
-            AppLocalizations.of(context)!.failedToConnectToServer,
+        () => _loginError =
+            authErrorText(AppLocalizations.of(context)!, authProvider),
       );
     }
   }

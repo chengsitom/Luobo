@@ -624,6 +624,10 @@ class AppLocalizationsBn extends AppLocalizations {
   }
 
   @override
+  String get ipv6OnlyNetworkHint =>
+      'This network doesn\'t support IPv6, but the server address resolves to IPv6 only. Try a network with IPv6 (e.g. a phone hotspot), or set a local address for the server.';
+
+  @override
   String get exitAudiobookFirst => 'Please exit the audiobook first';
 
   @override

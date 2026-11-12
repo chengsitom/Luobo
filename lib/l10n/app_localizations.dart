@@ -1240,6 +1240,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t play \"{title}\". Check your connection and try again.'**
   String playbackFailed(String title);
 
+  /// Connection failure hint: server host resolves to IPv6 only (AAAA) while this device has no public IPv6 address
+  ///
+  /// In en, this message translates to:
+  /// **'This network doesn\'t support IPv6, but the server address resolves to IPv6 only. Try a network with IPv6 (e.g. a phone hotspot), or set a local address for the server.'**
+  String get ipv6OnlyNetworkHint;
+
   /// Snackbar when queue operations are attempted while playing an audiobook
   ///
   /// In en, this message translates to:

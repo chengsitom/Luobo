@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/server_config.dart';
 import '../utils/image_cache.dart';
 import '../services/diagnostics/diagnostics.dart';
+import '../services/ipv6_reachability.dart';
 import '../services/services.dart';
 
 enum AuthState {
@@ -22,6 +23,12 @@ class AuthProvider extends ChangeNotifier {
 
   AuthState _state = AuthState.unknown;
   String? _error;
+
+  /// 上次连接失败的归因：服务器地址只有 AAAA、而本机没有公网 IPv6。
+  ///
+  /// UI 据此把「连接超时」换成一句能指导动作的话（见
+  /// `services/ipv6_reachability.dart`）——否则用户只会以为服务器挂了。
+  bool _ipv6OnlyUnreachable = false;
   ServerConfig? _config;
   bool _hasOfflineContent = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
@@ -33,6 +40,9 @@ class AuthProvider extends ChangeNotifier {
 
   AuthState get state => _state;
   String? get error => _error;
+
+  /// 连接失败是否可归因为「当前网络没有 IPv6，而服务器只有 IPv6 地址」。
+  bool get ipv6OnlyUnreachable => _ipv6OnlyUnreachable;
   ServerConfig? get config => _config;
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get hasOfflineContent => _hasOfflineContent;
@@ -108,6 +118,7 @@ class AuthProvider extends ChangeNotifier {
     if (pingResult!.success) {
       debugPrint(
           '[Auth] Ping OK — type=${pingResult.serverType} version=${pingResult.serverVersion}');
+      _ipv6OnlyUnreachable = false;
       if (_config != null) {
         final updatedConfig = _config!.copyWith(
           serverType: pingResult.serverType,
@@ -137,6 +148,14 @@ class AuthProvider extends ChangeNotifier {
       // 上一次表单登录遗留的旧错误）。
       _error = pingResult.error ?? 'Failed to connect to server';
 
+      // 归因：是不是「本网络没有 IPv6，而服务器只有 AAAA」。探测有 4s 上限，
+      // 失败/超时一律不下结论（false），绝不因为诊断拖慢或干扰原有流程。
+      _ipv6OnlyUnreachable = await _detectIpv6OnlyUnreachable();
+      if (_ipv6OnlyUnreachable) {
+        debugPrint('[Auth] Diagnosed: server is IPv6-only, this network has '
+            'no public IPv6');
+      }
+
       final offlineService = OfflineService();
       await offlineService.initialize();
       _hasOfflineContent = offlineService.getDownloadedCount() > 0;
@@ -145,6 +164,20 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.serverUnreachable;
     }
     notifyListeners();
+  }
+
+  /// 连接失败时做一次轻量归因：域名是否 AAAA-only、本机是否缺公网 IPv6。
+  ///
+  /// 只在 ping 失败后调用，本身带 4s 上限；任何异常都返回 false（不下结论）。
+  Future<bool> _detectIpv6OnlyUnreachable() async {
+    final host = Uri.tryParse(_subsonicService.activeBaseUrl)?.host ?? '';
+    if (host.isEmpty) return false;
+    try {
+      final diagnosis = await Ipv6Reachability.diagnose(host);
+      return diagnosis == Ipv6Diagnosis.serverIpv6OnlyNoLocalIpv6;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 单次带超时的 ping（10s 上限）。

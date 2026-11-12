@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/local_library_launcher.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/navigation_helper.dart';
 import '../utils/screen_helper.dart';
 import 'qr_scanner_screen.dart';
@@ -128,7 +129,7 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
       if (mounted) {
         showLuoboToast(
       context,
-      message: authProvider.error ?? l10n.failedToConnectToServer,
+      message: authErrorText(l10n, authProvider),
       tone: LuoboToastTone.error,
     );
       }
@@ -151,7 +152,7 @@ class _ServerGatewayScreenState extends State<ServerGatewayScreen> {
     if (!applied) {
       showLuoboToast(
       context,
-      message: authProvider.error ?? l10n.failedToConnectToServer,
+      message: authErrorText(l10n, authProvider),
       tone: LuoboToastTone.error,
     );
       return;
