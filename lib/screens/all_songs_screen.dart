@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:provider/provider.dart';
 import '../providers/library_provider.dart';
 import '../models/models.dart';
+import '../services/list_sort_preference.dart';
 import '../utils/navigation_helper.dart';
 import '../utils/song_sort.dart';
 import '../widgets/widgets.dart';
@@ -67,6 +70,17 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   }
 
   Future<void> _loadCachedData() async {
+    // 先读排序偏好（本地 SharedPreferences，毫秒级）再排序，避免列表先按
+    // 默认序渲染一帧再「跳」成用户上次选的序。
+    final saved = await ListSortPreference.load(
+      ListSortPreference.scopeAllSongs,
+    );
+    if (!mounted) return;
+    if (saved != null) {
+      _sortField = saved.field;
+      _sortAscending = saved.ascending;
+    }
+
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
@@ -141,6 +155,14 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
       }
     });
     _sortSongs();
+    // 记住这次选择：下次进页面（含冷启动）沿用。
+    unawaited(
+      ListSortPreference.save(
+        ListSortPreference.scopeAllSongs,
+        _sortField,
+        ascending: _sortAscending,
+      ),
+    );
   }
 
   /// 多选（fnos v1_0064：点击/长按后弹**全屏 sheet**选择，不是页面内模式）。
@@ -159,8 +181,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
       appBar: LuoboListTopBar(
         actions: [
           LuoboTopSearchButton(
-            onTap: () =>
-                NavigationHelper.push(context, const SearchScreen()),
+            onTap: () => NavigationHelper.push(context, const SearchScreen()),
           ),
         ],
       ),
