@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/genre.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../utils/navigation_helper.dart';
 import 'genre_screen.dart';
 
@@ -173,7 +174,7 @@ class _GenresScreenState extends State<GenresScreen> {
                 ),
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
         ],
       ),
     );

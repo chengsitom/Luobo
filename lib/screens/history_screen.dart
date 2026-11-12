@@ -7,6 +7,7 @@ import '../models/song.dart';
 import '../providers/providers.dart';
 import '../services/recommendation_service.dart';
 import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/luobo/empty_state.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/multi_select.dart';
@@ -167,7 +168,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           childCount: _recentSongs.length,
                         ),
                       ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
                   ],
                 ),
                 // 悬浮顶栏（圆返回 + 听歌报告；滚动常驻、无实色栏）。

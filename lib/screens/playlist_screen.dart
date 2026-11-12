@@ -660,7 +660,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 childCount: _playlist!.songs!.length,
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
         ],
       ),
           // 悬浮顶栏（圆返回 + 圆⋮；滚动时常驻、无实色栏——帧实测）。

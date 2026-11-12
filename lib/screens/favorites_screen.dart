@@ -214,7 +214,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           childCount: _favoriteSongs.length,
                         ),
                       ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
                   ],
                 ),
                 // 悬浮顶栏（圆返回；滚动常驻、无实色栏）。

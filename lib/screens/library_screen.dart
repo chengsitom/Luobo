@@ -569,7 +569,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
       ],
     );
   }
@@ -598,7 +598,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
       ],
     );
   }

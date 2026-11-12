@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/luobo/empty_state.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/song_divider.dart';
@@ -99,7 +100,7 @@ class DiscoverScreen extends StatelessWidget {
                     childCount: songs.length,
                   ),
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
             ],
           ),
           // 悬浮顶栏（圆返回；滚动常驻、无实色栏）—— 与收藏 / 歌单详情一致。

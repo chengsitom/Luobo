@@ -371,7 +371,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 _buildSongSliver()
               else
                 _buildAlbumSliver(),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
             ],
           ),
           _buildFloatingBar(context),

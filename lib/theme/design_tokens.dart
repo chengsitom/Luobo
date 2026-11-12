@@ -245,10 +245,18 @@ abstract final class LuoboSpacing {
 
   /// 覆盖式（§6.1）下二级页 `ListView` 的底部留白 = 设计值 + **条带净空**。
   ///
-  /// `main_screen` 用 `Scaffold.extendBody`，框架已把「底栏 / 播放条」的高度写进
-  /// `MediaQuery.padding.bottom`（见 SDK 的 `_BodyBuilder`）—— 但**显式传 `padding`
-  /// 的 `ListView` 不会自动吃到它**，所以这些页面要显式加上。
-  /// 传 `padding: null` 的页面由框架自动处理，无需调用本函数。
+  /// `main_screen` 用 `Scaffold.extendBody`，框架会把「底栏 / 播放条」的高度写进
+  /// body 的 `MediaQuery.padding.bottom`（见 SDK 的 `_BodyBuilder`）。但**谁来消费
+  /// 这个值**分两种情况（2026-11-12 实测确认）：
+  ///
+  /// - `ListView` / `GridView`（`BoxScrollView`）：`padding == null` 时会自动包一层
+  ///   `SliverPadding`，净空**自动**生效；
+  /// - `CustomScrollView`：**不会**自动吃 MediaQuery padding（它的 `buildSlivers`
+  ///   没有这段逻辑），必须自己留 —— 否则最后一行会被悬浮条带压住。
+  ///
+  /// 所以：`CustomScrollView` 页面用本函数做**末尾占位**或被显式 `padding` 时相加。
+  /// 这条曾被误解成「padding: null 全都自动处理」，导致一批 CustomScrollView 页面
+  /// 沿用手写 `SizedBox(height: 100)`，条带一变高就被压。
   static double pageBottomWithStrip(BuildContext context) =>
       pageBottom + MediaQuery.paddingOf(context).bottom;
 

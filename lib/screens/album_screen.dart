@@ -9,6 +9,7 @@ import '../providers/providers.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_icons.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/widgets.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/multi_select.dart';
@@ -260,7 +261,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   );
                 }, childCount: _songs.length),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
             ],
           ),
           // 悬浮顶栏（圆返回 + 下载；滚动常驻、无实色栏，同歌单/收藏）。

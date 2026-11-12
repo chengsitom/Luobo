@@ -448,9 +448,13 @@ class _MainScreenState extends State<MainScreen> {
             //
             // 用 `extendBody: true` + `bottomNavigationBar` 而不是手写 `Stack`：
             // Scaffold 会据此把 body 包进一个 MediaQuery，令
-            // `padding.bottom = max(安全区, 条带高度)`（见 SDK 的 `_BodyBuilder`）——
-            // 于是页面里 `ListView(padding: null)` 与 `SafeArea` **自动**留出净空，
-            // 最后一条内容不会被永久压在玻璃下面。
+            // `padding.bottom = max(安全区, 条带高度)`（见 SDK 的 `_BodyBuilder`）。
+            //
+            // ⚠️ 但**不是所有滚动视图都会自动消费这个值**（2026-11-12 实测）：
+            // `ListView` / `GridView` 在 `padding == null` 时会自动包 SliverPadding，
+            // `CustomScrollView` **不会** —— 后者必须在末尾自己留
+            // `LuoboSpacing.pageBottomWithStrip(context)`，否则最后一行会被条带压住。
+            // 详见 `theme/design_tokens.dart` 里该函数的注释。
             //
             // ⚠️ 因此**不再需要** `ColoredBox` 底色（§9.17.3 那个「色差带」的修法）——
             // 条带现在是真悬浮，玻璃自己负责模糊，内容从下方流过。
