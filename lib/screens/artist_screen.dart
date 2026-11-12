@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fluid_mesh_background/fluid_mesh_background.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/list_sort_preference.dart';
 import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../utils/image_cache.dart';
@@ -75,6 +78,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _loadArtistDetails() async {
+    // 先读排序偏好（本地，毫秒级），避免先按默认序渲染一帧再跳。
+    final saved = await ListSortPreference.load(ListSortPreference.scopeArtist);
+    if (!mounted) return;
+    if (saved != null) {
+      _sortField = saved.field;
+      _sortAscending = saved.ascending;
+    }
+
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
@@ -319,6 +330,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
         _sortAscending = true;
       }
     });
+    unawaited(
+      ListSortPreference.save(
+        ListSortPreference.scopeArtist,
+        _sortField,
+        ascending: _sortAscending,
+      ),
+    );
   }
 
   String _fieldLabel(AppLocalizations l10n, SongSortField field) {

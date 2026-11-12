@@ -17,8 +17,19 @@ class ListSortPreference {
 
   static const String _prefix = 'list_sort_';
 
-  /// 歌曲全库列表的 scope。其它列表页按需新增常量。
+  /// 歌曲全库列表的 scope。
   static const String scopeAllSongs = 'all_songs';
+
+  /// 收藏（歌曲）页。
+  static const String scopeFavorites = 'favorites';
+
+  /// 歌手详情页的歌曲列表（**所有歌手共用一个偏好**，符合「列表类型一致」的预期）。
+  static const String scopeArtist = 'artist';
+
+  /// 歌单详情页的歌曲列表（同上，按类型共享而不是按歌单各存一份）。
+  static const String scopePlaylist = 'playlist';
+
+  static const String scopeAlbums = 'albums';
 
   static String _fieldKey(String scope) => '$_prefix${scope}_field';
 

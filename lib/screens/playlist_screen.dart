@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../widgets/luobo/luobo_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/list_sort_preference.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
 import '../services/playback_context_tracker.dart';
@@ -54,6 +57,16 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _loadPlaylist() async {
+    // 先读排序偏好（本地，毫秒级），避免先按默认序渲染一帧再跳。
+    final saved = await ListSortPreference.load(
+      ListSortPreference.scopePlaylist,
+    );
+    if (!mounted) return;
+    if (saved != null) {
+      _sortField = saved.field;
+      _sortAscending = saved.ascending;
+    }
+
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
@@ -372,6 +385,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         _sortAscending = true;
       }
     });
+    unawaited(
+      ListSortPreference.save(
+        ListSortPreference.scopePlaylist,
+        _sortField,
+        ascending: _sortAscending,
+      ),
+    );
   }
 
   String _fieldLabel(AppLocalizations l10n, SongSortField field) {

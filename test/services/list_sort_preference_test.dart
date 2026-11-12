@@ -63,5 +63,16 @@ void main() {
       });
       expect(await ListSortPreference.load('all_songs'), isNull);
     });
+
+    test('各列表 scope 互不相同（避免两页共用一份偏好）', () {
+      final scopes = {
+        ListSortPreference.scopeAllSongs,
+        ListSortPreference.scopeFavorites,
+        ListSortPreference.scopeArtist,
+        ListSortPreference.scopePlaylist,
+        ListSortPreference.scopeAlbums,
+      };
+      expect(scopes.length, 5);
+    });
   });
 }
