@@ -13,16 +13,13 @@ import '../services/subsonic_service.dart';
 import '../theme/app_icons.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
-import '../utils/local_library_launcher.dart';
 import '../utils/auth_error_text.dart';
 import '../widgets/luobo/capsule_button.dart';
-import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/luobo/scroll_reveal_scaffold.dart';
 import '../widgets/luobo/sheet_shell.dart';
-import 'qr_scanner_screen.dart';
 
 enum _LoginErrorType {
   ssl,
@@ -69,19 +66,18 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
   final _usernameFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
 
-  bool _useLegacyAuth = false;
+  /// 明文认证恒为 true（道理鱼只认明文 `p=` 认证），开关已移除、不再暴露。
+  bool _useLegacyAuth = true;
   bool _allowSelfSignedCertificates = false;
   bool _obscurePassword = true;
   bool _showAdvancedOptions = false;
 
-  /// 'auto' | 'subsonic' | 'jellyfin' | 'daoliyu'（'youtube' 仅防御性保留，
-  /// 兼容历史 profile，UI 上不可选）。
-  String _serverFamily = 'auto';
-
-  /// 添加流程（B3）：是否已选定服务器类型。
-  /// 未选定时先显示**类型网格**，选定后才进入表单（设计稿 B3 的提示原文：
-  /// 「选定类型后进入表单填写地址与账号」）。编辑流程直接进表单。
-  bool _typeChosen = false;
+  /// 服务家族。
+  ///
+  /// **新建一律是道理鱼**（2026-11-13 起产品只做道理鱼）：类型选择那一步已整步
+  /// 删除。编辑老 profile 时 [_prefillFromConfig] 会用其原家族覆盖，
+  /// 历史配置仍能打开/保存，不会被强行改写。
+  String _serverFamily = 'daoliyu';
 
   String? _customCertificatePath;
   String? _customCertificateName;
@@ -214,7 +210,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     _passwordController.addListener(_clearError);
     _profileNameController.addListener(_clearError);
     _prefillFromConfig(widget.initialConfig ?? widget.prefillConfig);
-    if (widget.prefillConfig != null) _typeChosen = true;
   }
 
   @override
@@ -247,8 +242,8 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     _passwordController.text = config.password;
     _profileNameController.text = config.name ?? '';
     _serverFamily = _normalizeFamily(config.serverFamily);
-    // 道理鱼只认明文 p=，从已存 profile 恢复表单时同样强制。
-    _useLegacyAuth = config.useLegacyAuth || config.serverFamily == 'daoliyu';
+    // 道理鱼只认明文 p=，恒为 true（开关已移除）。
+    _useLegacyAuth = true;
     _allowSelfSignedCertificates = config.allowSelfSignedCertificates;
     _customCertificatePath = config.customCertificatePath;
     if (config.customCertificatePath != null) {
@@ -274,194 +269,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     if (_loginError != null && mounted) {
       setState(() => _loginError = null);
     }
-  }
-
-  // ── 服务器类型网格（设计稿 B3「添加服务器」第一步） ────────────────────
-
-  bool get _showTypePicker => !_isEdit && !_typeChosen;
-
-  Widget _buildTypePicker(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final c = LuoboColors.of(context);
-    final topInset = listTopInset(context);
-
-    Widget tile({
-      required String family,
-      required String label,
-      required IconData icon,
-      required Color color,
-    }) {
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => setState(() {
-            _serverFamily = family;
-            // 道理鱼只认明文 p=，选中即强制 legacy 认证。
-            _useLegacyAuth = family == 'daoliyu';
-            _typeChosen = true;
-          }),
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(LuoboRadius.tile),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration:
-                      BoxDecoration(color: color, shape: BoxShape.circle),
-                  child: Icon(icon, color: LuoboAccent.onAccent, size: 17),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: LuoboType.caption.copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: c.fg,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return ScrollRevealScaffold(
-      title: l10n.addServer,
-      backgroundColor: c.bg,
-      resizeToAvoidBottomInset: false,
-      // 与设置页其余子页面同款：透明顶栏 +「返回 + 标题」胶囊。
-      // （本路由是**全屏表单流**，表单步骤同样用这套页头 —— 两步形态一致，
-      //  故不套 `SettingsSubPage`，否则同路由内页头会跳变。）
-      actions: [
-        LuoboTopCircleButton(
-          icon: AppIcons.scan,
-          onTap: _scanToPrefill,
-        ),
-      ],
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          LuoboSpacing.pageX,
-          LuoboSpacing.pageY + topInset,
-          LuoboSpacing.pageX,
-          LuoboSpacing.pageBottomWithStrip(context),
-        ),
-        children: [
-          LuoboSectionHeader(l10n.serverType),
-          LuoboCard(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: LuoboSpacing.rowX,
-                  vertical: LuoboSpacing.rowY,
-                ),
-                child: Row(
-                  children: [
-                    tile(
-                      family: 'auto',
-                      label: l10n.serverTypeAuto,
-                      icon: AppIcons.ai,
-                      color: LuoboAccent.accent,
-                    ),
-                    const SizedBox(width: 9),
-                    tile(
-                      family: 'subsonic',
-                      label: l10n.serverTypeSubsonic,
-                      icon: AppIcons.music,
-                      color: LuoboAccent.familySubsonic,
-                    ),
-                    const SizedBox(width: 9),
-                    tile(
-                      family: 'jellyfin',
-                      label: l10n.serverTypeJellyfin,
-                      icon: AppIcons.radio,
-                      color: LuoboAccent.familyJellyfin,
-                    ),
-                    const SizedBox(width: 9),
-                    tile(
-                      family: 'daoliyu',
-                      label: l10n.serverTypeDaoliyu,
-                      icon: AppIcons.playlist,
-                      color: LuoboAccent.familyDaoliyu,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          LuoboHint(l10n.serverTypeGridHint),
-          LuoboSectionHeader(l10n.otherWays),
-          LuoboCard(
-            children: [
-              LuoboRow(
-                icon: AppIcons.scan,
-                title: l10n.scanQrCode,
-                onTap: _scanToPrefill,
-              ),
-              const LuoboDivider(indent: LuoboDivider.withIcon),
-              LuoboRow(
-                icon: AppIcons.folder,
-                title: l10n.useLocalFiles,
-                onTap: _useLocalLibrary,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 「其他方式 → 使用本地音乐文件」。
-  ///
-  /// ⚠️ 该流程会 `setLocalOnlyMode(true)`，即**断开当前服务器**改用本地曲库
-  /// （从「已连接的服务器」页进来时这属于破坏性操作），所以先弹确认框。
-  Future<void> _useLocalLibrary() async {
-    final l10n = AppLocalizations.of(context)!;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.useLocalFilesConfirmTitle),
-        content: Text(l10n.useLocalFilesConfirmBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.ok),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    // 与登录网关页共用同一份实现（utils/local_library_launcher.dart）。
-    final switched = await launchLocalLibrary(context);
-    if (!mounted || !switched) return;
-    // 已切到本地模式：路由栈上这些「服务器」页面已无意义，回到根。
-    Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  /// 扫码后**预填表单**（而不是直接登录）——添加流程里用户应先确认地址与账号。
-  Future<void> _scanToPrefill() async {
-    final config = await Navigator.push<ServerConfig>(
-      context,
-      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-    );
-    if (config == null || !mounted) return;
-    setState(() {
-      _prefillFromConfig(config);
-      _typeChosen = true;
-    });
   }
 
   // ── 登录 ────────────────────────────────────────────────────────────
@@ -619,92 +426,7 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     }
   }
 
-  // ── 服务器类型底部弹层 ──────────────────────────────────────────────
-
-  String get _serverFamilyLabel {
-    final l10n = AppLocalizations.of(context)!;
-    return switch (_serverFamily) {
-      'subsonic' => l10n.serverTypeSubsonic,
-      'jellyfin' => l10n.serverTypeJellyfin,
-      'daoliyu' => l10n.serverTypeDaoliyu,
-      // 历史 youtube profile 防御性保留（与 ServerFamilyInfo 文案一致）。
-      'youtube' => 'YouTube Music',
-      _ => l10n.serverTypeAuto,
-    };
-  }
-
-  Future<void> _showServerTypeSheet() async {
-    final l10n = AppLocalizations.of(context)!;
-    final options = [
-      (
-        family: 'auto',
-        label: l10n.serverTypeAuto,
-        subtitle: l10n.serverTypeAutoSubtitle,
-        icon: CupertinoIcons.sparkles,
-        color: LuoboAccent.accent,
-      ),
-      (
-        family: 'subsonic',
-        label: l10n.serverTypeSubsonic,
-        subtitle: null,
-        icon: CupertinoIcons.music_note,
-        color: LuoboAccent.familySubsonic,
-      ),
-      (
-        family: 'jellyfin',
-        label: l10n.serverTypeJellyfin,
-        subtitle: null,
-        icon: CupertinoIcons.tv,
-        color: LuoboAccent.familyJellyfin,
-      ),
-      (
-        family: 'daoliyu',
-        label: l10n.serverTypeDaoliyu,
-        subtitle: null,
-        icon: CupertinoIcons.music_note_list,
-        color: LuoboAccent.familyDaoliyu,
-      ),
-    ];
-
-    // 单选 Sheet（设计稿 D1 范式）：居中标题 + 每项一张独立白卡 + 玫红勾。
-    // ⚠️ 未选中项**什么都不带**（不带 chevron）——带 chevron 会让人以为
-    // 「点进去还有一层」（§2.3 铁律）。
-    final selected = await showLuoboSheet<String>(
-      context: context,
-      title: l10n.selectServerType,
-      builder: (sheetContext) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final opt in options)
-            LuoboSheetRow(
-              leading: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: opt.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(LuoboRadius.avatar),
-                ),
-                child: Icon(opt.icon, color: opt.color, size: 17),
-              ),
-              title: opt.label,
-              subtitle: opt.subtitle,
-              selected: _serverFamily == opt.family,
-              showChevron: false,
-              onTap: () => Navigator.of(sheetContext).pop(opt.family),
-            ),
-        ],
-      ),
-    );
-
-    if (selected != null && mounted) {
-      setState(() {
-        _serverFamily = selected;
-        // 道理鱼只认明文 p=，选中即强制 legacy 认证（开关同步禁用）。
-        _useLegacyAuth = selected == 'daoliyu';
-      });
-    }
-  }
+  // ── 服务器类型底部弹层（已随「只做道理鱼」整步删除） ────────────────
 
   // ── UI ──────────────────────────────────────────────────────────────
 
@@ -714,9 +436,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     final l10n = AppLocalizations.of(context)!;
     final isLoading =
         Provider.of<AuthProvider>(context).state == AuthState.authenticating;
-
-    // 添加流程第一步：先选服务器类型（设计稿 B3）。
-    if (_showTypePicker) return _buildTypePicker(context);
 
     // ⚠️ 必须在 Scaffold 之前算（`extendBodyBehindAppBar` 会把它叠进 body 的
     // `MediaQuery.padding.top`，在 body 内算会重复一次）。
@@ -764,6 +483,9 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 品牌区：logo + 应用名 + 副标题，让表单页不再「素」。
+                      _buildBrandHeader(),
+                      const SizedBox(height: 24),
                       // 无分组标题、无白卡外壳：参考物（飞牛「新建歌单」表单）就是
                       // 「标签在上 + 一摞独立白块」，块间 20dp。
                       _urlField(
@@ -814,7 +536,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
                         },
                       ),
                       const SizedBox(height: _fieldGap),
-                      _serverTypeTile(),
                       // 「音乐库范围」并入本页（§9.6 拍板）：语义上是**服务器属性**，
                       // 不是内容管理。仅当编辑的正是**当前连接**时才有数据来源
                       // —— getMusicFolders() 走的是当前登录态，对别的服务器会取错。
@@ -938,6 +659,51 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
 
   // ── 分组卡片 / 字段 ────────────────────────────────────────────────
 
+  /// 品牌区：黑底 logo + 应用名「萝卜」+ 副标题，撑起表单页顶部视觉。
+  Widget _buildBrandHeader() {
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.appleMusicRed.withValues(alpha: 0.4),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Image.asset(
+              'assets/logobig.png',
+              width: 64,
+              height: 64,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '萝卜',
+            style: LuoboType.display.copyWith(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.connectToServerSubtitle,
+            style: LuoboType.caption.copyWith(
+              color: LuoboColors.of(context).fg2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 分组卡 —— 设计体系 `LuoboCard`（白 / `#1C1C1E`、圆角 16、无阴影）。
   Widget _groupCard(List<Widget> children) {
     return SizedBox(
@@ -1043,18 +809,6 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
     );
   }
 
-  Widget _serverTypeTile() {
-    final l10n = AppLocalizations.of(context)!;
-    return LuoboRow(
-      icon: AppIcons.server,
-      title: l10n.serverType,
-      value: _serverFamilyLabel,
-      // 有状态值也要显示 chevron（与「音质偏好」那类「值 ›」行一致）。
-      showChevron: true,
-      onTap: _showServerTypeSheet,
-    );
-  }
-
   // ── 高级选项 ────────────────────────────────────────────────────────
 
   Widget _advancedExpander(ThemeData theme) {
@@ -1085,16 +839,9 @@ class _ServerFormScreenState extends State<ServerFormScreen> {
   }
 
   List<Widget> _advancedChildren(ThemeData theme, AppLocalizations l10n) {
+    // 明文认证开关已移除：道理鱼只认明文 p= 认证，`_useLegacyAuth` 恒为 true，
+    // 无需再暴露给用户切换。
     return [
-      _switchRow(
-        title: l10n.legacyAuthentication,
-        subtitle: l10n.legacyAuthSubtitle,
-        value: _useLegacyAuth,
-        onChanged: _serverFamily == 'daoliyu'
-            ? null
-            : (v) => setState(() => _useLegacyAuth = v),
-      ),
-      _advancedDivider(),
       _switchRow(
         title: l10n.allowSelfSignedCerts,
         subtitle: l10n.allowSelfSignedSubtitle,

@@ -88,6 +88,18 @@ class SubsonicService {
     ));
   }
 
+  /// 只改写「家族标记」，不碰地址/凭据/缓存。
+  ///
+  /// 用途：用「自动检测」或 Subsonic 通道登录的服务器，ping 通过后由
+  /// `AuthProvider` 探一次自研 `/api/auth/login`；能过就说明它其实是道理鱼，
+  /// 需要把 family 升级为 `daoliyu`。**不能走 [configure]** —— 那里会把刚
+  /// 拿到的 JWT、封面票、artist 计数全清空。
+  void upgradeServerFamily(String family) {
+    final config = _config;
+    if (config == null || config.serverFamily == family) return;
+    _config = config.copyWith(serverFamily: family);
+  }
+
   Future<void> configure(ServerConfig config) async {
     _config = config;
     _apiJwt = null;

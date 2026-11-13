@@ -123,6 +123,22 @@ class AuthProvider extends ChangeNotifier {
       debugPrint(
           '[Auth] Ping OK — type=${pingResult.serverType} version=${pingResult.serverVersion}');
       _ipv6OnlyUnreachable = false;
+
+      // 老 profile 自愈：家族停在 auto/subsonic 的道理鱼服务器，冷启动时探一次
+      // 自研 /api 登录，成功即升级并落盘（此后不再探）。否则 `isDaoliyu` 永假，
+      // 有声书/心动歌单/JWT 歌词全部静默失效。
+      if (_config != null) {
+        final family = _config!.serverFamily;
+        if (family == 'auto' || family == 'subsonic') {
+          if (await _subsonicService.loginToApi()) {
+            _config = _config!.copyWith(serverFamily: 'daoliyu');
+            _subsonicService.upgradeServerFamily('daoliyu');
+            await _storageService.saveServerConfig(_config!);
+            debugPrint('[Auth] Family upgraded on verify: $family → daoliyu');
+          }
+        }
+      }
+
       if (_config != null) {
         final updatedConfig = _config!.copyWith(
           serverType: pingResult.serverType,
@@ -361,12 +377,25 @@ class AuthProvider extends ChangeNotifier {
         // 道理鱼：Subsonic 层 ping 通过后，后台登录自研 /api 层拿 JWT
         // （歌词/随机歌依赖）。失败不阻塞登录——Subsonic 浏览/播放仍可用，
         // 仅歌词/随机歌降级走兜底。
-        if (serverFamily == 'daoliyu') {
+        //
+        // 顺带修「自动检测」的历史坑：`/api/auth/login` 能过 = 这台就是道理鱼，
+        // 把 family 升级并落盘。否则家族停在 auto/subsonic，`isDaoliyu` 永假，
+        // 有声书、心动歌单、JWT 歌词、跨端进度全部静默失效。
+        var effectiveFamily = serverFamily;
+        if (serverFamily == 'daoliyu' ||
+            serverFamily == 'auto' ||
+            serverFamily == 'subsonic') {
           final apiOk = await _subsonicService.loginToApi();
-          debugPrint('[Auth] 道理鱼 API login: $apiOk');
+          debugPrint('[Auth] 道理鱼 API login: $apiOk (family=$serverFamily)');
+          if (apiOk && effectiveFamily != 'daoliyu') {
+            effectiveFamily = 'daoliyu';
+            _subsonicService.upgradeServerFamily(effectiveFamily);
+            debugPrint('[Auth] Family upgraded: $serverFamily → daoliyu');
+          }
         }
 
         final updatedConfig = config.copyWith(
+          serverFamily: effectiveFamily,
           serverType: pingResult.serverType,
           serverVersion: pingResult.serverVersion,
           apiToken: _subsonicService.apiJwtOrNull,

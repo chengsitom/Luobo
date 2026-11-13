@@ -1523,7 +1523,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noRadioStationsHint => '请在 Navidrome 服务器设置中添加电台，即可在这里看到。';
 
   @override
-  String get connectToServerSubtitle => '连接到您的 Subsonic 服务器';
+  String get connectToServerSubtitle => '连接你的道理鱼服务器';
 
   @override
   String get pleaseEnterServerUrl => '请输入服务器地址';

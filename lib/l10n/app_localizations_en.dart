@@ -1544,7 +1544,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Add radio stations in your Navidrome server settings to see them here.';
 
   @override
-  String get connectToServerSubtitle => 'Connect to your Subsonic server';
+  String get connectToServerSubtitle => 'Connect to your Daoliyu server';
 
   @override
   String get pleaseEnterServerUrl => 'Please enter server URL';

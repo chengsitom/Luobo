@@ -119,17 +119,67 @@ class _ServerQrDialogState extends State<ServerQrDialog> {
             RepaintBoundary(
               key: _qrKey,
               child: Container(
-                padding: const EdgeInsets.all(16),
+                width: 300,
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFA243C), Color(0xFFA02E8C)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                child: QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 220,
-                  backgroundColor: Colors.white,
-                  errorCorrectionLevel: QrErrorCorrectLevel.M,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            width: 28,
+                            height: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '萝卜',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: QrImageView(
+                        data: qrData,
+                        version: QrVersions.auto,
+                        size: 200,
+                        backgroundColor: Colors.white,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

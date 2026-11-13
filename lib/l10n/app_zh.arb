@@ -1377,7 +1377,7 @@
     "description": "Empty state subtitle on the radio screen"
   },
   "@_LOGIN_SCREEN": {},
-  "connectToServerSubtitle": "连接到您的 Subsonic 服务器",
+  "connectToServerSubtitle": "连接你的道理鱼服务器",
   "@connectToServerSubtitle": {
     "description": "Subtitle below the app name on the login screen"
   },

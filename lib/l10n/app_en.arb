@@ -1632,7 +1632,7 @@
   "@noRadioStationsHint": { "description": "Empty state subtitle on the radio screen" },
 
   "@_LOGIN_SCREEN": {},
-  "connectToServerSubtitle": "Connect to your Subsonic server",
+  "connectToServerSubtitle": "Connect to your Daoliyu server",
   "@connectToServerSubtitle": { "description": "Subtitle below the app name on the login screen" },
 
   "pleaseEnterServerUrl": "Please enter server URL",
