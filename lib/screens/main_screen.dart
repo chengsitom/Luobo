@@ -80,6 +80,17 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
 
+    // 新挂载的一级页必然是「二级页深度 0」。
+    //
+    // `NavigationHelper.secondaryDepth` 是全局单例，只靠 NavigatorObserver 的
+    // didPush/didPop 维护；**Navigator 被 dispose 时不会补发 didPop** ——
+    // 而「退出登录」正好发生在二级页上（设置 → 应用页）：
+    //   登出 → MainScreen 卸载 → depth 停在 1 → 重新登录后新 MainScreen
+    //   以为自己还在二级页 → `_buildBottomStrip` 走二级页分支（无歌时整条不渲染）
+    //   → **底部 tab 直接消失**（用户 2026-11-13 真机反馈）。
+    // 在挂载点复位，比在登出处复位更可靠：不依赖谁触发、也不会漏掉别的销毁路径。
+    NavigationHelper.secondaryDepth.value = 0;
+
     NavigationHelper.registerTabChangeCallback(_setTab);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -141,7 +152,12 @@ class _MainScreenState extends State<MainScreen> {
       } else {
         libraryProvider.setLocalOnlyMode(false);
         libraryProvider.setServerOfflineMode(widget.isOfflineMode);
-        libraryProvider.initialize();
+        // 登出后重新登录：LibraryProvider 是单例，`initialize()` 在已初始化时
+        // 直接 return，拿到的仍是上一会话的缓存 → 首页「没刷新」。登出时
+        // AuthProvider 会置一个一次性标记，这里消费它强制全量重来。
+        libraryProvider.initialize(
+          force: authProvider.consumePendingLibraryReload(),
+        );
       }
 
       Future.delayed(const Duration(seconds: 2), () {

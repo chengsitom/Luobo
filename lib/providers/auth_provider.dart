@@ -6,6 +6,7 @@ import '../utils/image_cache.dart';
 import '../services/diagnostics/diagnostics.dart';
 import '../services/ipv6_reachability.dart';
 import '../services/services.dart';
+import '../utils/navigation_helper.dart';
 
 enum AuthState {
   unknown,
@@ -29,6 +30,9 @@ class AuthProvider extends ChangeNotifier {
   /// UI 据此把「连接超时」换成一句能指导动作的话（见
   /// `services/ipv6_reachability.dart`）——否则用户只会以为服务器挂了。
   bool _ipv6OnlyUnreachable = false;
+
+  /// 登出后置真：下一次进入 MainScreen 时强制重拉曲库（见 [disconnect]）。
+  bool _pendingLibraryReload = false;
   ServerConfig? _config;
   bool _hasOfflineContent = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
@@ -241,7 +245,27 @@ class AuthProvider extends ChangeNotifier {
     _config = null;
     _state = AuthState.unauthenticated;
     await _storageService.clearServerConfig();
+    // 登出后残留的全局导航状态：`secondaryDepth` 是「我现在在几级页」的全局计数，
+    // 退出登录按钮就在二级页（设置 → 应用）上——登出时 MainScreen 连同它的嵌套
+    // Navigator 一起被销毁，而 dispose 不会补发 didPop，计数会永远停在 1。
+    // 新会话如果继承它，底部 tab 会被当成二级页整条隐藏。MainScreen.initState
+    // 也做了复位（双保险），这里同时清是为了不让「登出」这个动作留下任何残余。
+    NavigationHelper.secondaryDepth.value = 0;
+    NavigationHelper.tabIndex.value = 0;
+
+    // 重新登录后要**强制**刷一次曲库：LibraryProvider 是全局单例，
+    // `initialize()` 在 `_isInitialized` 为真时会直接 return —— 登出再登录
+    // 拿到的还是上一会话的缓存，首页看起来「没刷新」。
+    _pendingLibraryReload = true;
+
     notifyListeners();
+  }
+
+  /// 重新登录后是否需要强制刷新曲库（读一次即消费，见 [disconnect]）。
+  bool consumePendingLibraryReload() {
+    if (!_pendingLibraryReload) return false;
+    _pendingLibraryReload = false;
+    return true;
   }
 
   Future<bool> login({
