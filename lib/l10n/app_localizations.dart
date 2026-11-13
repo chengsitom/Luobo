@@ -2941,7 +2941,7 @@ abstract class AppLocalizations {
   /// Subtitle below the app name on the login screen
   ///
   /// In en, this message translates to:
-  /// **'Connect to your Subsonic server'**
+  /// **'Connect to your Daoliyu server'**
   String get connectToServerSubtitle;
 
   /// Validation message when server URL is empty

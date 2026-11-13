@@ -54,6 +54,10 @@ class LibraryProvider extends ChangeNotifier {
   /// 行为画像更新（播放/打分/收藏）时失效常听缓存，保证下次进艺术家
   /// tab 即展示最新 TopN，无需等曲库刷新（曲库刷新时 notifyListeners
   /// 同样会清缓存，见 :222-229）。
+  /// 首页 feed 推荐服务（探索发现 / 每日推荐数据源），由 main.dart 注入。
+  /// 可空：未注入时全量同步完成仍正常 notifyListeners，只是不主动失效 feed。
+  HomeRecommendationService? homeRecommendationService;
+
   void _onRecommendationChanged() {
     _topArtistsCache = null;
     notifyListeners();
@@ -749,6 +753,11 @@ class LibraryProvider extends ChangeNotifier {
       _lastCacheUpdate = DateTime.now();
 
       await _saveCachedData();
+      // 全量曲库同步完成后，主动失效首页 feed 缓存：首登时 feed 曾在
+      // 「曲库/知识库尚未就绪」时用不完整数据算出（探索发现只剩零星几首），
+      // 这里让 _feedRevision++，首页 rebuild 时 feedKey 变化会强制重建，
+      // 探索发现随即补满（修复「首登探索发现只有 2 首、冷启后才满」）。
+      homeRecommendationService?.clearCaches();
       notifyListeners();
       // 全量专辑拉到后必须补一次封面预热：initialize() 里的预热（:542）
       // 只覆盖 DB 恢复的少量数据，冷启后磁盘里大部分专辑封面还是空的，

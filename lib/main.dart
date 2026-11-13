@@ -322,7 +322,8 @@ void main() async {
       ),
       ChangeNotifierProvider(
         create: (_) => LibraryProvider(subsonicService)
-          ..recommendationService = recommendationService,
+          ..recommendationService = recommendationService
+          ..homeRecommendationService = homeRecommendationService,
       ),
     ],
     child: const MuslyApp(),

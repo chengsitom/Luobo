@@ -677,8 +677,11 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
   /// 下一列的 **4dp 封面**（实测下一列封面左缘 356dp / 360 屏）作为可滑提示。
   Widget _buildSongRowColumns(List<Song> songs) {
     final columns = (songs.length / _rowSongsPerColumn).ceil();
+    // 高度随实际行数自适应：不足 4 行（新装/历史记录少）时只占实际行高，
+    // 满 4 行则回到固定 256dp 进入横向分页。历史固定 4 行会在内容少时留下大片空白。
+    final rows = min(songs.length, _rowSongsPerColumn);
     return SizedBox(
-      height: _rowSongsPerColumn * 64.0,
+      height: rows * 64.0,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columnWidth = constraints.maxWidth - 20;
