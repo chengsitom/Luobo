@@ -2284,8 +2284,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    if (_concatenatingSource != null &&
-        identical(_audioPlayer.audioSource, _concatenatingSource)) {
+    if (_concatSourceActive) {
       // With ConcatenatingAudioSource this only fires at the very end
       // of the queue when LoopMode is off.
       // 防御：单音源模式下标记可能残留（见 playSong 同处注释），此时「播完」
@@ -3919,12 +3918,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await seek(position);
   }
 
+  /// 拼接音源**正在生效**（不只是「构建过」）。
+  ///
+  /// `_concatenatingSource != null` 单独用是危险的：它只说明曾经构建过拼接源，
+  /// 而实际音源可能已经被换成单曲（HLS / 转码 / `_prepareCurrentSong` /
+  /// 降级重试都会换源，但不会都回头清这个字段）。此时 `seek(index:)` 作用在
+  /// 单音源上会被钳到 0 或直接无效 —— 用户看到的就是「点了下一曲没反应」，
+  /// 且 `_onSongComplete` 与 `skipNext` 的判断还不一致（前者有 identical 防御，
+  /// 后者没有）。统一用这个 getter。
+  bool get _concatSourceActive =>
+      _concatenatingSource != null &&
+      identical(_audioPlayer.audioSource, _concatenatingSource);
+
   Future<void> skipNext() async {
     // 有声书：不记录歌曲统计（B9）、不触发 AutoDJ（B7/B16），始终按队列顺序。
     // gapless 走 _audioPlayer.seek(index:) → _onCurrentIndexChanged 处理 bookmark；
     // 非 gapless 走 skipToIndex（内部透传 audiobook 状态，B11）。
     if (_isPlayingAudiobook) {
-      if (_concatenatingSource != null) {
+      if (_concatSourceActive) {
         if (_currentIndex < _queue.length - 1) {
           await _audioPlayer.seek(Duration.zero, index: _currentIndex + 1);
         }
@@ -3942,7 +3953,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _addAutoDjSongs();
     }
 
-    if (_concatenatingSource != null) {
+    if (_concatSourceActive) {
       if (_shuffleEnabled && _queue.length > 1) {
         _shuffleHistory.add(_currentSong!.id);
         if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
@@ -3951,6 +3962,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.seek(Duration.zero, index: next);
         } else if (_repeatMode == RepeatMode.all) {
           await _restartShuffleRound();
+        } else {
+          _recordSkipNoop('concatShuffleRoundExhausted');
         }
       } else if (_currentIndex < _queue.length - 1) {
         await _audioPlayer.seek(Duration.zero, index: _currentIndex + 1);
@@ -4230,7 +4243,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipToIndex(int index) async {
     if (index >= 0 && index < _queue.length) {
-      if (_concatenatingSource != null) {
+      if (_concatSourceActive) {
         await _audioPlayer.seek(Duration.zero, index: index);
       } else {
         await playSong(
