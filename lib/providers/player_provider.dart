@@ -2425,6 +2425,36 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       _currentSong = song;
+
+      // 索引自愈：`_currentIndex` 必须指向**正在播的这首**。
+      //
+      // 之前只信调用方传的 `startIndex`：一旦它与队列对不上（列表顺序不同源、
+      // 传了别的列表的下标、或下标越界），`_currentIndex` 就会停在一个无关位置，
+      // 甚至正好是队尾 —— 后果是 `hasNext` 误判「没有下一首」：
+      //   · 下一曲按钮被置灰（UI 是 `onPressed: hasNext ? skipNext : null`）→
+      //     用户点它「没反应」；
+      //   · 一首播完 `_currentIndex < len-1` 不成立 → 走 _handleEndOfQueue()，
+      //     AutoDJ 关闭时那里什么都不做 → 「播完就停」。
+      // 两者正是用户 2026-11-13 冷启动点歌后的反馈。
+      final resolvedIndex = _queue.indexWhere((s) => s.id == song.id);
+      if (resolvedIndex != -1 && resolvedIndex != _currentIndex) {
+        debugPrint(
+            '[Player] index repaired: $_currentIndex → $resolvedIndex '
+            '("${song.title}", queue=${_queue.length})');
+        DiagnosticsService.instance.record(
+          EventType.trackNext,
+          LogLevel.warn,
+          {
+            'phase': 'indexRepair',
+            'songId': song.id,
+            'from': _currentIndex,
+            'to': resolvedIndex,
+            'queueLen': _queue.length,
+          },
+        );
+        _currentIndex = resolvedIndex;
+      }
+
       // 有声书：置位必须在队列设置后、_saveQueueState 之前（顺序不可反，
       // 否则 _saveQueueState 会把章节队列写进 persistent_queue_*，B1/B15）。
       _isPlayingAudiobook = audiobook;
@@ -3926,6 +3956,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _audioPlayer.seek(Duration.zero, index: _currentIndex + 1);
       } else if (_repeatMode == RepeatMode.all) {
         await _audioPlayer.seek(Duration.zero, index: 0);
+      } else {
+        _recordSkipNoop('concatAtQueueEnd');
       }
       return;
     }
@@ -3938,6 +3970,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await skipToIndex(next);
       } else if (_repeatMode == RepeatMode.all) {
         await _restartShuffleRound();
+      } else {
+        _recordSkipNoop('shuffleRoundExhausted');
       }
     } else if (_currentIndex < _queue.length - 1) {
       await skipToIndex(_currentIndex + 1);
@@ -3948,7 +3982,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         await skipToIndex(0);
       }
+    } else {
+      _recordSkipNoop('atQueueEnd');
     }
+  }
+
+  /// 记录「下一曲调用了但什么都没发生」——这条路径此前完全静默，用户只会说
+  /// 「点了没反应」，无从判断是索引错位、shuffle 轮次耗尽还是真的到队尾。
+  void _recordSkipNoop(String phase) {
+    DiagnosticsService.instance.record(
+      EventType.trackNext,
+      LogLevel.warn,
+      {
+        'phase': phase,
+        'songId': _currentSong?.id,
+        'index': _currentIndex,
+        'queueLen': _queue.length,
+        'shuffle': _shuffleEnabled,
+        'shuffleOrderLen': _shuffleOrder.length,
+        'shufflePos': _shuffleOrderPos,
+        'repeat': _repeatMode.name,
+        'concat': _concatenatingSource != null,
+      },
+    );
   }
 
   /// Builds a fresh shuffled play order (indices into [_queue]). Recently
