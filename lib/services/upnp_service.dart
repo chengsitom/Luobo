@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'diagnostics/diagnostics.dart';
+import '../utils/log_redaction.dart';
 
 class UpnpDevice {
   final String friendlyName;
@@ -427,7 +428,8 @@ class UpnpService extends ChangeNotifier {
     }
 
     debugPrint('UPnP: loadAndPlay → ${device.friendlyName}');
-    debugPrint('UPnP:   URL: $url');
+    // 流 URL 里带 `?token=<JWT>` / `&p=<明文密码>`，日志必须脱敏。
+    debugPrint(redactSecretsInText('UPnP:   URL: $url'));
     debugPrint('UPnP:   AVTransport: ${device.avTransportUrl}');
 
     try {

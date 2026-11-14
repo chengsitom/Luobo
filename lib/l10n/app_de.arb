@@ -429,22 +429,6 @@
   "@smartRecommendations": {
     "description": "Smart Recommendations settings section title"
   },
-  "showVolumeSlider": "Zeige Lautstärkeregler",
-  "@showVolumeSlider": {
-    "description": "Show Volume Slider toggle label"
-  },
-  "showVolumeSliderSubtitle": "Lautstärkeregler in Wiedergabebildschirm anzeigen",
-  "@showVolumeSliderSubtitle": {
-    "description": "Show Volume Slider toggle subtitle"
-  },
-  "showStarRatings": "Sternbewertungen anzeigen",
-  "@showStarRatings": {
-    "description": "Show Star Ratings toggle label"
-  },
-  "showStarRatingsSubtitle": "Bewerte Songs und sehe Bewertungen an",
-  "@showStarRatingsSubtitle": {
-    "description": "Show Star Ratings toggle subtitle"
-  },
   "enableRecommendations": "Empfehlungen aktivieren",
   "@enableRecommendations": {
     "description": "Enable Recommendations toggle label"

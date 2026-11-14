@@ -429,22 +429,6 @@
   "@smartRecommendations": {
     "description": "Smart Recommendations settings section title"
   },
-  "showVolumeSlider": "Mostrar Controle de Volume",
-  "@showVolumeSlider": {
-    "description": "Show Volume Slider toggle label"
-  },
-  "showVolumeSliderSubtitle": "Exibir controle de volume na tela Tocando Agora",
-  "@showVolumeSliderSubtitle": {
-    "description": "Show Volume Slider toggle subtitle"
-  },
-  "showStarRatings": "Mostrar Avaliações",
-  "@showStarRatings": {
-    "description": "Show Star Ratings toggle label"
-  },
-  "showStarRatingsSubtitle": "Avaliar músicas e ver avaliações",
-  "@showStarRatingsSubtitle": {
-    "description": "Show Star Ratings toggle subtitle"
-  },
   "enableRecommendations": "Habilitar Recomendações",
   "@enableRecommendations": {
     "description": "Enable Recommendations toggle label"

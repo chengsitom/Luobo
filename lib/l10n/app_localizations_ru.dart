@@ -670,37 +670,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get smartRecommendations => 'Умные рекомендации';
 
   @override
-  String get showVolumeSlider => 'Показать ползунок громкости';
-
-  @override
-  String get showVolumeSliderSubtitle =>
-      'Отображать управление громкостью на экране воспроизведения';
-
-  @override
-  String get showStarRatings => 'Отображать оценку звёздами';
-
-  @override
-  String get showStarRatingsSubtitle =>
-      'Оценивайте песни и просматривайте рейтинги';
-
-  @override
   String get showMiniPlayerHeart => 'Show Heart Button';
 
   @override
   String get showMiniPlayerHeartSubtitle => 'Add to favorites from mini player';
-
-  @override
-  String get showMiniPlayerRepeat => 'Show Repeat Button';
-
-  @override
-  String get showMiniPlayerRepeatSubtitle =>
-      'Toggle repeat mode from mini player';
-
-  @override
-  String get showMiniPlayerShuffle => 'Show Shuffle Button';
-
-  @override
-  String get showMiniPlayerShuffleSubtitle => 'Toggle shuffle from mini player';
 
   @override
   String get enableRecommendations => 'Включить рекомендации';

@@ -799,22 +799,6 @@
   "@smartRecommendations": {
     "description": "Smart Recommendations settings section title"
   },
-  "showVolumeSlider": "显示音量滑块",
-  "@showVolumeSlider": {
-    "description": "Show Volume Slider toggle label"
-  },
-  "showVolumeSliderSubtitle": "在正在播放界面显示音量控制",
-  "@showVolumeSliderSubtitle": {
-    "description": "Show Volume Slider toggle subtitle"
-  },
-  "showStarRatings": "显示星级评分",
-  "@showStarRatings": {
-    "description": "Show Star Ratings toggle label"
-  },
-  "showStarRatingsSubtitle": "为歌曲评分并查看评分",
-  "@showStarRatingsSubtitle": {
-    "description": "Show Star Ratings toggle subtitle"
-  },
   "enableRecommendations": "启用推荐",
   "@enableRecommendations": {
     "description": "Enable Recommendations toggle label"
@@ -1961,10 +1945,6 @@
   "years": "年份",
   "showMiniPlayerHeart": "显示收藏按钮",
   "showMiniPlayerHeartSubtitle": "在迷你播放器中添加到收藏",
-  "showMiniPlayerRepeat": "显示循环按钮",
-  "showMiniPlayerRepeatSubtitle": "在迷你播放器中切换循环模式",
-  "showMiniPlayerShuffle": "显示随机按钮",
-  "showMiniPlayerShuffleSubtitle": "在迷你播放器中切换随机播放",
   "faves": "收藏",
   "localMusicLibrary": "本地音乐库",
   "mergeLocalLibrary": "与服务器合并",

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/subsonic_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../utils/image_cache.dart';
+import '../utils/log_redaction.dart';
 
 bool isLocalFilePath(String? s) {
   if (s == null || s.isEmpty) return false;
@@ -170,6 +171,12 @@ class AlbumArtwork extends StatelessWidget {
   Widget _buildImageNatural(bool isDark) {
     if (coverArt == null || coverArt!.isEmpty) return _buildPlaceholder(isDark);
 
+    // 服务端明确返回过 401/失败的封面（例如 NAS 源目录封面不可达），
+    // 在 TTL 内直接显示占位图，不再发请求，避免 rebuild 时反复刷屏。
+    if (CoverFailureCache.isFailed(coverArt!)) {
+      return _buildPlaceholder(isDark);
+    }
+
     if (isLocalFilePath(coverArt)) {
       final artFile = File(coverArt!);
       return Image.file(
@@ -203,8 +210,10 @@ class AlbumArtwork extends StatelessWidget {
           useOldImageOnUrlChange: true,
           placeholder: (ctx, url) => _buildPlaceholder(isDark),
           errorWidget: (ctx, err, stack) {
-            debugPrint('AlbumArtwork error (natural): $err');
-            return _buildNetworkImageFallback(imageUrl, isDark, BoxFit.contain);
+            CoverFailureCache.markFailed(coverArt!);
+            debugPrint(
+                redactSecretsInText('AlbumArtwork error (natural): $err'));
+            return _buildPlaceholder(isDark);
           },
         );
       },
@@ -213,6 +222,10 @@ class AlbumArtwork extends StatelessWidget {
 
   Widget _buildImage(bool isDark) {
     if (coverArt == null || coverArt!.isEmpty) return _buildPlaceholder(isDark);
+
+    if (CoverFailureCache.isFailed(coverArt!)) {
+      return _buildPlaceholder(isDark);
+    }
 
     if (isLocalFilePath(coverArt)) {
       final artFile = File(coverArt!);
@@ -247,21 +260,11 @@ class AlbumArtwork extends StatelessWidget {
           useOldImageOnUrlChange: true,
           placeholder: (ctx, url) => _buildPlaceholder(isDark),
           errorWidget: (ctx, err, stack) {
-            debugPrint('AlbumArtwork error: $err');
-            return _buildNetworkImageFallback(imageUrl, isDark, BoxFit.cover);
+            CoverFailureCache.markFailed(coverArt!);
+            debugPrint(redactSecretsInText('AlbumArtwork error: $err'));
+            return _buildPlaceholder(isDark);
           },
         );
-      },
-    );
-  }
-
-  Widget _buildNetworkImageFallback(String url, bool isDark, BoxFit fit) {
-    return Image.network(
-      url,
-      fit: fit,
-      errorBuilder: (ctx, err, stack) {
-        debugPrint('Network image fallback error: $err');
-        return _buildPlaceholder(isDark);
       },
     );
   }

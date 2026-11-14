@@ -6,6 +6,7 @@ import '../providers/library_provider.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/image_cache.dart';
+import '../utils/log_redaction.dart';
 import 'pressable_scale.dart';
 import 'artist_collage_cover.dart';
 import 'artist_placeholder.dart';
@@ -246,7 +247,7 @@ int _coverImageErrorLogCount = 0;
 void _logCoverImageError(String url, Object err) {
   if (_coverImageErrorLogCount >= 3) return;
   _coverImageErrorLogCount++;
-  debugPrint('[ArtistCover] 图加载失败: url=$url err=$err');
+  debugPrint(redactSecretsInText('[ArtistCover] 图加载失败: url=$url err=$err'));
 }
 
 /// 按 `ArtistCover` 结果择一渲染：网络图 → 2×2 拼贴 → 渐变占位。

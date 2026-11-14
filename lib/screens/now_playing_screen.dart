@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:volume_controller/volume_controller.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../l10n/app_localizations.dart';
@@ -21,7 +20,6 @@ import '../services/diagnostics/diagnostics.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_icons.dart';
 import '../services/player_ui_settings_service.dart';
-import '../widgets/star_rating_widget.dart';
 import '../widgets/dolby_atmos_badge.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
@@ -52,6 +50,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   String? _cachedImageUrl;
   String? _cachedThumbnailUrl;
+
+  /// 播放页中间大图用的高清 URL（[kNowPlayingArtworkSize]）。
+  /// 与 [_cachedImageUrl] 分开：背景取色、歌词页继续用 300px，
+  /// 避免为了大图清晰度让整页多解码一张 1200px 图。
+  String? _cachedHiResUrl;
   String? _cachedCoverArtId;
   bool _showLyricsInternal = false;
   bool get _showLyrics => _showLyricsInternal;
@@ -522,7 +525,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                       });
                     },
                     child: _SwipeableAlbumArtwork(
-                      currentImageUrl: _cachedImageUrl ?? '',
+                      currentImageUrl:
+                          _cachedHiResUrl ?? _cachedImageUrl ?? '',
+                      // 300px 已预热图：高清下载期间立刻显示，冷启零等待。
                       currentThumbnailUrl: _cachedThumbnailUrl,
                       previewImageUrl: _getPreviewArtworkUrl(_previewSong),
                       hasPreviewSong: _previewSong != null,
@@ -651,16 +656,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
         }
 
         // Normalize to the album cover so all songs of an album share one
-        // cache key; request a display-sized image (300) instead of 1200 —
-        // identical on a phone screen, 4x less decode work.
+        // cache key. 300px 图是全库预热过的，冷启从磁盘秒出：它既作背景/
+        // 歌词页用图，也作大图的 placeholder。大图另取 1200px 高清，
+        // 由 _SwipeableAlbumArtwork 在后台加载完再替换，首帧绝不等待。
         final libraryProvider =
             Provider.of<LibraryProvider>(context, listen: false);
         final coverId = libraryProvider.effectiveCoverArt(song);
         if (_cachedCoverArtId != coverId) {
           _cachedCoverArtId = coverId;
           if (isLocalFilePath(coverId)) {
+            // 本地文件本身就是原图，不需要再分高低清两套 URL。
             _cachedImageUrl = coverId;
             _cachedThumbnailUrl = coverId;
+            _cachedHiResUrl = coverId;
           } else {
             final subsonicService = Provider.of<SubsonicService>(
               context,
@@ -673,6 +681,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
             _cachedThumbnailUrl = subsonicService.getCoverArtUrl(
               coverId,
               size: kCoverArtRequestSize,
+            );
+            _cachedHiResUrl = subsonicService.getCoverArtUrl(
+              coverId,
+              size: kNowPlayingArtworkSize,
             );
           }
         }
@@ -868,8 +880,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                                                       child:
                                                           _SwipeableAlbumArtwork(
                                                         currentImageUrl:
-                                                            _cachedImageUrl ??
+                                                            _cachedHiResUrl ??
+                                                                _cachedImageUrl ??
                                                                 '',
+                                                        // 300px 已预热图：高清下载期间立刻显示，冷启零等待。
                                                         currentThumbnailUrl:
                                                             _cachedThumbnailUrl,
                                                         previewImageUrl:
@@ -1943,24 +1957,6 @@ class _PlayerControls extends StatefulWidget {
 }
 
 class _PlayerControlsState extends State<_PlayerControls> {
-  final _playerUiSettings = PlayerUiSettingsService();
-  bool _showVolumeSlider = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    await _playerUiSettings.initialize();
-    if (mounted) {
-      setState(() {
-        _showVolumeSlider = _playerUiSettings.getShowVolumeSlider();
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1979,36 +1975,6 @@ class _PlayerControlsState extends State<_PlayerControls> {
             ),
           ),
           const SizedBox(height: 12),
-          ValueListenableBuilder<bool>(
-            valueListenable: _playerUiSettings.showStarRatingsNotifier,
-            builder: (context, showRating, _) {
-              if (!showRating) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Selector<PlayerProvider, (Song?, bool)>(
-                  selector: (_, p) => (p.currentSong, p.isPlayingAudiobook),
-                  builder: (context, data, _) {
-                    final (song, isAudiobook) = data;
-                    // 有声书（P5）：隐藏评分（章节无评分语义）。
-                    if (song == null || isAudiobook) {
-                      return const SizedBox.shrink();
-                    }
-                    return StarRatingWidget(
-                      rating: song.userRating ?? 0,
-                      onRatingChanged: (rating) {
-                        context.read<PlayerProvider>().setRating(
-                              song.id,
-                              rating,
-                            );
-                      },
-                      color: Colors.white.withValues(alpha: 0.7),
-                      size: 24,
-                    );
-                  },
-                ),
-              );
-            },
-          ),
           // 用 effectiveDuration 而非 duration：转码流（chunked、无
           // Content-Length）播放器解析不出时长（duration 恒 0），进度条
           // 总时长标签会留空；effectiveDuration 会回退到服务端元数据
@@ -2357,257 +2323,6 @@ class _PlaybackControls extends StatelessWidget {
                 CupertinoIcons.list_bullet,
                 color: Colors.white.withValues(alpha: 0.7),
                 size: 22,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _VolumeSlider extends StatefulWidget {
-  const _VolumeSlider();
-
-  @override
-  State<_VolumeSlider> createState() => _VolumeSliderState();
-}
-
-class _VolumeSliderState extends State<_VolumeSlider> {
-  bool _isDragging = false;
-  double _dragValue = 0.0;
-  double _systemVolume = 0.5;
-  StreamSubscription<double>? _volumeSubscription;
-
-  // Serialise remote volume commits: store the latest desired value and run
-  // one async write loop at a time so out-of-order responses can't snap the
-  // renderer back to a stale level during a fast drag.
-  double? _pendingRemoteVolume;
-  bool _remoteCommitInProgress = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initVolumeController();
-  }
-
-  Future<void> _initVolumeController() async {
-    VolumeController.instance.showSystemUI = false;
-
-    _systemVolume = await VolumeController.instance.getVolume();
-    if (mounted) setState(() {});
-
-    _volumeSubscription = VolumeController.instance.addListener((volume) {
-      if (mounted && !_isDragging) {
-        setState(() {
-          _systemVolume = volume;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _volumeSubscription?.cancel();
-    super.dispose();
-  }
-
-  void _applyVolume(double newVolume, PlayerProvider provider, bool isRemote) {
-    setState(() {
-      _dragValue = newVolume;
-      if (!isRemote) _systemVolume = newVolume;
-    });
-    if (isRemote) {
-      // Queue the value and let a single async loop drain the queue so rapid
-      // drag ticks never result in out-of-order writes reaching the renderer.
-      _pendingRemoteVolume = newVolume;
-      _drainRemoteVolume(provider);
-    } else {
-      VolumeController.instance.setVolume(newVolume);
-    }
-  }
-
-  Future<void> _drainRemoteVolume(PlayerProvider provider) async {
-    if (_remoteCommitInProgress) return;
-    _remoteCommitInProgress = true;
-    try {
-      while (_pendingRemoteVolume != null) {
-        final value = _pendingRemoteVolume!;
-        _pendingRemoteVolume = null;
-        await provider.setVolume(value);
-      }
-    } finally {
-      _remoteCommitInProgress = false;
-    }
-  }
-
-  void _updateVolumeFromPosition(
-    Offset localPosition,
-    double width,
-    PlayerProvider provider,
-    bool isRemote,
-  ) {
-    final newVolume = (localPosition.dx / width).clamp(0.0, 1.0);
-    _applyVolume(newVolume, provider, isRemote);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Consumer so the slider re-reads provider.volume on each UPnP poll tick.
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, _) {
-        final isRemote = provider.isRemotePlayback;
-        final currentVolume = isRemote ? provider.volume : _systemVolume;
-        final displayVolume = _isDragging ? _dragValue : currentVolume;
-
-        return Row(
-          children: [
-            GestureDetector(
-              onTap: () => _applyVolume(0.0, provider, isRemote),
-              child: Icon(
-                displayVolume <= 0.01
-                    ? CupertinoIcons.speaker_slash_fill
-                    : CupertinoIcons.speaker_1_fill,
-                color: Colors.white.withValues(alpha: 0.7),
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final trackWidth = constraints.maxWidth;
-
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onHorizontalDragStart: (details) {
-                      setState(() {
-                        _isDragging = true;
-                        _dragValue = currentVolume;
-                      });
-                      _updateVolumeFromPosition(
-                        details.localPosition,
-                        trackWidth,
-                        provider,
-                        isRemote,
-                      );
-                    },
-                    onHorizontalDragUpdate: (details) {
-                      _updateVolumeFromPosition(
-                        details.localPosition,
-                        trackWidth,
-                        provider,
-                        isRemote,
-                      );
-                    },
-                    onHorizontalDragEnd: (details) {
-                      setState(() => _isDragging = false);
-                    },
-                    onTapDown: (details) {
-                      _updateVolumeFromPosition(
-                        details.localPosition,
-                        trackWidth,
-                        provider,
-                        isRemote,
-                      );
-                    },
-                    child: SizedBox(
-                      height: 44,
-                      child: Center(
-                        child: Stack(
-                          alignment: Alignment.centerLeft,
-                          children: [
-                            // Background track
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              curve: Curves.easeOut,
-                              height: _isDragging ? 5 : 3,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.25),
-                                borderRadius: BorderRadius.circular(
-                                  _isDragging ? 2.5 : 1.5,
-                                ),
-                              ),
-                            ),
-                            // Active track
-                            FractionallySizedBox(
-                              widthFactor: displayVolume.clamp(0.0, 1.0),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOut,
-                                height: _isDragging ? 5 : 3,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(
-                                    _isDragging ? 2.5 : 1.5,
-                                  ),
-                                  boxShadow: _isDragging
-                                      ? [
-                                          BoxShadow(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.4,
-                                            ),
-                                            blurRadius: 8,
-                                            spreadRadius: 1,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                              ),
-                            ),
-                            // Thumb
-                            Positioned(
-                              left: ((trackWidth *
-                                          displayVolume.clamp(0.0, 1.0)) -
-                                      (_isDragging ? 14 : 6))
-                                  .clamp(
-                                0.0,
-                                trackWidth - (_isDragging ? 28 : 12),
-                              ),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOut,
-                                width: _isDragging ? 28 : 12,
-                                height: _isDragging ? 28 : 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: _isDragging
-                                      ? [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                            blurRadius: 12,
-                                            spreadRadius: 2,
-                                          ),
-                                        ]
-                                      : [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.15,
-                                            ),
-                                            blurRadius: 4,
-                                          ),
-                                        ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _applyVolume(1.0, provider, isRemote),
-              child: Icon(
-                CupertinoIcons.speaker_3_fill,
-                color: Colors.white.withValues(alpha: 0.7),
-                size: 20,
               ),
             ),
           ],

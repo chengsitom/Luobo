@@ -429,22 +429,6 @@
   "@smartRecommendations": {
     "description": "Smart Recommendations settings section title"
   },
-  "showVolumeSlider": "Shfaq rregulluesin e volumit",
-  "@showVolumeSlider": {
-    "description": "Show Volume Slider toggle label"
-  },
-  "showVolumeSliderSubtitle": "Shfaq kontrollin e volumit në ekranin \"Duke u luajtur\"",
-  "@showVolumeSliderSubtitle": {
-    "description": "Show Volume Slider toggle subtitle"
-  },
-  "showStarRatings": "Shfaq vlerësimet me yje",
-  "@showStarRatings": {
-    "description": "Show Star Ratings toggle label"
-  },
-  "showStarRatingsSubtitle": "Vlerësoni këngët dhe shikoni vlerësimet",
-  "@showStarRatingsSubtitle": {
-    "description": "Show Star Ratings toggle subtitle"
-  },
   "enableRecommendations": "Aktivizo sugjerimet",
   "@enableRecommendations": {
     "description": "Enable Recommendations toggle label"

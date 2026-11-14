@@ -76,25 +76,27 @@ void main() {
     expectDesignBackPill(tester, title);
   }
 
-  testWidgets('添加服务器第 1 步（类型网格）页头 = 上滑后返回+标题胶囊', (tester) async {
+  testWidgets('添加服务器表单页页头 = 上滑后返回+标题胶囊', (tester) async {
     await pumpLogin(tester);
 
+    // 方案 A 登录收口后，Add Server 直达表单，不再有类型网格中间步。
     await tester.tap(find.text('Add Server'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Subsonic'), findsOneWidget); // 确认停在类型网格步
+    expect(find.text('Server URL'), findsOneWidget); // 确认已进表单
     await expectTitleAfterScroll(tester, 'Add Server');
   });
 
-  testWidgets('添加服务器第 2 步（表单）页头 = 上滑后返回+标题胶囊', (tester) async {
+  testWidgets('Add Server 直达表单：无类型选择步 + 品牌区', (tester) async {
     await pumpLogin(tester);
 
     await tester.tap(find.text('Add Server'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Subsonic'));
-    await tester.pumpAndSettle();
 
-    expect(find.text('Server URL'), findsOneWidget); // 确认已进表单步
-    await expectTitleAfterScroll(tester, 'Add Server');
+    // 锁死方案 A 的收口行为，防止「选服务器类型」网格被加回来。
+    expect(find.text('Subsonic'), findsNothing);
+    expect(find.text('Server URL'), findsOneWidget);
+    expect(find.text('萝卜'), findsOneWidget);
+    expect(find.text('Connect to your Daoliyu server'), findsWidgets);
   });
 }

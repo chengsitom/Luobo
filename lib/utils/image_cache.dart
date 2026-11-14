@@ -13,6 +13,16 @@ import 'package:path_provider/path_provider.dart';
 /// screen (see docs/图片缓存与播放性能优化技术文档.md §4.2).
 const int kCoverArtRequestSize = 300;
 
+/// 播放页中间大图的请求尺寸。列表/背景/歌词页仍用 [kCoverArtRequestSize]。
+///
+/// 为什么不直接把 [kCoverArtRequestSize] 调大：全库封面预热
+/// （LibraryProvider._preloadCoverArt）是按 300 跑的，调大会让冷启首屏
+/// 的预热变成几百张 1200px 下载，反而变慢。播放页单独要高清，用
+/// 「300px 已缓存图作 placeholder 秒出 → 后台取 1200px 替换」的渐进式：
+/// 首次冷启零等待，高清图落盘后（cacheKey 按 size 天然隔离）后续冷启
+/// 直接命中磁盘缓存，同样零等待。
+const int kNowPlayingArtworkSize = 1200;
+
 /// Shared HTTP client for cover downloads. Lazily created on first use so it
 /// inherits the global [HttpOverrides] installed by
 /// `SubsonicService._configureCertificateValidation` (self-signed / custom CA)
@@ -103,6 +113,49 @@ String coverArtCacheKeyFromUrl(String url) {
   } catch (_) {
     return url;
   }
+}
+
+/// 封面加载失败的短 TTL 负缓存。
+///
+/// 服务端对「封面文件不可达」的专辑会返回 401 COVER_AUTH_REQUIRED；
+/// `CachedNetworkImage` 失败后不缓存错误结果，于是每次 rebuild 都重新请求，
+/// 日志成对刷屏（AlbumArtwork error + Network image fallback error），
+/// 还会让那几张没封面的专辑反复打网络请求。
+///
+/// 命中时直接显示占位图，TTL 到期才重试一次。集合是静态的，冷启动会自然
+/// 清空；服务端补好封面后无需改客户端、下次冷启即可恢复显示。
+class CoverFailureCache {
+  CoverFailureCache._();
+
+  /// 10 分钟：足够止住一次会话内的刷屏，又不至于在服务端修好后长期不刷。
+  static const Duration ttl = Duration(minutes: 10);
+
+  static final Map<String, DateTime> _failedAt = <String, DateTime>{};
+
+  /// 按服务器 + 封面 id 隔离，切服/切号不会互相污染。
+  static String _key(String coverArtId) => '${coverCacheServerId}_$coverArtId';
+
+  static bool isFailed(String coverArtId) {
+    final key = _key(coverArtId);
+    final at = _failedAt[key];
+    if (at == null) return false;
+    if (DateTime.now().difference(at) >= ttl) {
+      _failedAt.remove(key);
+      return false;
+    }
+    return true;
+  }
+
+  static void markFailed(String coverArtId) {
+    _failedAt[_key(coverArtId)] = DateTime.now();
+    // 长期运行不至于无限增长；顺手清掉过期项。
+    if (_failedAt.length > 500) {
+      final now = DateTime.now();
+      _failedAt.removeWhere((_, at) => now.difference(at) >= ttl);
+    }
+  }
+
+  static void clear() => _failedAt.clear();
 }
 
 class ImageCacheConfig {

@@ -666,36 +666,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get smartRecommendations => 'Recomendaciones Inteligentes';
 
   @override
-  String get showVolumeSlider => 'Mostrar barra de volumen';
-
-  @override
-  String get showVolumeSliderSubtitle =>
-      'Mostrar control de volumen en la pantalla de reproducción';
-
-  @override
-  String get showStarRatings => 'Mostrar valoraciones de estrellas';
-
-  @override
-  String get showStarRatingsSubtitle => 'Valorar canciones y ver valoraciones';
-
-  @override
   String get showMiniPlayerHeart => 'Show Heart Button';
 
   @override
   String get showMiniPlayerHeartSubtitle => 'Add to favorites from mini player';
-
-  @override
-  String get showMiniPlayerRepeat => 'Show Repeat Button';
-
-  @override
-  String get showMiniPlayerRepeatSubtitle =>
-      'Toggle repeat mode from mini player';
-
-  @override
-  String get showMiniPlayerShuffle => 'Show Shuffle Button';
-
-  @override
-  String get showMiniPlayerShuffleSubtitle => 'Toggle shuffle from mini player';
 
   @override
   String get enableRecommendations => 'Habilitar Recomendaciones';

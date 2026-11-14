@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:luobo/main.dart';
 import 'package:luobo/providers/auth_provider.dart';
 import 'package:luobo/services/services.dart';
-import 'package:luobo/services/locale_service.dart';
-import 'package:luobo/services/theme_service.dart';
 import '../bootstrap.dart';
 
 void main() {
@@ -37,7 +35,7 @@ void main() {
       await tester.pump(); // 等待已保存配置的 FutureBuilder 解析
 
       expect(find.text('Luobo'), findsWidgets);
-      expect(find.text('Connect to your Subsonic server'), findsOneWidget);
+      expect(find.text('Connect to your Daoliyu server'), findsOneWidget);
     });
 
     testWidgets('should have login form fields', (tester) async {
@@ -63,12 +61,9 @@ void main() {
       await tester.pump();
       await tester.pump(); // 等待已保存配置的 FutureBuilder 解析
 
-      // 两步引导：第 1 步网关页 → 点「Add Server」进入第 2 步。
-      // 第 2 步现在是**先选服务器类型**（设计稿 B3 类型网格），选定后才进表单。
+      // 网关页 → 点「Add Server」直接进入表单。
+      // 方案 A 登录收口后已删除「选服务器类型」的类型网格中间步。
       await tester.tap(find.text('Add Server'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Subsonic'));
       await tester.pumpAndSettle();
 
       expect(find.text('Server URL'), findsOneWidget);
@@ -103,10 +98,7 @@ void main() {
       await tester.tap(find.text('Add Server'));
       await tester.pumpAndSettle();
 
-      // 先过类型网格（设计稿 B3），再进表单校验空字段。
-      await tester.tap(find.text('Subsonic'));
-      await tester.pumpAndSettle();
-
+      // 方案 A 收口后 Add Server 直达表单，直接校验空字段。
       final connectButton = find.text('Connect');
       await tester.ensureVisible(connectButton);
       await tester.tap(connectButton);

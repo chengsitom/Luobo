@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
-import 'package:flutter/cupertino.dart' hide RepeatMode;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:provider/provider.dart';
@@ -475,133 +474,70 @@ class _MiniPlayerControls extends StatelessWidget {
         return ValueListenableBuilder<bool>(
           valueListenable: playerUiSettings.showMiniPlayerHeartNotifier,
           builder: (context, showHeart, _) {
-            return ValueListenableBuilder<bool>(
-              valueListenable: playerUiSettings.showMiniPlayerRepeatNotifier,
-              builder: (context, showRepeat, _) {
-                return ValueListenableBuilder<bool>(
-                  valueListenable:
-                      playerUiSettings.showMiniPlayerShuffleNotifier,
-                  builder: (context, showShuffle, _) {
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 有声书（B8/B10）：隐藏收藏/shuffle/repeat（章节无收藏语义、
-                        // 强制顺序播放）。
-                        if (showHeart && !isRadio && !isAudiobook)
-                          Selector<PlayerProvider, bool>(
-                            selector: (_, p) => p.currentSong?.starred == true,
-                            builder: (context, isStarred, _) {
-                              return IconButton(
-                                onPressed: provider.toggleFavorite,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                    minWidth: 34, minHeight: 34),
-                                icon: Icon(
-                                  isStarred
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  size:
-                                      ScreenHelper.miniPlayerIconSize(context),
-                                ),
-                                color:
-                                    isStarred ? AppTheme.appleMusicRed : color,
-                              );
-                            },
-                          ),
-
-                        if (showShuffle && !isRadio && !isAudiobook)
-                          Selector<PlayerProvider, bool>(
-                            selector: (_, p) => p.shuffleEnabled,
-                            builder: (context, shuffleEnabled, _) {
-                              return IconButton(
-                                onPressed: provider.toggleShuffle,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                    minWidth: 34, minHeight: 34),
-                                icon: Icon(
-                                  CupertinoIcons.shuffle,
-                                  size:
-                                      ScreenHelper.miniPlayerIconSize(context),
-                                ),
-                                color: shuffleEnabled
-                                    ? Theme.of(context).colorScheme.primary
-                                    : color,
-                              );
-                            },
-                          ),
-
-                        IconButton(
-                          onPressed: provider.togglePlayPause,
-                          padding: EdgeInsets.zero,
-                          constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
-                          icon: Icon(
-                            isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            size: ScreenHelper.miniPlayerPlayIconSize(context),
-                          ),
-                          color: color,
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 有声书（B8/B10）：隐藏收藏（章节无收藏语义）。
+                if (showHeart && !isRadio && !isAudiobook)
+                  Selector<PlayerProvider, bool>(
+                    selector: (_, p) => p.currentSong?.starred == true,
+                    builder: (context, isStarred, _) {
+                      return IconButton(
+                        onPressed: provider.toggleFavorite,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 34, minHeight: 34),
+                        icon: Icon(
+                          isStarred
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          size: ScreenHelper.miniPlayerIconSize(context),
                         ),
+                        color: isStarred ? AppTheme.appleMusicRed : color,
+                      );
+                    },
+                  ),
 
-                        if (showRepeat && !isRadio && !isAudiobook)
-                          Selector<PlayerProvider, RepeatMode>(
-                            selector: (_, p) => p.repeatMode,
-                            builder: (context, repeatMode, _) {
-                              IconData icon;
-                              bool active = repeatMode != RepeatMode.off;
-                              if (repeatMode == RepeatMode.one) {
-                                icon = CupertinoIcons.repeat_1;
-                              } else {
-                                icon = CupertinoIcons.repeat;
-                              }
-                              return IconButton(
-                                onPressed: provider.toggleRepeat,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                    minWidth: 34, minHeight: 34),
-                                icon: Icon(icon,
-                                    size: ScreenHelper.miniPlayerIconSize(
-                                        context)),
-                                color: active
-                                    ? Theme.of(context).colorScheme.primary
-                                    : color,
-                              );
-                            },
-                          ),
+                IconButton(
+                  onPressed: provider.togglePlayPause,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
+                  icon: Icon(
+                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    size: ScreenHelper.miniPlayerPlayIconSize(context),
+                  ),
+                  color: color,
+                ),
 
-                        // 最右（对齐飞牛）：漫游中是**漫游标识**、不可点；
-                        // 其余情况是「歌曲列表」，点开播放队列浮层。
-                        //
-                        // ⚠️ 播放条**不再放「下一首」**（用户 2026-10-23）：省下的
-                        // 宽度全给歌名，切歌走播放页 / 队列。
-                        if (!isRadio && isRoaming)
-                          SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: Icon(
-                              AppIcons.roam,
-                              size: ScreenHelper.miniPlayerIconSize(context),
-                              color: color,
-                            ),
-                          ),
-                        if (!isRadio && !isRoaming)
-                          IconButton(
-                            onPressed: () => _openQueue(context),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 34, minHeight: 34),
-                            icon: Icon(
-                              AppIcons.viewList,
-                              size: ScreenHelper.miniPlayerIconSize(context),
-                            ),
-                            color: color,
-                          ),
-                      ],
-                    );
-                  },
-                );
-              },
+                // 最右（对齐飞牛）：漫游中是**漫游标识**、不可点；
+                // 其余情况是「歌曲列表」，点开播放队列浮层。
+                //
+                // ⚠️ 播放条**不再放「下一首」**（用户 2026-10-23）：省下的
+                // 宽度全给歌名，切歌走播放页 / 队列。
+                if (!isRadio && isRoaming)
+                  SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Icon(
+                      AppIcons.roam,
+                      size: ScreenHelper.miniPlayerIconSize(context),
+                      color: color,
+                    ),
+                  ),
+                if (!isRadio && !isRoaming)
+                  IconButton(
+                    onPressed: () => _openQueue(context),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 34, minHeight: 34),
+                    icon: Icon(
+                      AppIcons.viewList,
+                      size: ScreenHelper.miniPlayerIconSize(context),
+                    ),
+                    color: color,
+                  ),
+              ],
             );
           },
         );

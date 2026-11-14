@@ -657,34 +657,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get smartRecommendations => '智能推荐';
 
   @override
-  String get showVolumeSlider => '显示音量滑块';
-
-  @override
-  String get showVolumeSliderSubtitle => '在正在播放界面显示音量控制';
-
-  @override
-  String get showStarRatings => '显示星级评分';
-
-  @override
-  String get showStarRatingsSubtitle => '为歌曲评分并查看评分';
-
-  @override
   String get showMiniPlayerHeart => '显示收藏按钮';
 
   @override
   String get showMiniPlayerHeartSubtitle => '在迷你播放器中添加到收藏';
-
-  @override
-  String get showMiniPlayerRepeat => '显示循环按钮';
-
-  @override
-  String get showMiniPlayerRepeatSubtitle => '在迷你播放器中切换循环模式';
-
-  @override
-  String get showMiniPlayerShuffle => '显示随机按钮';
-
-  @override
-  String get showMiniPlayerShuffleSubtitle => '在迷你播放器中切换随机播放';
 
   @override
   String get enableRecommendations => '启用推荐';

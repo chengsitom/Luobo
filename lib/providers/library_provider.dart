@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../utils/image_cache.dart';
+import '../utils/log_redaction.dart';
 import '../services/services.dart';
 import '../services/local_music_service.dart';
 
@@ -950,7 +951,8 @@ class LibraryProvider extends ChangeNotifier {
         }
       }
       if (kDebugMode && urls.isNotEmpty) {
-        debugPrint('[LuoboDebug] First cover URL: ${urls.first}');
+        debugPrint(
+            redactSecretsInText('[LuoboDebug] First cover URL: ${urls.first}'));
       }
       // Full library: every album cover (each album = one unique cover that
       // all of its songs share via effectiveCoverArt). downloadFile() skips
@@ -985,7 +987,8 @@ class LibraryProvider extends ChangeNotifier {
             } catch (e) {
               failed++;
               if (kDebugMode) {
-                debugPrint('[LuoboDebug] Cover prefetch failed: $url → $e');
+                debugPrint(redactSecretsInText(
+                    '[LuoboDebug] Cover prefetch failed: $url → $e'));
               }
             }
           }),

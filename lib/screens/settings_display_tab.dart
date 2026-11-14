@@ -24,11 +24,7 @@ class SettingsDisplayTab extends StatefulWidget {
 
 class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   final _playerUiSettings = PlayerUiSettingsService();
-  bool _showVolumeSlider = true;
-  bool _showStarRatings = false;
   bool _showMiniPlayerHeart = false;
-  bool _showMiniPlayerRepeat = false;
-  bool _showMiniPlayerShuffle = false;
   double _albumArtCornerRadius = 8.0;
   String _artworkShape = 'rounded';
   String _artworkShadow = 'soft';
@@ -55,11 +51,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     if (!mounted) return;
 
     setState(() {
-      _showVolumeSlider = _playerUiSettings.getShowVolumeSlider();
-      _showStarRatings = _playerUiSettings.getShowStarRatings();
       _showMiniPlayerHeart = _playerUiSettings.getShowMiniPlayerHeart();
-      _showMiniPlayerRepeat = _playerUiSettings.getShowMiniPlayerRepeat();
-      _showMiniPlayerShuffle = _playerUiSettings.getShowMiniPlayerShuffle();
       _albumArtCornerRadius = _playerUiSettings.getAlbumArtCornerRadius();
       _artworkShape = _playerUiSettings.getArtworkShape();
       _artworkShadow = _playerUiSettings.getArtworkShadow();
@@ -77,15 +69,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         _buildSection(
           title: AppLocalizations.of(context)!.playerInterface.toUpperCase(),
           children: [
-            _buildVolumeSliderToggle(),
-            _buildDivider(),
-            _buildStarRatingsToggle(),
-            _buildDivider(),
             _buildMiniPlayerHeartToggle(),
-            _buildDivider(),
-            _buildMiniPlayerRepeatToggle(),
-            _buildDivider(),
-            _buildMiniPlayerShuffleToggle(),
             _buildDivider(),
             _buildAutoCarModeEntryToggle(),
             if (_isDesktop) ...[
@@ -145,38 +129,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
 
   Widget _buildDivider() => const LuoboDivider(indent: LuoboDivider.withIcon);
 
-  Widget _buildVolumeSliderToggle() {
-    return LuoboRow(
-      icon: CupertinoIcons.speaker_2,
-      title: AppLocalizations.of(context)!.showVolumeSlider,
-      subtitle: AppLocalizations.of(context)!.showVolumeSliderSubtitle,
-      showChevron: false,
-      trailing: LuoboSwitch(
-        value: _showVolumeSlider,
-        onChanged: (value) async {
-          setState(() => _showVolumeSlider = value);
-          await _playerUiSettings.setShowVolumeSlider(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildStarRatingsToggle() {
-    return LuoboRow(
-      icon: CupertinoIcons.star_fill,
-      title: AppLocalizations.of(context)!.showStarRatings,
-      subtitle: AppLocalizations.of(context)!.showStarRatingsSubtitle,
-      showChevron: false,
-      trailing: LuoboSwitch(
-        value: _showStarRatings,
-        onChanged: (value) async {
-          setState(() => _showStarRatings = value);
-          await _playerUiSettings.setShowStarRatings(value);
-        },
-      ),
-    );
-  }
-
   Widget _buildMiniPlayerHeartToggle() {
     return LuoboRow(
       icon: CupertinoIcons.heart_fill,
@@ -204,38 +156,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         onChanged: (value) async {
           setState(() => _autoCarModeEntry = value);
           await _playerUiSettings.setAutoCarModeEntry(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiniPlayerRepeatToggle() {
-    return LuoboRow(
-      icon: CupertinoIcons.repeat,
-      title: AppLocalizations.of(context)!.showMiniPlayerRepeat,
-      subtitle: AppLocalizations.of(context)!.showMiniPlayerRepeatSubtitle,
-      showChevron: false,
-      trailing: LuoboSwitch(
-        value: _showMiniPlayerRepeat,
-        onChanged: (value) async {
-          setState(() => _showMiniPlayerRepeat = value);
-          await _playerUiSettings.setShowMiniPlayerRepeat(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiniPlayerShuffleToggle() {
-    return LuoboRow(
-      icon: CupertinoIcons.shuffle,
-      title: AppLocalizations.of(context)!.showMiniPlayerShuffle,
-      subtitle: AppLocalizations.of(context)!.showMiniPlayerShuffleSubtitle,
-      showChevron: false,
-      trailing: LuoboSwitch(
-        value: _showMiniPlayerShuffle,
-        onChanged: (value) async {
-          setState(() => _showMiniPlayerShuffle = value);
-          await _playerUiSettings.setShowMiniPlayerShuffle(value);
         },
       ),
     );

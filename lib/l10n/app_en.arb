@@ -965,26 +965,6 @@
     "description": "Smart Recommendations settings section title"
   },
 
-  "showVolumeSlider": "Show Volume Slider",
-  "@showVolumeSlider": {
-    "description": "Show Volume Slider toggle label"
-  },
-
-  "showVolumeSliderSubtitle": "Display volume control in Now Playing screen",
-  "@showVolumeSliderSubtitle": {
-    "description": "Show Volume Slider toggle subtitle"
-  },
-
-  "showStarRatings": "Show Star Ratings",
-  "@showStarRatings": {
-    "description": "Show Star Ratings toggle label"
-  },
-
-  "showStarRatingsSubtitle": "Rate songs and view ratings",
-  "@showStarRatingsSubtitle": {
-    "description": "Show Star Ratings toggle subtitle"
-  },
-
   "showMiniPlayerHeart": "Show Heart Button",
   "@showMiniPlayerHeart": {
     "description": "Show Heart button in mini player toggle label"
@@ -993,26 +973,6 @@
   "showMiniPlayerHeartSubtitle": "Add to favorites from mini player",
   "@showMiniPlayerHeartSubtitle": {
     "description": "Show Heart button in mini player toggle subtitle"
-  },
-
-  "showMiniPlayerRepeat": "Show Repeat Button",
-  "@showMiniPlayerRepeat": {
-    "description": "Show Repeat button in mini player toggle label"
-  },
-
-  "showMiniPlayerRepeatSubtitle": "Toggle repeat mode from mini player",
-  "@showMiniPlayerRepeatSubtitle": {
-    "description": "Show Repeat button in mini player toggle subtitle"
-  },
-
-  "showMiniPlayerShuffle": "Show Shuffle Button",
-  "@showMiniPlayerShuffle": {
-    "description": "Show Shuffle button in mini player toggle label"
-  },
-
-  "showMiniPlayerShuffleSubtitle": "Toggle shuffle from mini player",
-  "@showMiniPlayerShuffleSubtitle": {
-    "description": "Show Shuffle button in mini player toggle subtitle"
   },
 
   "enableRecommendations": "Enable Recommendations",

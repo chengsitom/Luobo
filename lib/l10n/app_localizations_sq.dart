@@ -666,37 +666,10 @@ class AppLocalizationsSq extends AppLocalizations {
   String get smartRecommendations => 'Sugjerime inteligjente';
 
   @override
-  String get showVolumeSlider => 'Shfaq rregulluesin e volumit';
-
-  @override
-  String get showVolumeSliderSubtitle =>
-      'Shfaq kontrollin e volumit në ekranin \"Duke u luajtur\"';
-
-  @override
-  String get showStarRatings => 'Shfaq vlerësimet me yje';
-
-  @override
-  String get showStarRatingsSubtitle =>
-      'Vlerësoni këngët dhe shikoni vlerësimet';
-
-  @override
   String get showMiniPlayerHeart => 'Show Heart Button';
 
   @override
   String get showMiniPlayerHeartSubtitle => 'Add to favorites from mini player';
-
-  @override
-  String get showMiniPlayerRepeat => 'Show Repeat Button';
-
-  @override
-  String get showMiniPlayerRepeatSubtitle =>
-      'Toggle repeat mode from mini player';
-
-  @override
-  String get showMiniPlayerShuffle => 'Show Shuffle Button';
-
-  @override
-  String get showMiniPlayerShuffleSubtitle => 'Toggle shuffle from mini player';
 
   @override
   String get enableRecommendations => 'Aktivizo sugjerimet';

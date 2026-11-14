@@ -1,22 +1,17 @@
 import 'package:dio/dio.dart';
 
+import '../../utils/log_redaction.dart';
 import 'diagnostics_service.dart';
 import 'event_types.dart';
 import 'metrics_collector.dart';
 
-/// 共享 URL 脱敏：Subsonic 认证参数（p/t/s）打码，避免密码/token 落盘。
-String sanitizeQueryUrl(String url) {
-  try {
-    final uri = Uri.parse(url);
-    final q = Map<String, String>.from(uri.queryParameters);
-    for (final key in const ['p', 't', 's']) {
-      if (q.containsKey(key)) q[key] = '***';
-    }
-    return uri.replace(queryParameters: q).toString();
-  } catch (_) {
-    return url;
-  }
-}
+/// 共享 URL 脱敏：Subsonic 认证参数（u/p/t/s）、道理鱼 JWT（token/ticket）
+/// 等全部打码，避免密码 / token 落盘。
+///
+/// 旧实现只盖 p/t/s 且用 `Uri.parse` 解析整个字符串 —— 遇到「URL 嵌在
+/// 异常描述文字里」会解析失败并原样返回，等于没脱敏。统一委托给
+/// [redactSecretsInText]，纯 URL 与整段日志文本都能正确处理。
+String sanitizeQueryUrl(String url) => redactSecretsInText(url);
 
 /// 网络指标拦截器：请求耗时/状态码聚合（MetricsCollector）+
 /// requestTiming 事件落盘（DiagnosticsService）。
