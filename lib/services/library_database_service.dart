@@ -353,7 +353,6 @@ class LibraryDatabaseService {
           : null,
       'created': song.created?.toIso8601String(),
       'starred': song.starred == true ? 1 : 0,
-      'userRating': song.userRating,
     };
   }
 
@@ -388,7 +387,6 @@ class LibraryDatabaseService {
           ? DateTime.tryParse(m['created'] as String)
           : null,
       starred: (m['starred'] as int?) == 1,
-      userRating: m['userRating'] as int?,
     );
   }
 

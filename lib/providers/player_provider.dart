@@ -4806,22 +4806,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> setRating(String songId, int rating) async {
-    if (_currentSong?.id != songId) return;
-
-    final previousRating = _currentSong?.userRating;
-    _currentSong = _currentSong?.copyWith(userRating: rating);
-    notifyListeners();
-
-    try {
-      await _subsonicService.setRating(songId, rating);
-    } catch (e) {
-      _currentSong = _currentSong?.copyWith(userRating: previousRating);
-      notifyListeners();
-      rethrow;
-    }
-  }
-
   /// 退后台回前台：重新激活音频会话（Android/iOS 通用）。
   /// 播放器暂停期间系统会收回会话/焦点（尤其蓝牙断开 + 长时间后台），恢复时
   /// setActive(true) 让下次 play() 的输出管线处于就绪态。不自动恢复播放——

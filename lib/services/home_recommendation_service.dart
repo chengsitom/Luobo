@@ -555,11 +555,10 @@ class HomeRecommendationService extends ChangeNotifier {
   // 工具
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// 行为综合权重（§4.2 w(s)）：收藏 +2.0 / 评分 / 完成度 / 播放次数，跳过衰减。
+  /// 行为综合权重（§4.2 w(s)）：收藏 +2.0 / 完成度 / 播放次数，跳过衰减。
   double _behaviorWeight(SongProfile profile) {
     var w = 0.0;
     if (_behavior.starredSongIds.contains(profile.songId)) w += 2.0;
-    if (profile.userRating != null) w += profile.userRating! / 5.0;
     w += profile.completionRate;
     w += math.min(profile.playCount / 10.0, 1.0);
     if (profile.isDisliked) w -= 0.8;

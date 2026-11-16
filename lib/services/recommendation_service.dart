@@ -8,14 +8,10 @@ import '../models/models.dart';
 abstract class _W {
   static const double artistAffinity = 0.28;
   static const double genreAffinity = 0.18;
-  static const double artistRating = 0.11;
-  static const double genreRating = 0.07;
   static const double albumAffinity = 0.06;
   static const double completionRate = 0.09;
   static const double hourPreference = 0.05;
   static const double playCountSignal = 0.04;
-  static const double userRating = 0.10;
-  static const double songLevelRating = 0.06;
   static const double starBonus = 0.20;
   static const double noveltyBonus = 0.08;
   static const double skipPenaltyPerSkip = 0.06;
@@ -48,8 +44,6 @@ class RecommendationService extends ChangeNotifier {
   Map<String, double> _artistAffinity = {};
   Map<String, double> _genreAffinity = {};
   Map<String, double> _albumAffinity = {};
-  Map<String, double> _artistRatingAffinity = {};
-  Map<String, double> _genreRatingAffinity = {};
   Map<String, int> _skipCounts = {};
   Map<int, Map<String, double>> _timePatterns = {};
   List<String> _recentlyPlayed = [];
@@ -65,8 +59,6 @@ class RecommendationService extends ChangeNotifier {
   double? _maxArtistAffinity;
   double? _maxGenreAffinity;
   double? _maxAlbumAffinity;
-  double? _maxArtistRating;
-  double? _maxGenreRating;
 
   bool get enabled => _enabled;
   Map<String, SongProfile> get profiles => Map.unmodifiable(_profiles);
@@ -92,14 +84,6 @@ class RecommendationService extends ChangeNotifier {
 
   /// 专辑亲和度（播放加权）只读视图。
   Map<String, double> get albumAffinityView => Map.unmodifiable(_albumAffinity);
-
-  /// 歌手评分亲和度只读视图。
-  Map<String, double> get artistRatingAffinityView =>
-      Map.unmodifiable(_artistRatingAffinity);
-
-  /// 风格评分亲和度只读视图。
-  Map<String, double> get genreRatingAffinityView =>
-      Map.unmodifiable(_genreRatingAffinity);
 
   /// 收藏歌曲 id 集合只读视图。
   Set<String> get starredSongIds => Set.unmodifiable(_starredSongs);
@@ -237,40 +221,6 @@ class RecommendationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> trackSongRating(Song song, int rating) async {
-    if (rating < 1 || rating > 5) return;
-
-    (_profiles[song.id] ??
-            (_profiles[song.id] = SongProfile(
-              songId: song.id,
-              title: song.title,
-              artist: song.artist,
-              artistId: song.artistId,
-              albumId: song.albumId,
-              genre: song.genre,
-              duration: song.duration,
-            )))
-        .userRating = rating;
-
-    if (_enabled) {
-      final signedWeight = (rating - 3) / 2.0;
-
-      if (song.artist != null) {
-        _artistRatingAffinity[song.artist!] =
-            (_artistRatingAffinity[song.artist!] ?? 0) + signedWeight * 2.5;
-        _maxArtistRating = null;
-      }
-      if (song.genre != null) {
-        _genreRatingAffinity[song.genre!] =
-            (_genreRatingAffinity[song.genre!] ?? 0) + signedWeight * 1.8;
-        _maxGenreRating = null;
-      }
-    }
-
-    _scheduleSave();
-    notifyListeners();
-  }
-
   Future<void> trackStarred(Song song, bool starred) async {
     if (starred) {
       _starredSongs.add(song.id);
@@ -330,39 +280,12 @@ class RecommendationService extends ChangeNotifier {
       }
     }
 
-    if (song.artist != null) {
-      final maxAr = _cachedMax(_artistRatingAffinity, () => _maxArtistRating,
-          (v) => _maxArtistRating = v);
-      if (maxAr > 0) {
-        score += ((_artistRatingAffinity[song.artist] ?? 0).clamp(0, maxAr) /
-                maxAr) *
-            _W.artistRating;
-      }
-    }
-
-    if (song.genre != null) {
-      final maxGr = _cachedMax(_genreRatingAffinity, () => _maxGenreRating,
-          (v) => _maxGenreRating = v);
-      if (maxGr > 0) {
-        score +=
-            ((_genreRatingAffinity[song.genre] ?? 0).clamp(0, maxGr) / maxGr) *
-                _W.genreRating;
-      }
-    }
-
     if (profile != null) {
       score += profile.completionRate * _W.completionRate;
       score += profile.getHourPreference(hour) * _W.hourPreference;
       score += min(profile.playCount / 10.0, 1.0) * _W.playCountSignal;
-      if (profile.userRating != null) {
-        score += (profile.userRating! / 5.0) * _W.userRating;
-      }
     } else {
       score += _W.noveltyBonus;
-    }
-
-    if (song.userRating != null) {
-      score += (song.userRating! / 5.0) * _W.songLevelRating;
     }
 
     if (_starredSongs.contains(song.id) || song.starred == true) {
@@ -519,18 +442,12 @@ class RecommendationService extends ChangeNotifier {
   Map<String, dynamic> getListeningStats() {
     int totalPlays = 0;
     int totalDuration = 0;
-    int ratedSongs = 0;
-    int totalRating = 0;
     int totalSkips = 0;
 
     for (final p in _profiles.values) {
       totalPlays += p.playCount;
       totalDuration += p.totalListenTime;
       totalSkips += p.skipCount;
-      if (p.userRating != null) {
-        ratedSongs++;
-        totalRating += p.userRating!;
-      }
     }
 
     return {
@@ -540,9 +457,7 @@ class RecommendationService extends ChangeNotifier {
       'uniqueArtists': _artistAffinity.length,
       'uniqueGenres': _genreAffinity.length,
       'starredSongs': _starredSongs.length,
-      'ratedSongs': ratedSongs,
       'totalSkips': totalSkips,
-      'averageRating': ratedSongs > 0 ? totalRating / ratedSongs : 0.0,
       'skipRate': totalPlays > 0 ? totalSkips / totalPlays : 0.0,
       'topArtists': _getTopArtists(5),
       'topGenres': _getTopGenres(5),
@@ -559,8 +474,6 @@ class RecommendationService extends ChangeNotifier {
     _recentlyPlayed.clear();
     _recentIndex.clear();
     _starredSongs.clear();
-    _artistRatingAffinity.clear();
-    _genreRatingAffinity.clear();
     _invalidateCaches();
 
     final prefs = _prefs ?? await SharedPreferences.getInstance();
@@ -622,8 +535,6 @@ class RecommendationService extends ChangeNotifier {
     _maxArtistAffinity = null;
     _maxGenreAffinity = null;
     _maxAlbumAffinity = null;
-    _maxArtistRating = null;
-    _maxGenreRating = null;
   }
 
   void _rebuildRecentIndex() {
@@ -655,8 +566,6 @@ class RecommendationService extends ChangeNotifier {
     decayMap(_artistAffinity);
     decayMap(_genreAffinity);
     decayMap(_albumAffinity);
-    decayMap(_artistRatingAffinity);
-    decayMap(_genreRatingAffinity);
     _invalidateCaches();
     _lastDecayApplied = now;
   }
@@ -707,8 +616,6 @@ class RecommendationService extends ChangeNotifier {
         _artistAffinity = _parseDoubleMap(d['artists']);
         _genreAffinity = _parseDoubleMap(d['genres']);
         _albumAffinity = _parseDoubleMap(d['albums']);
-        _artistRatingAffinity = _parseDoubleMap(d['artistRatings']);
-        _genreRatingAffinity = _parseDoubleMap(d['genreRatings']);
         _recentlyPlayed = List<String>.from(d['recent'] ?? []);
         _starredSongs = Set<String>.from(d['starred'] ?? []);
       } catch (e) {
@@ -765,8 +672,6 @@ class RecommendationService extends ChangeNotifier {
         'albums': _albumAffinity,
         'recent': _recentlyPlayed,
         'starred': _starredSongs.toList(),
-        'artistRatings': _artistRatingAffinity,
-        'genreRatings': _genreRatingAffinity,
       };
 
       await Future.wait([
@@ -803,7 +708,6 @@ class SongProfile {
   int skipCount = 0;
   int totalListenTime = 0;
   int completedPlays = 0;
-  int? userRating;
   Map<int, int> hourlyPlays = {};
   Map<String, int> dailyPlays = {};
   Map<String, int> monthlyPlays = {};
@@ -868,7 +772,6 @@ class SongProfile {
         'skipCount': skipCount,
         'totalListenTime': totalListenTime,
         'completedPlays': completedPlays,
-        'userRating': userRating,
         'hourlyPlays': hourlyPlays.map((k, v) => MapEntry(k.toString(), v)),
         'dailyPlays': dailyPlays,
         'monthlyPlays': monthlyPlays,
@@ -891,7 +794,6 @@ class SongProfile {
         ..skipCount = json['skipCount'] as int? ?? 0
         ..totalListenTime = json['totalListenTime'] as int? ?? 0
         ..completedPlays = json['completedPlays'] as int? ?? 0
-        ..userRating = json['userRating'] as int?
         ..hourlyPlays = (json['hourlyPlays'] as Map<String, dynamic>?)
                 ?.map((k, v) => MapEntry(int.parse(k), v as int)) ??
             {}

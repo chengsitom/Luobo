@@ -386,24 +386,6 @@ $candidates
         }
       }
 
-      // High rated songs
-      final highRated = profiles.entries
-          .where((e) => (e.value.userRating ?? 0) >= 4)
-          .toList()
-        ..sort((a, b) =>
-            (b.value.userRating ?? 0).compareTo(a.value.userRating ?? 0));
-      if (highRated.isNotEmpty) {
-        final names = highRated
-            .take(10)
-            .map((e) => songMap[e.key])
-            .whereType<Song>()
-            .map((s) => '${s.title}-${s.artist ?? ""}')
-            .toList();
-        if (names.isNotEmpty) {
-          buffer.writeln('- 高评分歌曲（4-5星）：${names.join("、")}');
-        }
-      }
-
       // Current time context
       final hour = DateTime.now().hour;
       final timeLabel = hour >= 5 && hour < 12

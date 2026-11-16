@@ -20,7 +20,6 @@ class Song {
   final int? size;
   final String? path;
   final bool? starred;
-  final int? userRating;
   final bool isLocal;
   final double? replayGainTrackGain;
   final double? replayGainAlbumGain;
@@ -50,7 +49,6 @@ class Song {
     this.size,
     this.path,
     this.starred,
-    this.userRating,
     this.isLocal = false,
     this.replayGainTrackGain,
     this.replayGainAlbumGain,
@@ -88,7 +86,6 @@ class Song {
       size: jsonInt(json['size']),
       path: json['path']?.toString(),
       starred: json['starred'] != null ? true : false,
-      userRating: jsonInt(json['userRating']),
       isLocal: jsonBool(json['isLocal']) ?? false,
       replayGainTrackGain: jsonDouble(replayGain?['trackGain']),
       replayGainAlbumGain: jsonDouble(replayGain?['albumGain']),
@@ -180,7 +177,6 @@ class Song {
     int? size,
     String? path,
     bool? starred,
-    int? userRating,
     bool? isLocal,
     double? replayGainTrackGain,
     double? replayGainAlbumGain,
@@ -210,7 +206,6 @@ class Song {
       size: size ?? this.size,
       path: path ?? this.path,
       starred: starred ?? this.starred,
-      userRating: userRating ?? this.userRating,
       isLocal: isLocal ?? this.isLocal,
       replayGainTrackGain: replayGainTrackGain ?? this.replayGainTrackGain,
       replayGainAlbumGain: replayGainAlbumGain ?? this.replayGainAlbumGain,
