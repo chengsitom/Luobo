@@ -3183,4 +3183,16 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get deleteDownloadsConfirm =>
       'This will permanently remove all downloaded songs from this device. This cannot be undone.';
+
+  @override
+  String get startupConnecting => 'Connecting to server…';
+
+  @override
+  String get startupVerifying => 'Verifying identity…';
+
+  @override
+  String get startupPreparing => 'Preparing your library…';
+
+  @override
+  String get startupRetrying => 'Connection unstable, retrying…';
 }

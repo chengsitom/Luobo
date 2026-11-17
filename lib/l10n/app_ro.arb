@@ -428,7 +428,16 @@
   "downloadWifiOnlyBlocked": "Downloads are limited to Wi-Fi. Connect to Wi-Fi to continue.",
   "@downloadWifiOnlyBlocked": { "description": "Toast when a batch download is blocked on mobile data" },
   "deleteDownloadsConfirm": "This will permanently remove all downloaded songs from this device. This cannot be undone.",
-  "@deleteDownloadsConfirm": { "description": "Confirmation message before deleting all downloads" }
+  "@deleteDownloadsConfirm": { "description": "Confirmation message before deleting all downloads" },
+  "startupConnecting": "Connecting to server…",
+  "startupVerifying": "Verifying identity…",
+  "startupPreparing": "Preparing your library…",
+  "startupRetrying": "Connection unstable, retrying…",
+  "@startupConnecting": { "description": "Splash screen: connecting to server" },
+  "@startupVerifying": { "description": "Splash screen: verifying account" },
+  "@startupPreparing": { "description": "Splash screen: preparing music library" },
+  "@startupRetrying": { "description": "Splash screen: retrying connection" }
+
 
 
 }

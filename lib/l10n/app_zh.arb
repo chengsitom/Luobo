@@ -2686,7 +2686,16 @@
   "downloadWifiOnlyBlocked": "已设置为仅 Wi-Fi 下载，请连接 Wi-Fi 后再试",
   "@downloadWifiOnlyBlocked": { "description": "蜂窝网络下批量下载被拦截的提示" },
   "deleteDownloadsConfirm": "将永久删除本机所有已下载的歌曲，且无法恢复。确定继续吗？",
-  "@deleteDownloadsConfirm": { "description": "删除全部下载的二次确认文案" }
+  "@deleteDownloadsConfirm": { "description": "删除全部下载的二次确认文案" },
+  "startupConnecting": "正在连接服务器…",
+  "startupVerifying": "正在验证身份…",
+  "startupPreparing": "正在准备音乐库…",
+  "startupRetrying": "连接不稳定，正在重试…",
+  "@startupConnecting": { "description": "启动页：连接服务器阶段" },
+  "@startupVerifying": { "description": "启动页：验证账号阶段" },
+  "@startupPreparing": { "description": "启动页：准备音乐库阶段" },
+  "@startupRetrying": { "description": "启动页：重试连接阶段" }
+
 
 
 }

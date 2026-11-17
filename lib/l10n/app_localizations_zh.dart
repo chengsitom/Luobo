@@ -3060,4 +3060,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deleteDownloadsConfirm => '将永久删除本机所有已下载的歌曲，且无法恢复。确定继续吗？';
+
+  @override
+  String get startupConnecting => '正在连接服务器…';
+
+  @override
+  String get startupVerifying => '正在验证身份…';
+
+  @override
+  String get startupPreparing => '正在准备音乐库…';
+
+  @override
+  String get startupRetrying => '连接不稳定，正在重试…';
 }

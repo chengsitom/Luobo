@@ -18,12 +18,25 @@ enum AuthState {
   error,
 }
 
+/// 冷启连接阶段 —— 供品牌启动页显示"正在做什么"，避免黑盒转圈。
+/// UI 层据此映射到本地化文案；provider 本身不碰 l10n。
+enum StartupPhase {
+  connecting, // 读配置 / 探测服务器地址 / ping
+  verifying, // 登录校验（道理鱼 /api 自愈）
+  preparing, // 准备离线数据、音乐库
+  failed, // 本轮验证失败（可能在重试）
+}
+
 class AuthProvider extends ChangeNotifier {
   final SubsonicService _subsonicService;
   final StorageService _storageService;
 
   AuthState _state = AuthState.unknown;
   String? _error;
+
+  /// 冷启连接阶段。UI 单独监听它（不触发 ChangeNotifier 的整树重建）。
+  final ValueNotifier<StartupPhase> startupPhase =
+      ValueNotifier(StartupPhase.connecting);
 
   /// 上次连接失败的归因：服务器地址只有 AAAA、而本机没有公网 IPv6。
   ///
@@ -103,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _verifyConnection() async {
     debugPrint('[Auth] _verifyConnection: pinging ${_config?.serverUrl}');
     _state = AuthState.authenticating;
+    startupPhase.value = StartupPhase.connecting;
     notifyListeners();
 
     PingResult? pingResult;
@@ -116,7 +130,9 @@ class AuthProvider extends ChangeNotifier {
       debugPrint(
           '[Auth] Ping attempt $attempt/$maxAttempts failed: ${pingResult.error}');
       if (attempt < maxAttempts) {
+        startupPhase.value = StartupPhase.failed; // UI 显示"正在重试…"
         await Future.delayed(const Duration(seconds: 2));
+        startupPhase.value = StartupPhase.connecting;
       }
     }
     if (pingResult!.success) {
@@ -130,6 +146,7 @@ class AuthProvider extends ChangeNotifier {
       if (_config != null) {
         final family = _config!.serverFamily;
         if (family == 'auto' || family == 'subsonic') {
+          startupPhase.value = StartupPhase.verifying;
           if (await _subsonicService.loginToApi()) {
             _config = _config!.copyWith(serverFamily: 'daoliyu');
             _subsonicService.upgradeServerFamily('daoliyu');
@@ -150,6 +167,7 @@ class AuthProvider extends ChangeNotifier {
           await _storageService.saveServerConfig(updatedConfig);
         }
       }
+      startupPhase.value = StartupPhase.preparing;
       debugPrint('[Auth] State: authenticating → authenticated');
       _state = AuthState.authenticated;
       // 语义化封面缓存 key 的 (服务器, 账号) 命名空间：换密码不失效、多服务器不串图。
@@ -162,6 +180,7 @@ class AuthProvider extends ChangeNotifier {
           );
     } else {
       debugPrint('[Auth] Ping failed: ${pingResult.error}');
+      startupPhase.value = StartupPhase.failed;
 
       // 记录失败原因：切换配置失败时，网关/设置页据此展示准确文案
       //（此前 _verifyConnection 不写 _error，切失败后要么 null 要么是

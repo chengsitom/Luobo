@@ -5721,6 +5721,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This will permanently remove all downloaded songs from this device. This cannot be undone.'**
   String get deleteDownloadsConfirm;
+
+  /// Splash screen: connecting to server
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to server…'**
+  String get startupConnecting;
+
+  /// Splash screen: verifying account
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying identity…'**
+  String get startupVerifying;
+
+  /// Splash screen: preparing music library
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing your library…'**
+  String get startupPreparing;
+
+  /// Splash screen: retrying connection
+  ///
+  /// In en, this message translates to:
+  /// **'Connection unstable, retrying…'**
+  String get startupRetrying;
 }
 
 class _AppLocalizationsDelegate

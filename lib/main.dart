@@ -22,6 +22,7 @@ import 'services/favorite_playlists_service.dart';
 import 'services/cover_cache_cleaner.dart';
 import 'services/song_knowledge_cache.dart';
 import 'widgets/glass_surface.dart';
+import 'widgets/splash_loading_screen.dart';
 import 'widgets/luobo/download_progress_overlay.dart';
 import 'widgets/privacy_policy_dialog.dart';
 import 'providers/providers.dart';
@@ -457,8 +458,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
     switch (authProvider.state) {
       case AuthState.unknown:
-        _stableChild = const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+        // 冷启第一帧：品牌启动页替代光秃秃的转圈，阶段文案随连接进度变化。
+        _stableChild = SplashLoadingScreen(
+          phase: authProvider.startupPhase,
         );
         return _stableChild!;
       case AuthState.authenticated:
@@ -479,11 +481,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
         );
         return _stableChild!;
       case AuthState.authenticating:
-        // 保留上一个页面（MainScreen 或 LoginScreen），不卸载导航栈。
+        // 保留上一个页面（MainScreen / LoginScreen / 冷启的启动页），不卸载导航栈。
+        // 冷启首个 authenticating 时 _stableChild 仍是启动页，阶段文案继续更新。
         return _stableChild ??
-            const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+            SplashLoadingScreen(phase: authProvider.startupPhase);
       case AuthState.unauthenticated:
       case AuthState.error:
         _stableChild = const LoginScreen();
