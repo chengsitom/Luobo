@@ -92,6 +92,174 @@ enum LuoboToastTone {
   info,
 }
 
+// ── 可更新的进度卡 ──────────────────────────────────────────────────────
+//
+// 与一次性 toast 分开两套 entry：进度卡常驻、原地刷新，toast 照旧 2 秒消失。
+// 共用同一个锚点（mini player 上方 8dp），但互不替换——下载进度不会被
+// 一条顺手弹出的「已加入队列」冲掉。
+
+class LuoboProgressCardData {
+  final String message;
+  final LuoboToastTone tone;
+  final double? progress;
+
+  const LuoboProgressCardData({
+    required this.message,
+    this.tone = LuoboToastTone.info,
+    this.progress,
+  });
+}
+
+final ValueNotifier<LuoboProgressCardData?> _progressCardData =
+    ValueNotifier(null);
+OverlayEntry? _progressCardEntry;
+
+/// 代次标记：finish 后若又有新进度到来，旧的延迟消失不能把新卡清掉。
+int _progressFinishToken = 0;
+
+/// 显示 / 原地更新一张进度卡。锚点同 toast（播放条上方 8dp）。
+///
+/// 重复调用只更新数据 + `markNeedsBuild`，不重建卡片 widget —— 所以不会
+/// 重播入场动画，也不会像 toast 那样 2 秒自动消失。
+void showLuoboProgressCard(
+  BuildContext context, {
+  required String message,
+  double? progress,
+  LuoboToastTone tone = LuoboToastTone.info,
+}) {
+  _progressFinishToken++; // 任何待执行的 finish 作废
+
+  if (_progressCardEntry == null) {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+    final anchorBox =
+        luoboToastAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final anchorTopLeft = (anchorBox != null && overlayBox != null)
+        ? anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox)
+        : null;
+
+    final entry = OverlayEntry(
+      builder: (overlayContext) {
+        return ValueListenableBuilder<LuoboProgressCardData?>(
+          valueListenable: _progressCardData,
+          builder: (context, data, _) {
+            if (data == null) return const SizedBox.shrink();
+            final card = _LuoboProgressCard(data: data);
+            if (anchorTopLeft == null || overlayBox == null) {
+              return Align(alignment: const Alignment(0, 0.6), child: card);
+            }
+            const gap = 8.0;
+            final bottom = overlayBox.size.height - anchorTopLeft.dy + gap;
+            return Stack(
+              children: [
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: bottom,
+                  child: Center(child: card),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    _progressCardEntry = entry;
+    overlay.insert(entry);
+  }
+
+  _progressCardData.value = LuoboProgressCardData(
+    message: message,
+    tone: tone,
+    progress: progress,
+  );
+}
+
+/// 进度卡转终态，停留 2 秒后消失。若当前没有进度卡在显示，退化为普通 toast。
+void finishLuoboProgressCard(
+  BuildContext context, {
+  required String message,
+  LuoboToastTone tone = LuoboToastTone.success,
+}) {
+  if (_progressCardEntry == null) {
+    showLuoboToast(context, message: message, tone: tone);
+    return;
+  }
+  final token = ++_progressFinishToken;
+  _progressCardData.value = LuoboProgressCardData(message: message, tone: tone);
+  Future<void>.delayed(const Duration(seconds: 2), () {
+    if (_progressFinishToken == token) dismissLuoboProgressCard();
+  });
+}
+
+void dismissLuoboProgressCard() {
+  final entry = _progressCardEntry;
+  if (entry == null) return;
+  _progressCardEntry = null;
+  _progressFinishToken++;
+  _progressCardData.value = null;
+  if (entry.mounted) entry.remove();
+}
+
+class _LuoboProgressCard extends StatelessWidget {
+  final LuoboProgressCardData data;
+
+  const _LuoboProgressCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    final (icon, color) = switch (data.tone) {
+      LuoboToastTone.success => (Icons.check_rounded, LuoboAccent.accent),
+      LuoboToastTone.error =>
+        (Icons.error_outline_rounded, LuoboAccent.warn(context)),
+      LuoboToastTone.info => (Icons.file_download_rounded, c.fg2),
+    };
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: Material(
+        type: MaterialType.transparency,
+        child: LuoboGlassSurface(
+          borderRadius: LuoboRadius.groupR,
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Text(
+                      data.message,
+                      style: LuoboType.caption.copyWith(height: 1.4),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              if (data.progress != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: data.progress!.clamp(0.0, 1.0),
+                    minHeight: 3,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LuoboToastCard extends StatefulWidget {
   final String message;
   final LuoboToastTone tone;

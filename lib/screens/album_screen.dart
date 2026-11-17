@@ -131,30 +131,11 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
     setState(() => _isDownloading = true);
 
-    offline
-        .startBackgroundDownload(_songs, subsonicService)
-        .then((result) {
-      if (mounted) {
-        setState(() => _isDownloading = false);
-        showLuoboToast(
-          context,
-          message: result.failed > 0
-              ? '${l10n.downloadFailed} · ${l10n.downloadedSongsFrom(result.succeeded, _album!.name)}'
-              : l10n.downloadedSongsFrom(result.succeeded, _album!.name),
-          tone: result.failed > 0
-              ? LuoboToastTone.error
-              : LuoboToastTone.success,
-        );
-      }
+    // 进度与结果提示由全局 DownloadProgressOverlay 统一负责（进度卡 + 终态卡），
+    // 这里只管本页按钮的 loading 态，避免两套提示重复弹。
+    offline.startBackgroundDownload(_songs, subsonicService).then((_) {
+      if (mounted) setState(() => _isDownloading = false);
     });
-
-    if (mounted) {
-      showLuoboToast(
-      context,
-      message: l10n.downloadingSongsInBackground(_songs.length),
-      tone: LuoboToastTone.info,
-    );
-    }
   }
 
   @override

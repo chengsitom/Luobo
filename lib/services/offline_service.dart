@@ -529,6 +529,14 @@ class OfflineService {
     downloadState.value = downloadState.value.copyWith(isDownloading: false);
   }
 
+  /// 下载结束后由进度卡监听器调用：归零批次计数，避免后续 rebuild 重复弹
+  /// 终态卡。已下载总数（downloadedCount）保留，设置页统计不受影响。
+  void resetDownloadState() {
+    downloadState.value = DownloadState(
+      downloadedCount: getDownloadedCount(),
+    );
+  }
+
   bool get isBackgroundDownloadActive => _isBackgroundDownloadActive;
 
   Future<void> downloadPlaylist(

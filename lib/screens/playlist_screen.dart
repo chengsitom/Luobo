@@ -434,30 +434,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     setState(() => _isDownloading = true);
 
+    // 进度与结果提示由全局 DownloadProgressOverlay 统一负责（进度卡 + 终态卡），
+    // 这里只管本页按钮的 loading 态，避免两套提示重复弹。
     offlineService
         .startBackgroundDownload(songs, subsonicService)
-        .then((result) {
-      if (mounted) {
-        setState(() => _isDownloading = false);
-        showLuoboToast(
-          context,
-          message: result.failed > 0
-              ? '${l10n.downloadFailed} · ${l10n.downloadedSongsFrom(result.succeeded, _playlist!.name)}'
-              : l10n.downloadedSongsFrom(result.succeeded, _playlist!.name),
-          tone: result.failed > 0
-              ? LuoboToastTone.error
-              : LuoboToastTone.success,
-        );
-      }
+        .then((_) {
+      if (mounted) setState(() => _isDownloading = false);
     });
-
-    if (mounted) {
-      showLuoboToast(
-      context,
-      message: l10n.downloadingSongsInBackground(songs.length),
-      tone: LuoboToastTone.info,
-    );
-    }
   }
 
   @override

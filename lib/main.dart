@@ -22,6 +22,7 @@ import 'services/favorite_playlists_service.dart';
 import 'services/cover_cache_cleaner.dart';
 import 'services/song_knowledge_cache.dart';
 import 'widgets/glass_surface.dart';
+import 'widgets/luobo/download_progress_overlay.dart';
 import 'widgets/privacy_policy_dialog.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
@@ -419,6 +420,9 @@ class MuslyApp extends StatelessWidget {
           locale: localeService.currentLocale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          // 全局下载进度卡：常驻在所有路由之上，锚定 mini player 上方。
+          // builder 在 Navigator 之上，Overlay.of(rootOverlay:true) 可用。
+          builder: (context, child) => DownloadProgressOverlay(child: child ?? const SizedBox.shrink()),
           home: const AuthWrapper(),
           navigatorObservers: [
             AnalyticsNavigatorObserver(),
