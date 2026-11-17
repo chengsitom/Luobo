@@ -2670,5 +2670,14 @@
   "playlistsTotal": "共 {count} 个歌单",
   "@playlistsTotal": { "description": "歌单列表计数行", "placeholders": { "count": { "type": "int" } } },
   "albumYear": "{year} 年",
-  "@albumYear": { "description": "专辑封面下的年份（英文模板只有数字）", "placeholders": { "year": { "type": "int" } } }
+  "@albumYear": { "description": "专辑封面下的年份（英文模板只有数字）", "placeholders": { "year": { "type": "int" } } },
+  "noDownloadedSongs": "还没有下载的歌曲",
+  "@noDownloadedSongs": { "description": "已下载页空态文案" },
+  "downloadedSize": "已占用 {size}",
+  "@downloadedSize": { "description": "已下载歌曲占用空间", "placeholders": { "size": { "type": "String" } } },
+  "sortDownloadedAt": "最近下载",
+  "@sortDownloadedAt": { "description": "排序选项：最近下载优先" },
+  "downloadedSubtitle": "可离线播放",
+  "@downloadedSubtitle": { "description": "已下载页副标题" }
+
 }

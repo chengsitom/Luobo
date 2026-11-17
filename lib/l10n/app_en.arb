@@ -2943,7 +2943,16 @@
   "playlistsTotal": "共 {count} 个歌单",
   "@playlistsTotal": { "description": "Playlist list header total", "placeholders": { "count": { "type": "int" } } },
   "albumYear": "{year}",
-  "@albumYear": { "description": "Year label under an album cover (zh renders as 2007 年)", "placeholders": { "year": { "type": "int" } } }
+  "@albumYear": { "description": "Year label under an album cover (zh renders as 2007 年)", "placeholders": { "year": { "type": "int" } } },
+  "noDownloadedSongs": "No downloaded songs",
+  "@noDownloadedSongs": { "description": "Empty-state text on the downloaded songs page" },
+  "downloadedSize": "Storage used: {size}",
+  "@downloadedSize": { "description": "Storage used by downloaded songs", "placeholders": { "size": { "type": "String" } } },
+  "sortDownloadedAt": "Recently downloaded",
+  "@sortDownloadedAt": { "description": "Sort option: most recently downloaded first" },
+  "downloadedSubtitle": "Available offline",
+  "@downloadedSubtitle": { "description": "Subtitle on the downloaded songs page" }
+
 }
 
 

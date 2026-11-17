@@ -4,6 +4,7 @@ export 'album.dart';
 export 'audiobook.dart';
 export 'audiobook_chapter.dart';
 export 'song.dart';
+export 'download_record.dart';
 export 'playlist.dart';
 export 'playback_notice.dart';
 export 'server_config.dart';

@@ -3034,4 +3034,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String albumYear(int year) {
     return '$year 年';
   }
+
+  @override
+  String get noDownloadedSongs => '还没有下载的歌曲';
+
+  @override
+  String downloadedSize(String size) {
+    return '已占用 $size';
+  }
+
+  @override
+  String get sortDownloadedAt => '最近下载';
+
+  @override
+  String get downloadedSubtitle => '可离线播放';
 }

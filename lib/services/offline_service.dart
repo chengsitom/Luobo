@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
+import '../models/download_record.dart';
 import '../utils/image_cache.dart';
+import 'download_database_service.dart';
 import 'lyrics/lyrics_cache.dart';
 import 'subsonic_service.dart';
 
@@ -46,6 +48,29 @@ class OfflineService {
 
   SharedPreferences? _prefs;
   String? _offlineDir;
+  final DownloadDatabaseService _db = DownloadDatabaseService();
+
+  /// 记录表的内存镜像：同步方法（isSongDownloaded / getLocalPath 等）查它，
+  /// 避免把十几个调用点全改成 async。写入路径与 DB 双写，读取只认镜像。
+  Map<String, DownloadRecord> _records = {};
+
+  /// 已下载列表页用：返回全部记录（调用方按 serverId 自行过滤/分组）。
+  List<DownloadRecord> get downloadRecords =>
+      List.unmodifiable(_records.values);
+
+  /// 按服务器取下载记录。serverId 为空时返回全部（老数据无归属信息）。
+  List<DownloadRecord> getDownloadRecords({String? serverId}) {
+    if (serverId == null || serverId.isEmpty) {
+      return List.unmodifiable(_records.values);
+    }
+    return List.unmodifiable(
+      _records.values.where(
+        (r) => r.serverId.isEmpty || r.serverId == serverId,
+      ),
+    );
+  }
+
+  DownloadRecord? getDownloadRecord(String songId) => _records[songId];
 
   bool _offlineMode = false;
   bool get isOfflineMode => _offlineMode;
@@ -73,10 +98,73 @@ class OfflineService {
     if (!await offlineDirectory.exists()) {
       await offlineDirectory.create(recursive: true);
     }
+
+    // DB 不可用（测试环境、数据库损坏）时降级为空记录继续跑——
+    // 下载功能是辅助能力，绝不能因为打开 DB 失败拖垮整个 App 冷启。
+    try {
+      await _loadRecords();
+      await _migrateLegacyWhitelist();
+    } catch (e) {
+      debugPrint('[Offline] load records failed, degrade to empty: $e');
+      _records = {};
+    }
   }
 
+  /// 从 DB 加载记录到内存镜像，并做一致性自愈：
+  /// 记录还在但文件已被外部删掉 → 删记录（避免"计数虚报、播放失败"）。
+  Future<void> _loadRecords() async {
+    final records = await _db.getAll();
+    final survived = <DownloadRecord>[];
+    for (final record in records) {
+      final file = File('$_offlineDir/${record.fileName}');
+      if (await file.exists()) {
+        survived.add(record);
+      } else {
+        await _db.delete(record.songId);
+      }
+    }
+    _records = {for (final r in survived) r.songId: r};
+  }
+
+  /// 老版本把下载清单存成 prefs 里的 songId 白名单，没有任何元数据。
+  /// 冷启时扫一遍：文件还在就补一条记录（元数据缺失，title 用 id 兜底），
+  /// 之后清掉旧键。用户已下载的文件一首都不会丢。
+  Future<void> _migrateLegacyWhitelist() async {
+    final legacy = _prefs?.getStringList(_keyDownloadedSongs);
+    if (legacy == null || legacy.isEmpty) return;
+
+    final migrated = <DownloadRecord>[];
+    for (final id in legacy) {
+      if (_records.containsKey(id)) continue;
+      final file = File('$_offlineDir/$id.mp3');
+      if (!await file.exists()) continue;
+      final bytes = await file.length();
+      migrated.add(
+        DownloadRecord(
+          songId: id,
+          serverId: '', // 老数据无归属信息，不串到任何服务器
+          song: Song(id: id, title: id),
+          fileName: '$id.mp3',
+          suffix: 'mp3',
+          bytes: bytes,
+          downloadedAt: DateTime.fromMillisecondsSinceEpoch(
+            file.lastModifiedSync().millisecondsSinceEpoch,
+          ),
+        ),
+      );
+    }
+    if (migrated.isNotEmpty) await _db.upsertMany(migrated);
+    for (final record in migrated) {
+      _records[record.songId] = record;
+    }
+    await _prefs?.remove(_keyDownloadedSongs);
+  }
+
+  /// 音频文件路径：从记录里取真实文件名（含扩展名）。
+  /// 老数据/尚未建记录的 id 回退到 .mp3，保证所有调用点零改动。
   String _getSongPath(String songId) {
-    return '$_offlineDir/$songId.mp3';
+    final fileName = _records[songId]?.fileName ?? '$songId.mp3';
+    return '$_offlineDir/$fileName';
   }
 
   String _getLyricsPath(String songId) {
@@ -116,48 +204,63 @@ class OfflineService {
 
   bool isSongDownloaded(String songId) {
     if (_offlineDir == null) return false;
-    final file = File(_getSongPath(songId));
-    return file.existsSync();
+    final record = _records[songId];
+    // 有记录就以记录为准（文件已由 _loadRecords 自愈校验过）；
+    // 无记录时兼容尚未迁移的进程内状态，回退到文件存在判断。
+    if (record != null) return true;
+    return File('$_offlineDir/$songId.mp3').existsSync();
   }
 
   List<String> getDownloadedSongIds() {
-    return _prefs?.getStringList(_keyDownloadedSongs) ?? [];
+    return _records.keys.toList();
   }
 
   int getDownloadedCount() {
-    return getDownloadedSongIds().length;
+    return _records.length;
   }
 
   Future<int> getDownloadedSize() async {
     if (_offlineDir == null) return 0;
-
-    int totalSize = 0;
+    // 统一口径：只算音频文件本身（封面/歌词是附属小文件，不混入"下了多少MB"）。
+    // 记录里的 bytes 是下载时算好的真实大小；缺记录的老文件回退 stat。
+    var total = _records.values.fold<int>(0, (sum, r) => sum + r.bytes);
+    final knownFiles = _records.values.map((r) => r.fileName).toSet();
     final dir = Directory(_offlineDir!);
     if (await dir.exists()) {
       await for (final entity in dir.list()) {
-        if (entity is File) {
-          totalSize += await entity.length();
+        if (entity is File &&
+            !knownFiles.contains(entity.uri.pathSegments.last) &&
+            !entity.path.endsWith('.part') &&
+            !entity.path.endsWith('.jpg') &&
+            !entity.path.endsWith('.lyrics.json')) {
+          total += await entity.length();
         }
       }
     }
-    return totalSize;
+    return total;
   }
 
   Future<bool> downloadSong(
     Song song,
     SubsonicService subsonicService, {
     Function(double progress)? onProgress,
+    DownloadSource source = DownloadSource.manual,
   }) async {
     if (_offlineDir == null) await initialize();
 
+    final fileName = downloadFileNameFor(song.id, song.suffix);
+    final filePath = '$_offlineDir/$fileName';
+    final partPath = '$filePath.part';
+
     try {
       final url = subsonicService.getStreamUrl(song.id);
-      final filePath = _getSongPath(song.id);
-
       final dio = Dio();
+
+      // 先写临时文件，成功校验后再 rename 落盘——中途被杀/断网不会留下
+      // 一个"存在但半截"的正式文件被 isSongDownloaded 误判为已完成。
       await dio.download(
         url,
-        filePath,
+        partPath,
         onReceiveProgress: (received, total) {
           if (total > 0 && onProgress != null) {
             onProgress(received / total);
@@ -165,17 +268,52 @@ class OfflineService {
         },
       );
 
-      final downloadedIds = getDownloadedSongIds();
-      if (!downloadedIds.contains(song.id)) {
-        downloadedIds.add(song.id);
-        await _prefs?.setStringList(_keyDownloadedSongs, downloadedIds);
+      final partFile = File(partPath);
+      if (!await partFile.exists()) {
+        debugPrint('Download incomplete: part file missing for ${song.title}');
+        return false;
       }
+      final downloadedBytes = await partFile.length();
+      if (downloadedBytes < 1024) {
+        debugPrint('Download incomplete: ${downloadedBytes}B for ${song.title}');
+        await partFile.delete();
+        return false;
+      }
+      // 服务端给了 size 时做一次完整性校验（允许 1% 的转码/分块误差）。
+      final expected = song.size;
+      if (expected != null && expected > 0) {
+        final tolerance = (expected * 0.01).round() + 64;
+        if ((downloadedBytes - expected).abs() > tolerance) {
+          debugPrint(
+            'Download size mismatch for ${song.title}: '
+            'got $downloadedBytes, expected $expected',
+          );
+          await partFile.delete();
+          return false;
+        }
+      }
+      final finalFile = File(filePath);
+      if (await finalFile.exists()) await finalFile.delete();
+      await partFile.rename(filePath);
+
+      final record = DownloadRecord(
+        songId: song.id,
+        serverId: subsonicService.coverCacheServerId,
+        song: song,
+        fileName: fileName,
+        suffix: fileName.contains('.') ? fileName.split('.').last : 'mp3',
+        bytes: downloadedBytes,
+        downloadedAt: DateTime.now(),
+        source: source,
+      );
+      await _db.upsert(record);
+      _records[song.id] = record;
 
       try {
         if (song.coverArt != null) {
           final coverUrl = subsonicService.getCoverArtUrl(
             song.coverArt,
-            size: kCoverArtRequestSize,
+            size: kNowPlayingArtworkSize,
           );
           if (coverUrl.isNotEmpty) {
             final dioCover = Dio();
@@ -214,6 +352,11 @@ class OfflineService {
       return true;
     } catch (e) {
       debugPrint('Error downloading song: $e');
+      // 失败时清掉临时文件，绝不留半截数据。
+      try {
+        final partFile = File(partPath);
+        if (await partFile.exists()) await partFile.delete();
+      } catch (_) {}
       return false;
     }
   }
@@ -390,11 +533,11 @@ class OfflineService {
       if (await coverArtFile.exists()) {
         await coverArtFile.delete();
       }
+      final partFile = File('$_offlineDir/$songId.mp3.part');
+      if (await partFile.exists()) await partFile.delete();
 
-      final downloadedIds = getDownloadedSongIds();
-      downloadedIds.remove(songId);
-      await _prefs?.setStringList(_keyDownloadedSongs, downloadedIds);
-
+      await _db.delete(songId);
+      _records.remove(songId);
       return true;
     } catch (e) {
       debugPrint('Error deleting song: $e');
@@ -415,7 +558,9 @@ class OfflineService {
         }
       }
 
-      await _prefs?.setStringList(_keyDownloadedSongs, []);
+      await _db.clear();
+      _records.clear();
+      await _prefs?.remove(_keyDownloadedSongs);
     } catch (e) {
       debugPrint('Error deleting all downloads: $e');
     }

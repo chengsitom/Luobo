@@ -11,6 +11,7 @@ import 'all_songs_screen.dart';
 import 'artists_list_screen.dart';
 import 'audiobook_list_screen.dart';
 import 'favorites_screen.dart';
+import 'downloaded_songs_screen.dart';
 import 'playlists_screen.dart';
 import 'radio_screen.dart';
 import 'search_screen.dart';
@@ -63,6 +64,12 @@ class LibraryHubScreen extends StatelessWidget {
         icon: Icons.favorite_rounded,
         colors: const [Color(0xFFF93D4E), Color(0xFFE855A8)],
         onTap: () => _push(context, const FavoritesScreen()),
+      ),
+      _HubEntry(
+        title: l10n.downloadedSongs,
+        icon: Icons.download_done_rounded,
+        colors: const [Color(0xFF3CC98A), Color(0xFF0E9F8E)],
+        onTap: () => _push(context, const DownloadedSongsScreen()),
       ),
       _HubEntry(
         title: isDaoliyu ? l10n.audiobooks : l10n.categoryRadio,

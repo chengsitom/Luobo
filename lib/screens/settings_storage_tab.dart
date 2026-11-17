@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/byte_format.dart';
 import '../utils/image_cache.dart';
+import '../utils/navigation_helper.dart';
+import 'downloaded_songs_screen.dart';
 import '../providers/library_provider.dart';
 import '../services/bpm_analyzer_service.dart';
 import '../services/cache_settings_service.dart';
@@ -504,7 +506,14 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         context,
       )!
           .downloadedStats(_downloadedCount, _downloadedSize),
-      showChevron: false,
+      onTap: () async {
+        await NavigationHelper.push(
+          context,
+          const DownloadedSongsScreen(),
+        );
+        // 从已下载页删除歌曲返回后，刷新统计数字。
+        if (mounted) await _loadOfflineInfo();
+      },
     );
   }
 

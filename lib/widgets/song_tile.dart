@@ -80,6 +80,10 @@ class SongTile extends StatelessWidget {
   /// ⚠️ 非 0 会**叠加**在 64 之上，别用来调行高）。
   final double contentVerticalPadding;
 
+  /// 封面右下角是否显示「已下载」绿点（曲库列表用；已下载页整页都是下载，
+  /// 没有区分意义，传 false 关掉）。
+  final bool showDownloadBadge;
+
   const SongTile({
     super.key,
     required this.song,
@@ -98,6 +102,7 @@ class SongTile extends StatelessWidget {
     this.selectionMode = false,
     this.selected = false,
     this.contentVerticalPadding = 0,
+    this.showDownloadBadge = true,
   });
 
   /// Cached adaptive font sizes for the `artist • album` subtitle,
@@ -242,6 +247,31 @@ class SongTile extends StatelessWidget {
                   // overlaid on the artwork corner — takes no layout space.
                   _buildQualityTag(context, isCurrentSong, resolvedRadius) ??
                       const SizedBox.shrink(),
+                  // 「已下载」角标：让用户一眼看出哪些歌离线可播。查询走
+                  // OfflineService 内存 Map，O(1)，滚动无额外 IO。
+                  if (showDownloadBadge &&
+                      !selectionMode &&
+                      OfflineService().isSongDownloaded(song.id))
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 15,
+                          height: 15,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1D9E75),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               );
             },

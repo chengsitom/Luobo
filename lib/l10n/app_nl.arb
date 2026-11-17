@@ -5,5 +5,14 @@
     "description": "Welcome message"
   }
 ,
-  "edit": "Bewerken"
+  "edit": "Bewerken",
+  "noDownloadedSongs": "No downloaded songs",
+  "@noDownloadedSongs": { "description": "Empty-state text on the downloaded songs page" },
+  "downloadedSize": "Storage used: {size}",
+  "@downloadedSize": { "description": "Storage used by downloaded songs", "placeholders": { "size": { "type": "String" } } },
+  "sortDownloadedAt": "Recently downloaded",
+  "@sortDownloadedAt": { "description": "Sort option: most recently downloaded first" },
+  "downloadedSubtitle": "Available offline",
+  "@downloadedSubtitle": { "description": "Subtitle on the downloaded songs page" }
+
 }

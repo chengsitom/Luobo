@@ -5673,6 +5673,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{year}'**
   String albumYear(int year);
+
+  /// Empty-state text on the downloaded songs page
+  ///
+  /// In en, this message translates to:
+  /// **'No downloaded songs'**
+  String get noDownloadedSongs;
+
+  /// Storage used by downloaded songs
+  ///
+  /// In en, this message translates to:
+  /// **'Storage used: {size}'**
+  String downloadedSize(String size);
+
+  /// Sort option: most recently downloaded first
+  ///
+  /// In en, this message translates to:
+  /// **'Recently downloaded'**
+  String get sortDownloadedAt;
+
+  /// Subtitle on the downloaded songs page
+  ///
+  /// In en, this message translates to:
+  /// **'Available offline'**
+  String get downloadedSubtitle;
 }
 
 class _AppLocalizationsDelegate

@@ -3147,4 +3147,18 @@ class AppLocalizationsSq extends AppLocalizations {
   String albumYear(int year) {
     return '$year';
   }
+
+  @override
+  String get noDownloadedSongs => 'No downloaded songs';
+
+  @override
+  String downloadedSize(String size) {
+    return 'Storage used: $size';
+  }
+
+  @override
+  String get sortDownloadedAt => 'Recently downloaded';
+
+  @override
+  String get downloadedSubtitle => 'Available offline';
 }
