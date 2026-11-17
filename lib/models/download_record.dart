@@ -19,6 +19,15 @@ String downloadFileNameFor(String songId, String? suffix) {
   return '$safeId.$clean';
 }
 
+/// 下载记录是否归属于给定的 (服务器,账号) 命名空间。
+///
+/// 空 serverId = 老版本迁移来的无归属数据，对所有服务器可见（否则老用户
+/// 升级后下载会"全部消失"）；非空则必须精确匹配，避免跨服同 songId 串音。
+bool recordBelongsToServer(DownloadRecord record, String currentServerId) {
+  if (record.serverId.isEmpty) return true;
+  return record.serverId == currentServerId;
+}
+
 enum DownloadSource {
   /// 用户从 ⋮ 菜单 / 专辑 / 歌单 / 多选主动下载。
   manual,

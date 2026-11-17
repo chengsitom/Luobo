@@ -88,6 +88,36 @@ void main() {
       expect(restored.song.title, 'trk_bad');
     });
 
+    test('legacy records (empty serverId) are visible on every server', () {
+      final legacy = DownloadRecord(
+        songId: 'trk_1',
+        serverId: '',
+        song: Song(id: 'trk_1', title: 'x'),
+        fileName: 'trk_1.mp3',
+        suffix: 'mp3',
+        bytes: 1,
+        downloadedAt: DateTime.now(),
+      );
+      expect(recordBelongsToServer(legacy, 'serverA'), isTrue);
+      expect(recordBelongsToServer(legacy, 'serverB'), isTrue);
+      expect(recordBelongsToServer(legacy, ''), isTrue);
+    });
+
+    test('records are isolated by serverId to avoid cross-server songId clash', () {
+      final onA = DownloadRecord(
+        songId: '123', // 两服可能用相同的数字 id
+        serverId: 'serverA',
+        song: Song(id: '123', title: 'A version'),
+        fileName: '123.mp3',
+        suffix: 'mp3',
+        bytes: 1,
+        downloadedAt: DateTime.now(),
+      );
+      expect(recordBelongsToServer(onA, 'serverA'), isTrue);
+      expect(recordBelongsToServer(onA, 'serverB'), isFalse);
+      expect(recordBelongsToServer(onA, ''), isFalse);
+    });
+
     test('preserves source and status enums', () {
       final record = DownloadRecord(
         songId: 'trk_1',

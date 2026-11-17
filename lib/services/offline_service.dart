@@ -101,6 +101,14 @@ class OfflineService {
 
   DownloadRecord? getDownloadRecord(String songId) => _records[songId];
 
+  /// 记录是否归属于当前服务器。
+  /// - 空 serverId = 老版本迁移来的无归属数据，对所有服务器可见（否则老用户
+  ///   升级后下载会"全部消失"）；
+  /// - 非空则必须与当前 (服务器,账号) 命名空间一致——避免跨服同 songId 串音。
+  /// 当前 serverId 读全局注册值（登录/切服/登出各节点都会更新），零接线。
+  bool _recordBelongsToCurrentServer(DownloadRecord record) =>
+      recordBelongsToServer(record, coverCacheServerId);
+
   bool _offlineMode = false;
   bool get isOfflineMode => _offlineMode;
   void setOfflineMode(bool value) => _offlineMode = value;
@@ -238,6 +246,8 @@ class OfflineService {
 
   String? getLocalCoverArtPath(String songId) {
     if (_offlineDir == null) return null;
+    final record = _records[songId];
+    if (record != null && !_recordBelongsToCurrentServer(record)) return null;
     final path = _getCoverArtPath(songId);
     if (File(path).existsSync()) return path;
     return null;
@@ -266,18 +276,25 @@ class OfflineService {
   bool isSongDownloaded(String songId) {
     if (_offlineDir == null) return false;
     final record = _records[songId];
-    // 有记录就以记录为准（文件已由 _loadRecords 自愈校验过）；
+    if (record != null) {
+      // 跨服同 songId：记录属于别的服务器 → 当作未下载，播放走网络流，
+      // 避免误播旧服音频（B 方案：不销毁旧服数据，只在读取侧隔离）。
+      return _recordBelongsToCurrentServer(record);
+    }
     // 无记录时兼容尚未迁移的进程内状态，回退到文件存在判断。
-    if (record != null) return true;
     return File('$_offlineDir/$songId.mp3').existsSync();
   }
 
+  /// 当前服务器可见的已下载 id（含老数据）。离线模式列表据此过滤。
   List<String> getDownloadedSongIds() {
-    return _records.keys.toList();
+    return _records.values
+        .where(_recordBelongsToCurrentServer)
+        .map((r) => r.songId)
+        .toList();
   }
 
   int getDownloadedCount() {
-    return _records.length;
+    return getDownloadedSongIds().length;
   }
 
   Future<int> getDownloadedSize() async {
