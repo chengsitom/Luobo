@@ -74,7 +74,14 @@ class OfflineService {
   /// 刷新（同步查询拿不到 Flutter 的重建通知，用一个 int 代次桥接）。
   final ValueNotifier<int> recordsNotifier = ValueNotifier(0);
 
-  void _notifyRecordsChanged() => recordsNotifier.value++;
+  /// 批量下载期间抑制逐首 notify：否则 N 首 × (已下载页整页 + 每个角标)
+  /// 会重建上万次 widget。抑制期结束后由 startBackgroundDownload 统一notify 一次。
+  bool _suppressRecordNotify = false;
+
+  void _notifyRecordsChanged() {
+    if (_suppressRecordNotify) return;
+    recordsNotifier.value++;
+  }
 
   /// 已下载列表页用：返回全部记录（调用方按 serverId 自行过滤/分组）。
   List<DownloadRecord> get downloadRecords =>
@@ -134,6 +141,18 @@ class OfflineService {
     final offlineDirectory = Directory(_offlineDir!);
     if (!await offlineDirectory.exists()) {
       await offlineDirectory.create(recursive: true);
+    }
+
+    // 清理上次进程被强杀时残留的 .part（正常结束时 catch/rename 已清掉；
+    // 强杀来不及跑，重启后这些半截文件既无记录也无法从 UI 删除）。
+    try {
+      await for (final entity in offlineDirectory.list()) {
+        if (entity is File && entity.path.endsWith('.part')) {
+          await entity.delete();
+        }
+      }
+    } catch (e) {
+      debugPrint('[Offline] .part cleanup failed: $e');
     }
 
     // DB 不可用（测试环境、数据库损坏）时降级为空记录继续跑——
@@ -336,6 +355,17 @@ class OfflineService {
       }
       final finalFile = File(filePath);
       if (await finalFile.exists()) await finalFile.delete();
+      // 换后缀重下（如 .mp3 → .flac）时删掉旧扩展名文件，避免孤儿文件
+      // 占磁盘且被 getDownloadedSize 计入总量。
+      final oldFileName = _records[song.id]?.fileName;
+      if (oldFileName != null && oldFileName != fileName) {
+        try {
+          final oldFile = File('$_offlineDir/$oldFileName');
+          if (await oldFile.exists()) await oldFile.delete();
+        } catch (e) {
+          debugPrint('[Offline] remove stale file failed: $e');
+        }
+      }
       await partFile.rename(filePath);
 
       final record = DownloadRecord(
@@ -474,6 +504,7 @@ class OfflineService {
     }
 
     _isBackgroundDownloadActive = true;
+    _suppressRecordNotify = true;
     final alreadyDownloadedCount = getDownloadedCount();
     final concurrentDownloads = parallelCount ?? getParallelDownloadsCount();
     final keepScreenOn = getKeepScreenOn();
@@ -541,6 +572,9 @@ class OfflineService {
       debugPrint('Error during background download: $e');
     } finally {
       _isBackgroundDownloadActive = false;
+      // 批量期间逐首 notify 被抑制，这里统一通知一次（列表/角标只重建一次）。
+      _suppressRecordNotify = false;
+      _notifyRecordsChanged();
       downloadState.value = downloadState.value.copyWith(isDownloading: false);
 
       // Always disable wake lock when download finishes or fails
@@ -568,6 +602,9 @@ class OfflineService {
   /// 下载结束后由进度卡监听器调用：归零批次计数，避免后续 rebuild 重复弹
   /// 终态卡。已下载总数（downloadedCount）保留，设置页统计不受影响。
   void resetDownloadState() {
+    // 终态到下一帧这十几毫秒内若用户又发起了一轮下载，_isBackgroundDownloadActive
+    // 已重新置 true；此时清零会吞掉新批次的进度/终态卡，直接跳过。
+    if (_isBackgroundDownloadActive) return;
     downloadState.value = DownloadState(
       downloadedCount: getDownloadedCount(),
     );
@@ -606,7 +643,9 @@ class OfflineService {
       if (await coverArtFile.exists()) {
         await coverArtFile.delete();
       }
-      final partFile = File('$_offlineDir/$songId.mp3.part');
+      // .part 名跟随记录里的真实文件名（可能是 .flac.part/.m4a.part），
+      // 写死 .mp3.part 会漏掉非 mp3 的残留。
+      final partFile = File('$_offlineDir/${_records[songId]?.fileName ?? '$songId.mp3'}.part');
       if (await partFile.exists()) await partFile.delete();
 
       await _db.delete(songId);

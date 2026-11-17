@@ -120,6 +120,10 @@ class Song {
       'size': size,
       'path': path,
       'isLocal': isLocal,
+      // fromJson 用 `starred != null` 判定已收藏，所以这里只在 true 时写键；
+      // 写成 false 会被读回 true。下载快照/歌单快照落盘都需要保留收藏态，
+      // 否则重启后从快照播放会误判为未收藏、点收藏变成重复加星。
+      if (starred == true) 'starred': true,
       'replayGain': {
         if (replayGainTrackGain != null) 'trackGain': replayGainTrackGain,
         if (replayGainAlbumGain != null) 'albumGain': replayGainAlbumGain,

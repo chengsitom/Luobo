@@ -216,20 +216,26 @@ Future<void> runMultiAction(
       onExit?.call();
       break;
     case LuoboMultiAction.download:
+      // 依赖 context 的读取都在 await 之前完成，避免 async gap 后用 context。
+      final isMobile = context.read<TranscodingService>().currentConnectionType !=
+          ConnectionType.wifi;
+      final subsonicService =
+          Provider.of<SubsonicService>(context, listen: false);
       final offline = OfflineService();
-      if (offline.getWifiOnly() &&
-          context.read<TranscodingService>().currentConnectionType !=
-              ConnectionType.wifi) {
-        showLuoboToast(
-          context,
-          message: l10n.downloadWifiOnlyBlocked,
-          tone: LuoboToastTone.info,
-        );
+      // 先确保 prefs 已加载：冷启时 initialize() 是 fire-and-forget，若此处
+      // 抢在它前面，getWifiOnly() 会读到默认 false 从而绕过仅 Wi-Fi 限制。
+      await offline.initialize();
+      if (offline.getWifiOnly() && isMobile) {
+        if (context.mounted) {
+          showLuoboToast(
+            context,
+            message: l10n.downloadWifiOnlyBlocked,
+            tone: LuoboToastTone.info,
+          );
+        }
         onExit?.call();
         break;
       }
-      final subsonicService =
-          Provider.of<SubsonicService>(context, listen: false);
       var ok = 0;
       var fail = 0;
       await OfflineService().downloadSongs(

@@ -71,6 +71,18 @@ void main() {
       expect(json['track'], 5);
     });
 
+    test('starred survives toJson/fromJson round-trip (download snapshot)', () {
+      // 下载快照用 song.toJson 落盘；fromJson 用 `starred != null` 判定，
+      // 因此 toJson 只在 true 时写键，false 不能写成 false（会被读回 true）。
+      final starred = Song(id: '1', title: 'S', starred: true);
+      final restored = Song.fromJson(starred.toJson());
+      expect(restored.starred, isTrue);
+
+      final notStarred = Song(id: '2', title: 'N', starred: false);
+      final restored2 = Song.fromJson(notStarred.toJson());
+      expect(restored2.starred, isFalse);
+    });
+
     test('should format duration correctly', () {
       final song1 = Song(id: '1', title: 'Song 1', duration: 180);
       expect(song1.formattedDuration, '3:00');
