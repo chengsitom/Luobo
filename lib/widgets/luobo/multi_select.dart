@@ -7,6 +7,7 @@ import '../../providers/library_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/offline_service.dart';
 import '../../services/subsonic_service.dart';
+import '../../services/transcoding_service.dart';
 import '../../theme/design_tokens.dart';
 import '../song_tile.dart';
 import 'empty_state.dart';
@@ -215,6 +216,18 @@ Future<void> runMultiAction(
       onExit?.call();
       break;
     case LuoboMultiAction.download:
+      final offline = OfflineService();
+      if (offline.getWifiOnly() &&
+          context.read<TranscodingService>().currentConnectionType !=
+              ConnectionType.wifi) {
+        showLuoboToast(
+          context,
+          message: l10n.downloadWifiOnlyBlocked,
+          tone: LuoboToastTone.info,
+        );
+        onExit?.call();
+        break;
+      }
       final subsonicService =
           Provider.of<SubsonicService>(context, listen: false);
       var ok = 0;

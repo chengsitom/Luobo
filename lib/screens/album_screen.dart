@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/subsonic_service.dart';
+import '../services/transcoding_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
@@ -99,6 +100,21 @@ class _AlbumScreenState extends State<AlbumScreen> {
     if (_songs.isEmpty || _isDownloading) return;
 
     final l10n = AppLocalizations.of(context)!;
+    // 仅 Wi-Fi 下载：批量下载耗流量，蜂窝下按用户设置拦截。
+    // 网络类型在 await 之前读，避免 async gap 后用 context。
+    final isMobile = context.read<TranscodingService>().currentConnectionType !=
+        ConnectionType.wifi;
+    final offline = OfflineService();
+    await offline.initialize();
+    if (!mounted) return;
+    if (offline.getWifiOnly() && isMobile) {
+      showLuoboToast(
+        context,
+        message: l10n.downloadWifiOnlyBlocked,
+        tone: LuoboToastTone.info,
+      );
+      return;
+    }
 
     // 确认后再下：整张专辑的下载不可忽略、且按钮就在返回钮下面，容易误触。
     final confirmed = await showLuoboConfirmSheet(
@@ -113,19 +129,22 @@ class _AlbumScreenState extends State<AlbumScreen> {
       context,
       listen: false,
     );
-    final offlineService = OfflineService();
-    await offlineService.initialize();
-
     setState(() => _isDownloading = true);
 
-    offlineService.startBackgroundDownload(_songs, subsonicService).then((_) {
+    offline
+        .startBackgroundDownload(_songs, subsonicService)
+        .then((result) {
       if (mounted) {
         setState(() => _isDownloading = false);
         showLuoboToast(
-      context,
-      message: l10n.downloadedSongsFrom(_songs.length, _album!.name),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: result.failed > 0
+              ? '${l10n.downloadFailed} · ${l10n.downloadedSongsFrom(result.succeeded, _album!.name)}'
+              : l10n.downloadedSongsFrom(result.succeeded, _album!.name),
+          tone: result.failed > 0
+              ? LuoboToastTone.error
+              : LuoboToastTone.success,
+        );
       }
     });
 

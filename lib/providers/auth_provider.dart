@@ -621,9 +621,8 @@ class AuthProvider extends ChangeNotifier {
     try {
       await BpmAnalyzerService().clearCache();
     } catch (_) {}
-    try {
-      await offlineService.deleteAllDownloads();
-    } catch (_) {}
+    // 登出不再清空下载：文件是用户花流量换来的稀缺资源，切账号不该销毁。
+    // 下载记录按 serverId 归属，切回来仍可用；要清理请在设置里手动操作。
     try {
       await AndroidAutoService().dispose();
     } catch (_) {}

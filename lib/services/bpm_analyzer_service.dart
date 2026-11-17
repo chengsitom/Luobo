@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
-import 'cache_settings_service.dart';
 import 'diagnostics/diagnostics.dart';
 
 class BpmAnalyzerService {
@@ -11,14 +10,12 @@ class BpmAnalyzerService {
 
   bool _isInitialized = false;
   SharedPreferences? _prefs;
-  final _cacheSettings = CacheSettingsService();
 
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
       _prefs = await SharedPreferences.getInstance();
-      await _cacheSettings.initialize();
       _isInitialized = true;
     } catch (e) {
       debugPrint('Error initializing BPM analyzer: $e');

@@ -31,15 +31,20 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   final _offlineService = OfflineService();
 
   bool _imageCacheEnabled = true;
-  bool _musicCacheEnabled = true;
   final bool _isCaching = false;
   final int _currentProgress = 0;
   final int _totalSongs = 0;
   int _downloadedCount = 0;
   String _downloadedSize = '0 B';
+  // 下载任务进度（与 BPM 缓存进度 _currentProgress/_totalSongs 分开）
+  bool _isDownloading = false;
+  int _downloadDone = 0;
+  int _downloadTotal = 0;
+  int _downloadFailed = 0;
   String _imageCacheSize = '—';
   int _parallelDownloads = 3;
   bool _keepScreenOn = true;
+  bool _wifiOnlyDownload = false;
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
@@ -65,6 +70,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     final state = _offlineService.downloadState.value;
     setState(() {
       _downloadedCount = state.downloadedCount;
+      _isDownloading = state.isDownloading;
+      _downloadDone = state.currentProgress;
+      _downloadTotal = state.totalCount;
+      _downloadFailed = state.failedCount;
     });
   }
 
@@ -76,9 +85,9 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
 
     setState(() {
       _imageCacheEnabled = _cacheSettings.getImageCacheEnabled();
-      _musicCacheEnabled = _cacheSettings.getMusicCacheEnabled();
       _parallelDownloads = _offlineService.getParallelDownloadsCount();
       _keepScreenOn = _offlineService.getKeepScreenOn();
+      _wifiOnlyDownload = _offlineService.getWifiOnly();
     });
   }
 
@@ -116,14 +125,6 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
               value: _imageCacheEnabled,
               onChanged: _toggleImageCache,
             ),
-            _buildDivider(),
-            _buildCacheToggle(
-              icon: CupertinoIcons.music_note,
-              title: AppLocalizations.of(context)!.musicCacheTitle,
-              subtitle: AppLocalizations.of(context)!.musicCacheSubtitle,
-              value: _musicCacheEnabled,
-              onChanged: _toggleMusicCache,
-            ),
           ],
         ),
         _buildSection(
@@ -145,7 +146,13 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
             _buildDivider(),
             _buildKeepScreenOnTile(),
             _buildDivider(),
+            _buildWifiOnlyTile(),
+            _buildDivider(),
             _buildOfflineInfo(),
+            if (_isDownloading) ...[
+              _buildDivider(),
+              _buildDownloadProgress(),
+            ],
             _buildDivider(),
             _buildDeleteDownloadsButton(),
           ],
@@ -201,11 +208,6 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     setState(() => _imageCacheEnabled = value);
     await _cacheSettings.setImageCacheEnabled(value);
     if (!value) await coverCacheManager.emptyCache();
-  }
-
-  void _toggleMusicCache(bool value) async {
-    setState(() => _musicCacheEnabled = value);
-    await _cacheSettings.setMusicCacheEnabled(value);
   }
 
   Widget _buildLocalMusicSection() {
@@ -350,6 +352,23 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         onChanged: (value) async {
           setState(() => _keepScreenOn = value);
           await _offlineService.setKeepScreenOn(value);
+        },
+      ),
+    );
+  }
+
+  Widget _buildWifiOnlyTile() {
+    final l10n = AppLocalizations.of(context)!;
+    return LuoboRow(
+      icon: CupertinoIcons.wifi,
+      title: l10n.downloadWifiOnly,
+      subtitle: l10n.downloadWifiOnlySubtitle,
+      showChevron: false,
+      trailing: LuoboSwitch(
+        value: _wifiOnlyDownload,
+        onChanged: (value) async {
+          setState(() => _wifiOnlyDownload = value);
+          await _offlineService.setWifiOnly(value);
         },
       ),
     );
@@ -523,14 +542,20 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
       title: AppLocalizations.of(context)!.deleteDownloads,
       danger: true,
       onTap: () async {
+        final l10n = AppLocalizations.of(context)!;
+        final confirmed = await _confirmClear(
+          l10n.deleteDownloads,
+          l10n.deleteDownloadsConfirm,
+        );
+        if (confirmed != true || !mounted) return;
         await _offlineService.deleteAllDownloads();
         await _loadOfflineInfo();
         if (mounted) {
           showLuoboToast(
-      context,
-      message: AppLocalizations.of(context)!.downloadsDeleted,
-      tone: LuoboToastTone.info,
-    );
+            context,
+            message: l10n.downloadsDeleted,
+            tone: LuoboToastTone.info,
+          );
         }
       },
     );
@@ -543,6 +568,32 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
       title: AppLocalizations.of(context)!.cachedBpms,
       value: '$cachedCount',
       showChevron: false,
+    );
+  }
+
+  /// 后台下载进度条：显示 已完成/总数 + 失败数，让批量下载不再"点了就没影"。
+  Widget _buildDownloadProgress() {
+    final progress = _downloadTotal > 0 ? _downloadDone / _downloadTotal : 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '下载中 $_downloadDone / $_downloadTotal'
+            '${_downloadFailed > 0 ? ' · $_downloadFailed 失败' : ''}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: _isDark ? AppTheme.darkCard : AppTheme.lightDivider,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

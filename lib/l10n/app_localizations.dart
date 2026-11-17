@@ -5697,6 +5697,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Available offline'**
   String get downloadedSubtitle;
+
+  /// Setting: only allow downloads on Wi-Fi
+  ///
+  /// In en, this message translates to:
+  /// **'Download over Wi-Fi only'**
+  String get downloadWifiOnly;
+
+  /// Subtitle for wifi-only download setting
+  ///
+  /// In en, this message translates to:
+  /// **'Avoid using mobile data for downloads'**
+  String get downloadWifiOnlySubtitle;
+
+  /// Toast when a batch download is blocked on mobile data
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads are limited to Wi-Fi. Connect to Wi-Fi to continue.'**
+  String get downloadWifiOnlyBlocked;
+
+  /// Confirmation message before deleting all downloads
+  ///
+  /// In en, this message translates to:
+  /// **'This will permanently remove all downloaded songs from this device. This cannot be undone.'**
+  String get deleteDownloadsConfirm;
 }
 
 class _AppLocalizationsDelegate

@@ -19,11 +19,17 @@ class DownloadState {
   final int totalCount;
   final int downloadedCount;
 
+  /// 本批次成功/失败数（已下载的跳过不计入失败）。供完成 Toast 报真实结果。
+  final int successCount;
+  final int failedCount;
+
   DownloadState({
     this.isDownloading = false,
     this.currentProgress = 0,
     this.totalCount = 0,
     this.downloadedCount = 0,
+    this.successCount = 0,
+    this.failedCount = 0,
   });
 
   DownloadState copyWith({
@@ -31,12 +37,16 @@ class DownloadState {
     int? currentProgress,
     int? totalCount,
     int? downloadedCount,
+    int? successCount,
+    int? failedCount,
   }) {
     return DownloadState(
       isDownloading: isDownloading ?? this.isDownloading,
       currentProgress: currentProgress ?? this.currentProgress,
       totalCount: totalCount ?? this.totalCount,
       downloadedCount: downloadedCount ?? this.downloadedCount,
+      successCount: successCount ?? this.successCount,
+      failedCount: failedCount ?? this.failedCount,
     );
   }
 }
@@ -85,6 +95,7 @@ class OfflineService {
   static const String _keyPendingScrobbles = 'pending_scrobbles';
   static const String _keyParallelDownloads = 'parallel_downloads_count';
   static const String _keyKeepScreenOn = 'offline_keep_screen_on';
+  static const String _keyWifiOnly = 'offline_wifi_only';
 
   static const int _defaultParallelDownloads = 3;
   static const int _maxParallelDownloads = 5;
@@ -408,14 +419,26 @@ class OfflineService {
     return _prefs?.getBool(_keyKeepScreenOn) ?? true;
   }
 
-  Future<void> startBackgroundDownload(
+  Future<void> setWifiOnly(bool value) async {
+    if (_prefs == null) await initialize();
+    await _prefs?.setBool(_keyWifiOnly, value);
+  }
+
+  /// 是否仅允许 Wi-Fi 下载。默认 false（不限制），避免改变老用户行为。
+  bool getWifiOnly() {
+    return _prefs?.getBool(_keyWifiOnly) ?? false;
+  }
+
+  /// 返回本批次 (成功数, 失败数)，供调用方弹真实的完成提示。
+  /// 已有下载被跳过时既不算成功也不算失败。
+  Future<({int succeeded, int failed})> startBackgroundDownload(
     List<Song> songs,
     SubsonicService subsonicService, {
     int? parallelCount,
   }) async {
     if (_isBackgroundDownloadActive) {
       debugPrint('Background download already in progress');
-      return;
+      return (succeeded: 0, failed: 0);
     }
 
     _isBackgroundDownloadActive = true;
@@ -440,6 +463,9 @@ class OfflineService {
       downloadedCount: alreadyDownloadedCount,
     );
 
+    var succeeded = 0;
+    var failed = 0;
+
     if (_offlineDir == null) await initialize();
 
     try {
@@ -455,27 +481,29 @@ class OfflineService {
         // Get the next batch of songs
         final batch = pendingSongs.skip(i).take(concurrentDownloads).toList();
 
-        // Download all songs in the batch concurrently
-        final downloadFutures = batch.map((song) async {
-          if (!_isBackgroundDownloadActive) return false;
+        // 并发回调可能同帧到达，用 Future.wait 的返回值统一汇总，
+        // 避免多个 async 回调各自 copyWith 造成计数互相覆盖。
+        final results = await Future.wait(
+          batch.map((song) async {
+            if (!_isBackgroundDownloadActive) return false;
+            return downloadSong(song, subsonicService);
+          }),
+        );
 
-          final success = await downloadSong(song, subsonicService);
-          completedCount++;
-
-          final newDownloadedCount = getDownloadedCount();
-          downloadState.value = downloadState.value.copyWith(
-            currentProgress: completedCount,
-            downloadedCount: newDownloadedCount,
-          );
-
-          if (!success) {
-            debugPrint('Failed to download song: ${song.title}');
+        completedCount += results.length;
+        for (final success in results) {
+          if (success) {
+            succeeded++;
+          } else {
+            failed++;
           }
-          return success;
-        });
-
-        // Wait for all downloads in the batch to complete
-        await Future.wait(downloadFutures);
+        }
+        downloadState.value = downloadState.value.copyWith(
+          currentProgress: completedCount,
+          downloadedCount: getDownloadedCount(),
+          successCount: succeeded,
+          failedCount: failed,
+        );
       }
     } catch (e) {
       debugPrint('Error during background download: $e');
@@ -493,6 +521,7 @@ class OfflineService {
         }
       }
     }
+    return (succeeded: succeeded, failed: failed);
   }
 
   void cancelBackgroundDownload() {

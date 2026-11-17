@@ -9,6 +9,7 @@ import '../providers/providers.dart';
 import '../services/list_sort_preference.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
+import '../services/transcoding_service.dart';
 import '../services/playback_context_tracker.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_tokens.dart';
@@ -416,20 +417,37 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       context,
       listen: false,
     );
+    final l10n = AppLocalizations.of(context)!;
+    final isMobile = context.read<TranscodingService>().currentConnectionType !=
+        ConnectionType.wifi;
     final offlineService = OfflineService();
     await offlineService.initialize();
-    final l10n = AppLocalizations.of(context)!;
+    if (!mounted) return;
+    if (offlineService.getWifiOnly() && isMobile) {
+      showLuoboToast(
+        context,
+        message: l10n.downloadWifiOnlyBlocked,
+        tone: LuoboToastTone.info,
+      );
+      return;
+    }
 
     setState(() => _isDownloading = true);
 
-    offlineService.startBackgroundDownload(songs, subsonicService).then((_) {
+    offlineService
+        .startBackgroundDownload(songs, subsonicService)
+        .then((result) {
       if (mounted) {
         setState(() => _isDownloading = false);
         showLuoboToast(
-      context,
-      message: l10n.downloadedSongsFrom(songs.length, _playlist!.name),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: result.failed > 0
+              ? '${l10n.downloadFailed} · ${l10n.downloadedSongsFrom(result.succeeded, _playlist!.name)}'
+              : l10n.downloadedSongsFrom(result.succeeded, _playlist!.name),
+          tone: result.failed > 0
+              ? LuoboToastTone.error
+              : LuoboToastTone.success,
+        );
       }
     });
 

@@ -205,16 +205,16 @@ const List<MechanismItem> _storageItems = [
   MechanismItem(
     title: '离线下载：存哪、怎么存',
     summary:
-        '下载的文件存在 App 文档目录 offline_music/，一首歌 = 音频 + 封面 + 歌词三个文件。默认 3 个并发下载。不支持断点续传——中断后要整首重下。已下载的歌播放时优先读本地文件、不耗流量。删除 App 时一并删除。',
+        '下载的文件存在 App 文档目录 offline_music/，一首歌 = 音频（保留服务端原始格式，FLAC/MP3 等按后缀命名）+ 封面 + 歌词。默认 3 个并发下载。已下载的歌在「音乐库 → 已下载」可浏览、播放、删除，播放时优先读本地文件、不耗流量。删除 App 时一并删除。',
     details:
-        '_getSongPath 一律存 {songId}.mp3（内容为服务端原始格式，不转码）+ {songId}.jpg（300px）+ {songId}.lyrics.json；并发 1-5（parallel_downloads_count，默认 3）；WakelockPlus 保持常亮；已下载清单存 prefs offline_downloaded_songs；播放时 getPlayableUrl 命中即返回 file://。\n依据：offline_service.dart:53-249,420-493',
+        '下载记录存独立 SQLite musly_offline.db（download_records 表，含 songId/songJson/serverId/fileName/bytes/downloadedAt/source），与会被切服清空的曲库库解耦；冷启自动迁移旧版 prefs 白名单并做「记录 vs 文件」一致性自愈。文件名按 song.suffix 决定扩展名（不再一律 .mp3）；先写 {id}.{ext}.part，校验大小后再 rename 落盘，中断不留半截文件；封面用 1200px。并发 1-5（parallel_downloads_count，默认 3）；WakelockPlus 常亮；播放时 getPlayableUrl 命中即返回 file://。\n依据：offline_service.dart、download_record.dart、download_database_service.dart',
   ),
   MechanismItem(
     title: '在线播放与进度定位',
     summary:
         '在线播放的流由 ExoPlayer 直接处理（不落本地缓存）：拖动进度条时播放器向服务器发起 HTTP Range 分段请求来定位，服务器支持断点读取时 seek 即点即到。局域网（不转码）与远程转码流都走同一裸流路径，保证各网络环境下进度条行为一致、不会从头重放。',
     details:
-        'playSong/_prepareCurrentSong/_buildAudioSourceForSong 对远程流统一用 AudioSource.uri 裸流直连 ExoPlayer，不再包 LockCachingAudioSource——后者在服务器不带 Accept-Ranges 头（局域网常见）时会把 seek 降级为完整 200 响应，导致进度条回 0:00 重播。旧缓存文件由 StreamingCacheCleaner.prune() 按 mtime 清理。\n依据：player_provider.dart:1888-1912、streaming_cache_cleaner.dart:10-62',
+        'playSong/_prepareCurrentSong/_buildAudioSourceForSong 对远程流统一用 AudioSource.uri 裸流直连 ExoPlayer，不落本地缓存——LockCachingAudioSource 在服务器不带 Accept-Ranges 头（局域网常见）及道理鱼转码流上会把 seek 降级为完整 200 响应，导致进度条回 0:00，已移除。要离线听请用「离线下载」。\n依据：player_provider.dart、daoliyu_seek_policy.dart',
   ),
   MechanismItem(
     title: '转码（音质 / 流量）原理',
@@ -243,13 +243,6 @@ const List<MechanismItem> _storageItems = [
         '设置 → 下载与存储 里能看到并清理：图片缓存（实时扫描目录算占用）、离线下载（数量 + 占用，可全部删除）、BPM 缓存、本地音乐扫描目录。「清除全部缓存」会清掉图片缓存和 BPM 缓存，不会动离线下载。',
     details:
         '依据：settings_storage_tab.dart:81-145,272-276,501-634,710-826,828-936',
-  ),
-  MechanismItem(
-    title: '音乐缓存开关（现状说明）',
-    summary:
-        '设置页「音乐缓存」开关目前是历史遗留设置项，尚未接入实际业务逻辑——它只影响该开关本身的显示状态，不影响任何播放/缓存行为。后续版本会接入或移除。',
-    details:
-        '依据：settings_storage_tab.dart:75,140 仅读写 cache_music_enabled，无业务代码消费（对照 docs/图片缓存与播放性能优化技术文档.md §8.7）。',
   ),
 ];
 

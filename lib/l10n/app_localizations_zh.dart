@@ -3048,4 +3048,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get downloadedSubtitle => '可离线播放';
+
+  @override
+  String get downloadWifiOnly => '仅 Wi-Fi 下载';
+
+  @override
+  String get downloadWifiOnlySubtitle => '避免在蜂窝网络下消耗流量';
+
+  @override
+  String get downloadWifiOnlyBlocked => '已设置为仅 Wi-Fi 下载，请连接 Wi-Fi 后再试';
+
+  @override
+  String get deleteDownloadsConfirm => '将永久删除本机所有已下载的歌曲，且无法恢复。确定继续吗？';
 }

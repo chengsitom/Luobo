@@ -59,6 +59,15 @@
   "sortDownloadedAt": "Recently downloaded",
   "@sortDownloadedAt": { "description": "Sort option: most recently downloaded first" },
   "downloadedSubtitle": "Available offline",
-  "@downloadedSubtitle": { "description": "Subtitle on the downloaded songs page" }
+  "@downloadedSubtitle": { "description": "Subtitle on the downloaded songs page" },
+  "downloadWifiOnly": "Download over Wi-Fi only",
+  "@downloadWifiOnly": { "description": "Setting: only allow downloads on Wi-Fi" },
+  "downloadWifiOnlySubtitle": "Avoid using mobile data for downloads",
+  "@downloadWifiOnlySubtitle": { "description": "Subtitle for wifi-only download setting" },
+  "downloadWifiOnlyBlocked": "Downloads are limited to Wi-Fi. Connect to Wi-Fi to continue.",
+  "@downloadWifiOnlyBlocked": { "description": "Toast when a batch download is blocked on mobile data" },
+  "deleteDownloadsConfirm": "This will permanently remove all downloaded songs from this device. This cannot be undone.",
+  "@deleteDownloadsConfirm": { "description": "Confirmation message before deleting all downloads" }
+
 
 }

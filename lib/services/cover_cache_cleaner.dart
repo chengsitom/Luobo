@@ -54,7 +54,7 @@ class CoverCacheCleaner {
       }
       if (entries.isEmpty) return;
 
-      // Sort oldest-first (same strategy as StreamingCacheCleaner).
+      // Sort oldest-first (LRU by last access).
       entries.sort((a, b) => a.mtime.compareTo(b.mtime));
 
       var totalSize = entries.fold<int>(0, (s, e) => s + e.size);

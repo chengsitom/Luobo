@@ -1,10 +1,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Toggles for image and music caching. BPM caching is intentionally
-/// always enabled (it consumes negligible space in SharedPreferences).
+/// Toggle for cover-image caching. BPM caching is intentionally always
+/// enabled (negligible space). The old "music cache" toggle was removed:
+/// online streams are never written to disk (LockCachingAudioSource was
+/// retired to fix seek), so that switch had no effect.
 class CacheSettingsService {
   static const String _keyImageCacheEnabled = 'cache_images_enabled';
-  static const String _keyMusicCacheEnabled = 'cache_music_enabled';
 
   static final CacheSettingsService _instance =
       CacheSettingsService._internal();
@@ -24,14 +25,5 @@ class CacheSettingsService {
 
   bool getImageCacheEnabled() {
     return _prefs?.getBool(_keyImageCacheEnabled) ?? true;
-  }
-
-  Future<void> setMusicCacheEnabled(bool enabled) async {
-    await initialize();
-    await _prefs!.setBool(_keyMusicCacheEnabled, enabled);
-  }
-
-  bool getMusicCacheEnabled() {
-    return _prefs?.getBool(_keyMusicCacheEnabled) ?? true;
   }
 }

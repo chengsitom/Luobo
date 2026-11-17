@@ -12,7 +12,6 @@ import '../utils/image_cache.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
 import '../services/android_auto_service.dart';
-import '../services/streaming_cache_cleaner.dart';
 import '../services/android_system_service.dart';
 import '../services/windows_system_service.dart';
 import '../services/bluetooth_avrcp_service.dart';
@@ -114,8 +113,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isRenderingRemotely = false;
 
   String? _resolvedArtworkUrl;
-
-  final StreamingCacheCleaner _cacheCleaner = StreamingCacheCleaner();
 
   RadioStation? _currentRadioStation;
   bool _isPlayingRadio = false;
@@ -2263,7 +2260,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         await skipNext();
       }
-      _cacheCleaner.prune();
       return;
     }
 
@@ -2316,10 +2312,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await _handleEndOfQueue();
     }
-
-    // Prune the streaming cache after every song finishes to keep it
-    // within the configured size limit.
-    _cacheCleaner.prune();
   }
 
   Future<void> _handleEndOfQueue() async {

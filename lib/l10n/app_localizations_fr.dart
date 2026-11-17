@@ -3175,4 +3175,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get downloadedSubtitle => 'Available offline';
+
+  @override
+  String get downloadWifiOnly => 'Download over Wi-Fi only';
+
+  @override
+  String get downloadWifiOnlySubtitle =>
+      'Avoid using mobile data for downloads';
+
+  @override
+  String get downloadWifiOnlyBlocked =>
+      'Downloads are limited to Wi-Fi. Connect to Wi-Fi to continue.';
+
+  @override
+  String get deleteDownloadsConfirm =>
+      'This will permanently remove all downloaded songs from this device. This cannot be undone.';
 }
