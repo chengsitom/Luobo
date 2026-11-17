@@ -131,13 +131,8 @@ void showLuoboProgressCard(
 
   if (_progressCardEntry == null) {
     final overlay = Overlay.of(context, rootOverlay: true);
+    // Overlay 自身的 RenderBox 作为坐标基准，稳定不变（在闭包外取一次）。
     final overlayBox = overlay.context.findRenderObject() as RenderBox?;
-    final anchorBox =
-        luoboToastAnchorKey.currentContext?.findRenderObject() as RenderBox?;
-    final anchorTopLeft = (anchorBox != null && overlayBox != null)
-        ? anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox)
-        : null;
-
     final entry = OverlayEntry(
       builder: (overlayContext) {
         return ValueListenableBuilder<LuoboProgressCardData?>(
@@ -145,6 +140,13 @@ void showLuoboProgressCard(
           builder: (context, data, _) {
             if (data == null) return const SizedBox.shrink();
             final card = _LuoboProgressCard(data: data);
+            // 每次重建都重新算锚点：mini player 可能在下载期间出现/消失
+            // （开始/停止播放），或屏幕旋转导致位置变化。固化的话卡会错位。
+            final anchorBox = luoboToastAnchorKey.currentContext
+                ?.findRenderObject() as RenderBox?;
+            final anchorTopLeft = (anchorBox != null && overlayBox != null)
+                ? anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox)
+                : null;
             if (anchorTopLeft == null || overlayBox == null) {
               return Align(alignment: const Alignment(0, 0.6), child: card);
             }

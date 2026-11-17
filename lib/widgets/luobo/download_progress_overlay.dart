@@ -66,18 +66,26 @@ class _DownloadProgressOverlayState extends State<DownloadProgressOverlay> {
     // 因为默认 DownloadState() 而弹一个"下载 0 首"）。
     if (!state.isDownloading && state.totalCount > 0) {
       final succeeded = state.successCount;
-      final hasFailed = state.failedCount > 0;
-      final message = hasFailed
-          ? '${l10n != null ? l10n.downloadFailed : 'Download failed'} · '
-              '${l10n != null ? l10n.downloadedSongsFrom(succeeded, '') : '$succeeded songs'}'
-          : (l10n != null
-              ? l10n.downloadedSongsFrom(succeeded, '')
-              : 'Downloaded $succeeded songs');
-      finishLuoboProgressCard(
-        context,
-        message: message,
-        tone: hasFailed ? LuoboToastTone.error : LuoboToastTone.success,
-      );
+      final newDownloads = l10n != null
+          ? l10n.downloadedSongsFrom(succeeded, '')
+          : 'Downloaded $succeeded songs';
+
+      // 取消 / 失败 / 成功三态：取消时不报"下载失败"（当时取消会让在途任务
+      // 返回 false 计入 failedCount，那不是真实失败）。
+      final String message;
+      final LuoboToastTone tone;
+      if (state.cancelled) {
+        message = '${l10n != null ? l10n.cancel : 'Cancelled'} · $newDownloads';
+        tone = LuoboToastTone.info;
+      } else if (state.failedCount > 0) {
+        message = '${l10n != null ? l10n.downloadFailed : 'Download failed'} · '
+            '$newDownloads';
+        tone = LuoboToastTone.error;
+      } else {
+        message = newDownloads;
+        tone = LuoboToastTone.success;
+      }
+      finishLuoboProgressCard(context, message: message, tone: tone);
       // 下一帧再清 totalCount，避免在 notify listener 期间同步修改
       // 同一个 notifier（会触发重入）。清零后不会重复进终态分支。
       WidgetsBinding.instance.addPostFrameCallback((_) {

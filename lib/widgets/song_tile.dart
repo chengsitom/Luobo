@@ -247,30 +247,38 @@ class SongTile extends StatelessWidget {
                   // overlaid on the artwork corner — takes no layout space.
                   _buildQualityTag(context, isCurrentSong, resolvedRadius) ??
                       const SizedBox.shrink(),
-                  // 「已下载」角标：让用户一眼看出哪些歌离线可播。查询走
-                  // OfflineService 内存 Map，O(1)，滚动无额外 IO。
-                  if (showDownloadBadge &&
-                      !selectionMode &&
-                      OfflineService().isSongDownloaded(song.id))
-                    Positioned(
-                      right: 1,
-                      bottom: 1,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 15,
-                          height: 15,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1D9E75),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
+                  // 「已下载」角标：监听 recordsNotifier，下载完/删除后自动
+                  //  appearing/disappearing（内存 Map 查询是同步的，靠 notifier
+                  //  代次触发重建）。放左上角，避开底部质量标签通栏。
+                  if (showDownloadBadge && !selectionMode)
+                    ValueListenableBuilder<int>(
+                      valueListenable: OfflineService().recordsNotifier,
+                      builder: (context, _, __) {
+                        if (!OfflineService().isSongDownloaded(song.id)) {
+                          return const SizedBox.shrink();
+                        }
+                        return Positioned(
+                          left: 2,
+                          top: 2,
+                          child: IgnorePointer(
+                            child: Container(
+                              width: 15,
+                              height: 15,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1D9E75),
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                size: 10,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            size: 10,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                 ],
               );

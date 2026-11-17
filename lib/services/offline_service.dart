@@ -23,6 +23,9 @@ class DownloadState {
   final int successCount;
   final int failedCount;
 
+  /// 本批次是否被用户主动取消（区别于真实失败：取消不该弹"下载失败"）。
+  final bool cancelled;
+
   DownloadState({
     this.isDownloading = false,
     this.currentProgress = 0,
@@ -30,6 +33,7 @@ class DownloadState {
     this.downloadedCount = 0,
     this.successCount = 0,
     this.failedCount = 0,
+    this.cancelled = false,
   });
 
   DownloadState copyWith({
@@ -39,6 +43,7 @@ class DownloadState {
     int? downloadedCount,
     int? successCount,
     int? failedCount,
+    bool? cancelled,
   }) {
     return DownloadState(
       isDownloading: isDownloading ?? this.isDownloading,
@@ -47,6 +52,7 @@ class DownloadState {
       downloadedCount: downloadedCount ?? this.downloadedCount,
       successCount: successCount ?? this.successCount,
       failedCount: failedCount ?? this.failedCount,
+      cancelled: cancelled ?? this.cancelled,
     );
   }
 }
@@ -63,6 +69,12 @@ class OfflineService {
   /// 记录表的内存镜像：同步方法（isSongDownloaded / getLocalPath 等）查它，
   /// 避免把十几个调用点全改成 async。写入路径与 DB 双写，读取只认镜像。
   Map<String, DownloadRecord> _records = {};
+
+  /// 记录变更代次：任何 _records 写入都 +1，供已下载页 / 列表角标做响应式
+  /// 刷新（同步查询拿不到 Flutter 的重建通知，用一个 int 代次桥接）。
+  final ValueNotifier<int> recordsNotifier = ValueNotifier(0);
+
+  void _notifyRecordsChanged() => recordsNotifier.value++;
 
   /// 已下载列表页用：返回全部记录（调用方按 serverId 自行过滤/分组）。
   List<DownloadRecord> get downloadRecords =>
@@ -100,7 +112,21 @@ class OfflineService {
   static const int _defaultParallelDownloads = 3;
   static const int _maxParallelDownloads = 5;
 
-  Future<void> initialize() async {
+  /// 并发调用共享同一个 Future，避免多处冷启初始化时 _loadRecords 重复跑、
+  /// 其 _records 整体赋值覆盖掉初始化期间刚写入的下载记录。
+  Future<void>? _initFuture;
+
+  Future<void> initialize() {
+    final existing = _initFuture;
+    if (existing != null) return existing;
+    final future = _initializeOnce();
+    _initFuture = future;
+    // 失败时允许下次重试，不让一次瞬时错误永久锁死初始化。
+    future.catchError((_) => _initFuture = null);
+    return future;
+  }
+
+  Future<void> _initializeOnce() async {
     _prefs ??= await SharedPreferences.getInstance();
     final dir = await getApplicationDocumentsDirectory();
     _offlineDir = '${dir.path}/offline_music';
@@ -118,6 +144,7 @@ class OfflineService {
     } catch (e) {
       debugPrint('[Offline] load records failed, degrade to empty: $e');
       _records = {};
+      _notifyRecordsChanged();
     }
   }
 
@@ -135,6 +162,7 @@ class OfflineService {
       }
     }
     _records = {for (final r in survived) r.songId: r};
+    _notifyRecordsChanged();
   }
 
   /// 老版本把下载清单存成 prefs 里的 songId 白名单，没有任何元数据。
@@ -164,9 +192,12 @@ class OfflineService {
         ),
       );
     }
-    if (migrated.isNotEmpty) await _db.upsertMany(migrated);
-    for (final record in migrated) {
-      _records[record.songId] = record;
+    if (migrated.isNotEmpty) {
+      await _db.upsertMany(migrated);
+      for (final record in migrated) {
+        _records[record.songId] = record;
+      }
+      _notifyRecordsChanged();
     }
     await _prefs?.remove(_keyDownloadedSongs);
   }
@@ -319,6 +350,7 @@ class OfflineService {
       );
       await _db.upsert(record);
       _records[song.id] = record;
+      _notifyRecordsChanged();
 
       try {
         if (song.coverArt != null) {
@@ -525,8 +557,12 @@ class OfflineService {
   }
 
   void cancelBackgroundDownload() {
+    if (!_isBackgroundDownloadActive) return;
     _isBackgroundDownloadActive = false;
-    downloadState.value = downloadState.value.copyWith(isDownloading: false);
+    downloadState.value = downloadState.value.copyWith(
+      isDownloading: false,
+      cancelled: true,
+    );
   }
 
   /// 下载结束后由进度卡监听器调用：归零批次计数，避免后续 rebuild 重复弹
@@ -575,6 +611,7 @@ class OfflineService {
 
       await _db.delete(songId);
       _records.remove(songId);
+      _notifyRecordsChanged();
       return true;
     } catch (e) {
       debugPrint('Error deleting song: $e');
@@ -597,6 +634,7 @@ class OfflineService {
 
       await _db.clear();
       _records.clear();
+      _notifyRecordsChanged();
       await _prefs?.remove(_keyDownloadedSongs);
     } catch (e) {
       debugPrint('Error deleting all downloads: $e');

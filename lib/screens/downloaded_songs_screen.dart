@@ -44,17 +44,31 @@ class _DownloadedSongsScreenState extends State<DownloadedSongsScreen> {
   @override
   void initState() {
     super.initState();
+    // 单曲 ⋮ 删除走 SongTile 内部的 deleteSong，页面需靠 notifier 感知并刷新。
+    _offline.recordsNotifier.addListener(_onRecordsChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _offline.recordsNotifier.removeListener(_onRecordsChanged);
+    super.dispose();
+  }
+
+  void _onRecordsChanged() {
+    if (!mounted) return;
+    final serverId = context.read<SubsonicService>().coverCacheServerId;
+    setState(() {
+      _records = _offline.getDownloadRecords(serverId: serverId);
+    });
   }
 
   Future<void> _load() async {
     await _offline.initialize();
     if (!mounted) return;
-    final serverId = context.read<SubsonicService>().coverCacheServerId;
-    setState(() {
-      _records = _offline.getDownloadRecords(serverId: serverId);
-      _isLoading = false;
-    });
+    _onRecordsChanged();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
   }
 
   List<DownloadRecord> get _sortedRecords {
@@ -145,11 +159,8 @@ class _DownloadedSongsScreenState extends State<DownloadedSongsScreen> {
     for (final song in songs) {
       await _offline.deleteSong(song.id);
     }
+    // 列表刷新由 recordsNotifier 驱动（deleteSong 内部会 notify）。
     if (!mounted) return;
-    setState(() {
-      final ids = songs.map((s) => s.id).toSet();
-      _records.removeWhere((r) => ids.contains(r.songId));
-    });
     showLuoboToast(
       context,
       message: AppLocalizations.of(context)!.downloadsDeleted,
@@ -157,8 +168,6 @@ class _DownloadedSongsScreenState extends State<DownloadedSongsScreen> {
     );
   }
 
-  /// 单曲菜单里的「已下载 → 删除」走的是 SongTile ⋮ 自带逻辑；
-  /// 这里通过监听下载记录变化刷新页面（删除后返回本页时 _load 重跑）。
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
