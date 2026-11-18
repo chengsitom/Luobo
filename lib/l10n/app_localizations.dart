@@ -5757,6 +5757,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Browse local music'**
   String get browseLocalMusic;
+
+  /// Toast when manual update check finds no new version
+  ///
+  /// In en, this message translates to:
+  /// **'You are up to date'**
+  String get alreadyLatest;
+
+  /// Toast when update check request fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check for updates'**
+  String get updateCheckFailed;
+
+  /// Toast shown when manual update check starts
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get checkingUpdate;
+
+  /// Badge text next to version number when an update is available
+  ///
+  /// In en, this message translates to:
+  /// **'New version'**
+  String get newVersionAvailable;
 }
 
 class _AppLocalizationsDelegate

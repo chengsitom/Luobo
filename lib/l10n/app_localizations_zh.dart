@@ -3080,4 +3080,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get browseLocalMusic => '浏览本地音乐';
+
+  @override
+  String get alreadyLatest => '已是最新版本';
+
+  @override
+  String get updateCheckFailed => '检查更新失败，请稍后重试';
+
+  @override
+  String get checkingUpdate => '正在检查更新…';
+
+  @override
+  String get newVersionAvailable => '有新版本';
 }

@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'android_system_service.dart';
+
 class ReleaseAsset {
   final String name;
   final String browserDownloadUrl;
@@ -50,6 +52,15 @@ class UpdateService {
   static const String _apiUrl =
       'https://api.github.com/repos/chengsitom/Luobo/releases/latest';
 
+  /// 最近一次检查到的新版本（null = 已是最新 / 尚未检查）。
+  /// 冷启自动检查写入，设置页版本号行的角标与主动检查共享这份结果，
+  /// 避免重复请求、也保证"弹窗提示有更新"和"角标提示有更新"口径一致。
+  static final ValueNotifier<ReleaseInfo?> availableUpdate =
+      ValueNotifier(null);
+
+  /// 最近一次检查是否成功（用于区分"已是最新"和"网络失败"，后者不能谎报最新）。
+  static bool lastCheckSucceeded = false;
+
   static final _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 8),
@@ -68,14 +79,49 @@ class UpdateService {
       if (data == null) return null;
 
       final release = ReleaseInfo.fromJson(data);
+      lastCheckSucceeded = true;
       if (_isNewer(release.version, currentVersion)) {
+        availableUpdate.value = release;
         return release;
       }
+      availableUpdate.value = null;
       return null;
     } catch (e) {
       debugPrint('UpdateService: check failed – $e');
+      // 网络失败时不清空缓存：上次已知的新版本角标应保留。
+      lastCheckSucceeded = false;
       return null;
     }
+  }
+
+  /// 按设备 ABI 从 release 资产中挑最合适的 APK。
+  ///
+  /// CI split-per-abi 产出 app-arm64-v8a-release.apk / app-armeabi-v7a-release.apk
+  /// / app-x86_64-release.apk，另有通用 app-release.apk。按系统支持的 ABI
+  /// 优先级匹配，找不到则回退通用包；都没有返回 null（调用方跳 release 页）。
+  static Future<ReleaseAsset?> pickBestApk(ReleaseInfo release) async {
+    return pickBestApkFor(release, await AndroidSystemService().getSupportedAbis());
+  }
+
+  /// 纯逻辑版（abis 由调用方提供），便于单测覆盖匹配与回退。
+  static ReleaseAsset? pickBestApkFor(ReleaseInfo release, List<String> abis) {
+    final apks = release.assets
+        .where((a) => a.name.toLowerCase().endsWith('.apk'))
+        .toList();
+    if (apks.isEmpty) return null;
+
+    for (final abi in abis) {
+      for (final apk in apks) {
+        if (apk.name.toLowerCase().contains(abi.toLowerCase())) {
+          return apk;
+        }
+      }
+    }
+    // 回退通用包：精确匹配 app-release.apk，避免误中 xxx-arm64-v8a 之类。
+    for (final apk in apks) {
+      if (apk.name.toLowerCase() == 'app-release.apk') return apk;
+    }
+    return null;
   }
 
   static bool _isNewer(String remote, String current) {

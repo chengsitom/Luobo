@@ -308,6 +308,16 @@ class AndroidSystemService {
     }
   }
 
+  /// Android 支持的 ABI 列表（系统按优先级排序，arm64-v8a 在前）。
+  /// 供更新时选择匹配的 split APK；非 Android 返回空列表。
+  Future<List<String>> getSupportedAbis() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return [];
+    final info = await getSystemInfo();
+    final raw = info['supportedAbis'];
+    if (raw is! List) return [];
+    return raw.whereType<String>().toList();
+  }
+
   Future<bool> isSamsungDevice() async {
     if (defaultTargetPlatform != TargetPlatform.android) return false;
 

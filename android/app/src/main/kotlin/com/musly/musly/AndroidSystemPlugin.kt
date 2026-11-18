@@ -252,7 +252,10 @@ object AndroidSystemPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             "sdkVersion" to Build.VERSION.SDK_INT,
             "release" to Build.VERSION.RELEASE,
             "isSamsung" to Build.MANUFACTURER.equals("samsung", ignoreCase = true),
-            "hasAudioFocus" to hasAudioFocus
+            "hasAudioFocus" to hasAudioFocus,
+            // 系统按优先级排序（通常 arm64-v8a → armeabi-v7a），供更新时
+            // 选择与机型匹配的 split APK；API 21+ 保证非空。
+            "supportedAbis" to Build.SUPPORTED_ABIS.toList()
         )
     }
     

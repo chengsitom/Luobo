@@ -2698,7 +2698,16 @@
   "offlineModeWithCount": "进入离线模式（{count} 首可听）",
   "@offlineModeWithCount": { "description": "登录失败页：进入离线模式按钮，附可听的已下载歌曲数", "placeholders": { "count": { "type": "int" } } },
   "browseLocalMusic": "浏览本地音乐",
-  "@browseLocalMusic": { "description": "登录失败页：无下载歌曲时进入 app 的按钮" }
+  "@browseLocalMusic": { "description": "登录失败页：无下载歌曲时进入 app 的按钮" },
+  "alreadyLatest": "已是最新版本",
+  "@alreadyLatest": { "description": "主动检查更新无新版本时的提示" },
+  "updateCheckFailed": "检查更新失败，请稍后重试",
+  "@updateCheckFailed": { "description": "更新检查请求失败的提示" },
+  "checkingUpdate": "正在检查更新…",
+  "@checkingUpdate": { "description": "主动检查更新开始时的提示" },
+  "newVersionAvailable": "有新版本",
+  "@newVersionAvailable": { "description": "版本号旁角标文案" }
+
 
 
 

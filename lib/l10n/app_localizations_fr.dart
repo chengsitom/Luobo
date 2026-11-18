@@ -3210,4 +3210,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get browseLocalMusic => 'Browse local music';
+
+  @override
+  String get alreadyLatest => 'You are up to date';
+
+  @override
+  String get updateCheckFailed => 'Could not check for updates';
+
+  @override
+  String get checkingUpdate => 'Checking for updates…';
+
+  @override
+  String get newVersionAvailable => 'New version';
 }

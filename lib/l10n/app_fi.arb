@@ -75,7 +75,16 @@
   "offlineModeWithCount": "Enter offline mode ({count} songs available)",
   "@offlineModeWithCount": { "description": "Login-failure screen: enter offline mode, with count of playable downloaded songs", "placeholders": { "count": { "type": "int" } } },
   "browseLocalMusic": "Browse local music",
-  "@browseLocalMusic": { "description": "Login-failure screen: button to enter app with no downloaded songs" }
+  "@browseLocalMusic": { "description": "Login-failure screen: button to enter app with no downloaded songs" },
+  "alreadyLatest": "You are up to date",
+  "@alreadyLatest": { "description": "Toast when manual update check finds no new version" },
+  "updateCheckFailed": "Could not check for updates",
+  "@updateCheckFailed": { "description": "Toast when update check request fails" },
+  "checkingUpdate": "Checking for updates…",
+  "@checkingUpdate": { "description": "Toast shown when manual update check starts" },
+  "newVersionAvailable": "New version",
+  "@newVersionAvailable": { "description": "Badge text next to version number when an update is available" }
+
 
 
 

@@ -7,6 +7,8 @@ import '../theme/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../services/analytics_service.dart';
+import '../services/update_service.dart';
+import '../widgets/update_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsAboutTab extends StatefulWidget {
@@ -50,13 +52,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
           context,
           title: AppLocalizations.of(context)!.sectionAboutInformation,
           children: [
-            _buildInfoTile(
-              context,
-              icon: CupertinoIcons.info,
-              iconColor: Theme.of(context).colorScheme.primary,
-              title: AppLocalizations.of(context)!.aboutVersion,
-              subtitle: '1.0.13',
-            ),
+            _buildVersionTile(context),
             _buildDivider(context),
             _buildInfoTile(
               context,
@@ -287,6 +283,95 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         color: _isDark(context) ? AppTheme.darkDivider : AppTheme.lightDivider,
       ),
     );
+  }
+
+  /// 版本号行：显示真实版本；有新版本时挂红点角标；点击主动检查更新。
+  /// 角标数据来自 UpdateService.availableUpdate（冷启自动检查也写它），
+  /// 与 MainScreen 的自动弹窗共用一份状态，口径一致。
+  Widget _buildVersionTile(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final iconColor = Theme.of(context).colorScheme.primary;
+    return ValueListenableBuilder<ReleaseInfo?>(
+      valueListenable: UpdateService.availableUpdate,
+      builder: (context, update, _) {
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(CupertinoIcons.info, color: iconColor, size: 18),
+          ),
+          title: Text(l10n.aboutVersion, style: const TextStyle(fontSize: 16)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (update != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF0305C),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        l10n.newVersionAvailable,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFF0305C),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Text(
+                UpdateService.currentVersion,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _isDark(context)
+                      ? AppTheme.darkSecondaryText
+                      : AppTheme.lightSecondaryText,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: 16,
+                color: _isDark(context)
+                    ? AppTheme.darkSecondaryText
+                    : AppTheme.lightSecondaryText,
+              ),
+            ],
+          ),
+          onTap: () => _checkForUpdate(context),
+        );
+      },
+    );
+  }
+
+  Future<void> _checkForUpdate(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    showLuoboToast(context, message: l10n.checkingUpdate, tone: LuoboToastTone.info);
+    final release = await UpdateService.checkForUpdate();
+    if (!context.mounted) return;
+    if (release != null) {
+      showUpdateDialog(context, release);
+    } else if (UpdateService.lastCheckSucceeded) {
+      showLuoboToast(context, message: l10n.alreadyLatest, tone: LuoboToastTone.success);
+    } else {
+      // 请求失败：不谎报"已是最新"。
+      showLuoboToast(context, message: l10n.updateCheckFailed, tone: LuoboToastTone.error);
+    }
   }
 
   Widget _buildInfoTile(
