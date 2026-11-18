@@ -42,7 +42,12 @@ Future<void> refreshLibraryWithFeedback(
     if (connected) return;
     final offlineL10n = AppLocalizations.of(context);
     if (offlineL10n == null) return;
-    showCenteredToast(context, offlineL10n.reconnectFailed);
+    // 与横幅入口同一口径：失败用 error 色调，别混进"普通提示"。
+    showLuoboToast(
+      context,
+      message: offlineL10n.reconnectFailed,
+      tone: LuoboToastTone.error,
+    );
     return;
   }
 
