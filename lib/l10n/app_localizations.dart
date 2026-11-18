@@ -5767,7 +5767,7 @@ abstract class AppLocalizations {
   /// Login-failure screen: what offline mode offers when there are downloads
   ///
   /// In en, this message translates to:
-  /// **'{count} downloaded songs playable offline'**
+  /// **'{count, plural, =0{No downloaded songs yet} =1{1 downloaded song playable offline} other{{count} downloaded songs playable offline}}'**
   String offlineModeHintWithCount(int count);
 
   /// Login-failure screen: what offline mode offers when nothing is downloaded

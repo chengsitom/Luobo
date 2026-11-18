@@ -469,17 +469,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           await _showPrivacyPolicyIfNeeded();
         });
-        _stableChild = const MainScreen(key: ValueKey('main-online'));
+        _stableChild = const MainScreen();
         return _stableChild!;
       case AuthState.offlineMode:
-        // ⚠️ key 必须区分在线/离线：两者是同一个 widget 类型，不加 key 时
-        // 「离线 → 重新连接成功」只是复用同一个 Element，MainScreen 的
-        // initState 不会重跑 → 曲库仍是离线态、横幅状态也更新不了（真机上
-        // 表现为「重连成功了但首页还是离线内容」）。换 key 强制重建。
-        _stableChild = const MainScreen(
-          key: ValueKey('main-offline'),
-          isOfflineMode: true,
-        );
+        // 不加 key：离线 ↔ 在线是同一个 MainScreen 的两种状态，靠
+        // `_MainScreenState.didUpdateWidget` 重跑曲库接线。加 key 会强制重建，
+        // 连带把 tab 位置、内层导航栈、以及全局的
+        // `NavigationHelper.mobileNavigatorKey`（GlobalKey）一起重建 —— 同一个
+        // GlobalKey 在新旧子树间被"接管"，行为不可预期。
+        _stableChild = const MainScreen(isOfflineMode: true);
         return _stableChild!;
       case AuthState.serverUnreachable:
         _stableChild = _ServerUnreachableScreen(

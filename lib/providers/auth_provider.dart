@@ -64,9 +64,17 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get hasOfflineContent => _hasOfflineContent;
 
-  /// 登录失败页文案用：本地已下载总数。与 hasOfflineContent 判定同口径 —
-  /// 失败时 serverId 归属未必就绪，按服过滤会显示"0 首可听"却又有入口，自相矛盾。
-  int get offlinePlayableCount => OfflineService().getTotalDownloadedCount();
+  /// 登录失败页文案用：本地可离线播放的歌曲数。
+  ///
+  /// 与播放层同口径（按 (服务器,账号) 过滤），但**冷启直接失败时** `serverId`
+  /// 还没注册（空），按服过滤会把有下载误判成 0 首、入口看起来像坏的 —— 这种
+  /// 情况下退回全量计数。多服务器用户的下载会在登录成功后自动收敛为准确值。
+  int get offlinePlayableCount {
+    final offline = OfflineService();
+    return coverCacheServerId.isEmpty
+        ? offline.getTotalDownloadedCount()
+        : offline.getDownloadedCount();
+  }
 
   void _listenToConnectivityChanges() {
     _connectivitySubscription =
@@ -179,6 +187,10 @@ class AuthProvider extends ChangeNotifier {
       startupPhase.value = StartupPhase.preparing;
       debugPrint('[Auth] State: authenticating → authenticated');
       _state = AuthState.authenticated;
+      // 不变量：已登录 ⇒ 不再处于离线态。冷启补验、重连、切 profile 都汇到
+      // 这里；集中一处，避免「登录成功了但播放层仍只认已下载歌曲、在线歌
+      // 点了没声音」（此前只有 reconnect 自己摘标记，switchProfile 走漏）。
+      OfflineService().setOfflineMode(false);
       // 语义化封面缓存 key 的 (服务器, 账号) 命名空间：换密码不失效、多服务器不串图。
       registerCoverCacheServerId(_subsonicService.coverCacheServerId);
 
@@ -206,9 +218,9 @@ class AuthProvider extends ChangeNotifier {
 
       final offlineService = OfflineService();
       await offlineService.initialize();
-      // 用全局数判定"本地有没有内容"：失败时当前 serverId 归属未必已注册，
-      // 按服过滤会把有下载误判成 0、藏掉离线入口（登录失败页是死胡同的根源）。
-      _hasOfflineContent = offlineService.getTotalDownloadedCount() > 0;
+      // 与下面 `offlinePlayableCount` 同口径：有下载才把入口说成"可离线播放"，
+      // 否则老实说"暂无已下载歌曲"。
+      _hasOfflineContent = offlinePlayableCount > 0;
       debugPrint(
           '[Auth] State: authenticating → serverUnreachable (offlineContent=$_hasOfflineContent)');
       _state = AuthState.serverUnreachable;
@@ -294,8 +306,29 @@ class AuthProvider extends ChangeNotifier {
   ///
   /// 失败**回滚到离线态**（不把正在离线听歌的用户踢到失败页），由调用方用
   /// 轻提示告知原因。返回是否连上。
-  Future<bool> reconnect() async {
+  ///
+  /// 重入安全：横幅按钮与首页「刷新」两条入口可能同时触发（一次验证最长
+  /// 3×10s+2×2s ≈ 34s，够用户点第二次）。并发会让第二个调用看到
+  /// `authenticating`（`wasOffline == false`），失败时不回滚、把用户丢进
+  /// serverUnreachable —— 必须共用同一个 Future。
+  Future<bool> reconnect() {
+    final inflight = _reconnectFuture;
+    if (inflight != null) return inflight;
+    final future = _reconnectOnce();
+    _reconnectFuture = future;
+    future.whenComplete(() {
+      if (identical(_reconnectFuture, future)) _reconnectFuture = null;
+    });
+    return future;
+  }
+
+  Future<bool>? _reconnectFuture;
+
+  Future<bool> _reconnectOnce() async {
     if (_config == null) return false;
+    // 本地文件模式也复用 offlineMode 状态（`serverType == 'local'`），但它根本没有
+    // 服务器可连 —— 直接返回，调用方据此跳过，不要把用户拖进 30s 的无效重试。
+    if (isLocalOnlyMode) return false;
     final wasOffline = _state == AuthState.offlineMode;
 
     // 只切 UI 状态，**先不摘** OfflineService 的离线标记：验证要几秒，
@@ -305,12 +338,17 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // 离线期间网络可能已经变了（换 Wi-Fi / 拿到 IPv6），不能沿用旧地址记忆。
-    await _subsonicService.resolveActiveUrl(forceProbe: true);
-    await retryConnection();
+    try {
+      // 离线期间网络可能已经变了（换 Wi-Fi / 拿到 IPv6），不能沿用旧地址记忆。
+      await _subsonicService.resolveActiveUrl(forceProbe: true);
+      await retryConnection();
+    } catch (e) {
+      debugPrint('[Auth] reconnect threw: $e');
+    }
 
     if (_state == AuthState.authenticated) {
-      OfflineService().setOfflineMode(false);
+      // 离线标记已由 `_verifyConnection` 的成功路径统一摘掉（不变量：
+      // 已登录 ⇒ 非离线）。
       // 离线态下 LibraryProvider 已经 initialized（只是走离线分支），
       // MainScreen 重建时它的 `initialize()` 会因 `_isInitialized` 直接返回 →
       // 首页仍展示离线缓存、不拉服务端数据。复用登出那条「强制重拉」标记。
@@ -474,6 +512,9 @@ class AuthProvider extends ChangeNotifier {
         _config = updatedConfig;
         await _storageService.saveServerConfig(updatedConfig);
         _state = AuthState.authenticated;
+        // 同 _verifyConnection：已登录 ⇒ 非离线。设置里从离线态"添加服务器"
+        // 成功后也必须摘掉标记，否则在线歌点了只走本地。
+        OfflineService().setOfflineMode(false);
         // login() 不走 _verifyConnection，必须在此注册封面缓存 key 的
         // (服务器, 账号) 命名空间，否则首次登录会话内 serverId 为空，
         // 重启后 key 变化导致已缓存封面全部失效重下。

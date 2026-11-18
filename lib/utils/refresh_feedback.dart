@@ -17,15 +17,20 @@ Future<void> refreshLibraryWithFeedback(
   BuildContext context,
   LibraryProvider libraryProvider,
 ) async {
-  // 离线态：先重连。连上后 MainScreen 会以在线态重建并自行加载曲库，
+  // 离线态：先重连。连上后 MainScreen 会以在线态重建状态并自行加载曲库，
   // 这里不再重复 refresh（否则和它刚发起的初始化打架）。
+  //
+  // ⚠️ 本地文件模式（`isLocalOnlyMode`）复用 offlineMode 状态，但没有服务器
+  // 可连 —— 必须排除，否则「刷新本地曲库」会变成一次注定失败的服务器重连。
   AuthProvider? auth;
   try {
     auth = Provider.of<AuthProvider>(context, listen: false);
   } catch (_) {
     // 测试 harness 可能没有 AuthProvider —— 退化为纯曲库刷新。
   }
-  if (auth != null && auth.state == AuthState.offlineMode) {
+  if (auth != null &&
+      auth.state == AuthState.offlineMode &&
+      !auth.isLocalOnlyMode) {
     // 重连最长要走 3 次 ping + 重试间隔（约 30s），期间必须让用户知道
     // 「这次刷新真的在连服务器」，否则又变成点了没反应。
     final connectingL10n = AppLocalizations.of(context);

@@ -3197,7 +3197,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String offlineModeHintWithCount(int count) {
-    return '$count downloaded songs playable offline';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count downloaded songs playable offline',
+      one: '1 downloaded song playable offline',
+      zero: 'No downloaded songs yet',
+    );
+    return '$_temp0';
   }
 
   @override

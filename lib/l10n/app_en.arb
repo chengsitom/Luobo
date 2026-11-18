@@ -2974,7 +2974,7 @@
   "@browseLocalMusic": { "description": "Login-failure screen: button to enter app with no downloaded songs" },
   "enterOfflineMode": "Enter offline mode",
   "@enterOfflineMode": { "description": "Login-failure screen: primary button that always enters offline mode" },
-  "offlineModeHintWithCount": "{count} downloaded songs playable offline",
+  "offlineModeHintWithCount": "{count, plural, =0{No downloaded songs yet} =1{1 downloaded song playable offline} other{{count} downloaded songs playable offline}}",
   "@offlineModeHintWithCount": { "description": "Login-failure screen: what offline mode offers when there are downloads", "placeholders": { "count": { "type": "int" } } },
   "offlineModeHintNoDownloads": "No downloads yet — you can still browse local music and settings",
   "@offlineModeHintNoDownloads": { "description": "Login-failure screen: what offline mode offers when nothing is downloaded" },

@@ -93,7 +93,6 @@ class _MainScreenState extends State<MainScreen> {
     NavigationHelper.registerTabChangeCallback(_setTab);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final libraryProvider = Provider.of<LibraryProvider>(
         context,
         listen: false,
@@ -135,34 +134,62 @@ class _MainScreenState extends State<MainScreen> {
       // 此处补一次归属校验：队列属于旧服务器则清空，避免旧 songId 打新服务器。
       playerProvider.validateQueueForServer();
 
-      if (authProvider.isLocalOnlyMode) {
-        final localMusicService = Provider.of<LocalMusicService>(
-          context,
-          listen: false,
-        );
-
-        libraryProvider.setLocalMusicService(localMusicService);
-
-        if (localMusicService.isEmpty && !localMusicService.isScanning) {
-          localMusicService.scanForMusic();
-        } else if (!localMusicService.isScanning) {
-          libraryProvider.initialize();
-        }
-      } else {
-        libraryProvider.setLocalOnlyMode(false);
-        libraryProvider.setServerOfflineMode(widget.isOfflineMode);
-        // 登出后重新登录：LibraryProvider 是单例，`initialize()` 在已初始化时
-        // 直接 return，拿到的仍是上一会话的缓存 → 首页「没刷新」。登出时
-        // AuthProvider 会置一个一次性标记，这里消费它强制全量重来。
-        libraryProvider.initialize(
-          force: authProvider.consumePendingLibraryReload(),
-        );
-      }
+      _bootLibrary();
 
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) _checkForUpdate();
       });
     });
+  }
+
+  /// 离线 ↔ 在线切换（`AuthProvider.reconnect()` 成功）：MainScreen 不重建，
+  /// 只是 `isOfflineMode` 变了 —— 必须重跑一次曲库接线，否则曲库仍停在离线
+  /// 分支（`initialize()` 因 `_isInitialized` 直接返回，首页永远是离线缓存）。
+  ///
+  /// 不复用 initState 的其余工作：播放器/队列/更新检查都只该做一次。
+  @override
+  void didUpdateWidget(MainScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isOfflineMode == widget.isOfflineMode) return;
+    debugPrint(
+        '[Main] offline mode → ${widget.isOfflineMode}, rebooting library');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _bootLibrary(forceReload: true);
+    });
+  }
+
+  /// 按当前会话形态（本地文件 / 服务端在线 / 服务端离线）接好曲库数据源。
+  void _bootLibrary({bool forceReload = false}) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final libraryProvider =
+        Provider.of<LibraryProvider>(context, listen: false);
+
+    if (authProvider.isLocalOnlyMode) {
+      final localMusicService = Provider.of<LocalMusicService>(
+        context,
+        listen: false,
+      );
+
+      libraryProvider.setLocalMusicService(localMusicService);
+
+      if (localMusicService.isEmpty && !localMusicService.isScanning) {
+        localMusicService.scanForMusic();
+      } else if (!localMusicService.isScanning) {
+        libraryProvider.initialize(force: forceReload);
+      }
+      return;
+    }
+
+    libraryProvider.setLocalOnlyMode(false);
+    libraryProvider.setServerOfflineMode(widget.isOfflineMode);
+    // 登出后重新登录：LibraryProvider 是单例，`initialize()` 在已初始化时
+    // 直接 return，拿到的仍是上一会话的缓存 → 首页「没刷新」。登出时
+    // AuthProvider 会置一个一次性标记，这里消费它强制全量重来。
+    // ⚠️ 必须先消费再或运算：`forceReload || consume()` 会短路，把标记留在
+    // 位（下一次进入 MainScreen 又白刷一遍）。
+    final pendingReload = authProvider.consumePendingLibraryReload();
+    libraryProvider.initialize(force: forceReload || pendingReload);
   }
 
   Future<void> _checkForUpdate() async {
