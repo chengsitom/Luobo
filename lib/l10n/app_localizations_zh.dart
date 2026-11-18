@@ -3082,6 +3082,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get browseLocalMusic => '浏览本地音乐';
 
   @override
+  String get enterOfflineMode => '进入离线模式';
+
+  @override
+  String offlineModeHintWithCount(int count) {
+    return '$count 首已下载歌曲可离线播放';
+  }
+
+  @override
+  String get offlineModeHintNoDownloads => '暂无已下载歌曲，仍可浏览本地音乐与设置';
+
+  @override
+  String get reconnect => '重新连接';
+
+  @override
+  String get reconnectFailed => '仍无法连接服务器，保持在离线模式';
+
+  @override
+  String refreshOfflineComplete(int count) {
+    return '离线模式：已读取本地缓存（$count 首）';
+  }
+
+  @override
   String get alreadyLatest => '已是最新版本';
 
   @override

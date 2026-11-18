@@ -19,6 +19,7 @@ class RefreshResult {
     required this.success,
     this.merged = false,
     this.isLocal = false,
+    this.isOffline = false,
     this.albumCount = 0,
     this.songCount = 0,
     this.error,
@@ -31,6 +32,10 @@ class RefreshResult {
 
   /// 本地模式：仅重读本地扫描结果，未走服务端全量同步。
   final bool isLocal;
+
+  /// 离线模式：服务器不可达，只重读了缓存。**与 isLocal 分开**：离线态的
+  /// 曲目来自服务端缓存，把它说成「已重新加载本地音乐库」是错的。
+  final bool isOffline;
   final int albumCount;
   final int songCount;
   final String? error;
@@ -634,8 +639,14 @@ class LibraryProvider extends ChangeNotifier {
 
       if (loadFullLibrary) {
         try {
-          _cachedAllAlbums = await _db.getAllAlbums();
-          _cachedAllSongs = await _db.getAllSongs();
+          // 同 `loadRecentAlbums` 的取向：**磁盘为空不覆盖内存里的曲库**。
+          // 否则一次 DB 缺行（切服后未完成全量同步、DB 被清）的刷新会把
+          // 首页已经显示的曲库整体抹成空 → 「刷新一下内容全没了」。
+          // 真正的清空由 `_refreshAllDataInBackground` 自己赋值，不会漏。
+          final albums = await _db.getAllAlbums();
+          final songs = await _db.getAllSongs();
+          if (albums.isNotEmpty) _cachedAllAlbums = albums;
+          if (songs.isNotEmpty) _cachedAllSongs = songs;
         } catch (e) {
           debugPrint('Error loading library from DB: $e');
         }
@@ -1059,8 +1070,24 @@ class LibraryProvider extends ChangeNotifier {
 
       if (_serverOfflineMode || _localOnlyMode) {
         // 本地/离线：仅重读缓存/本地扫描结果，不触发服务端全量同步。
-        completer
-            .complete(RefreshResult(success: true, isLocal: _localOnlyMode));
+        // ⚠️ 必须带上真实条数：此前返回 `RefreshResult(success: true)` 让
+        // albumCount/songCount 落到默认 0，首页刷新后弹「刷新完成：0 张专辑，
+        // 0 首歌曲」，看起来像"本地一首歌都没有"（用户真机反馈）。
+        // 取数与首页同口径：全量缓存为空时首页用的是 random/recent 回退池，
+        // 只报全量缓存会又出现「有内容却说 0 首」。
+        completer.complete(
+          RefreshResult(
+            success: true,
+            isLocal: _localOnlyMode,
+            isOffline: _serverOfflineMode && !_localOnlyMode,
+            albumCount: _cachedAllAlbums.isNotEmpty
+                ? _cachedAllAlbums.length
+                : _recentAlbums.length,
+            songCount: _cachedAllSongs.isNotEmpty
+                ? _cachedAllSongs.length
+                : _randomSongs.length,
+          ),
+        );
       } else {
         completer.complete(await _refreshAllDataInBackground());
       }

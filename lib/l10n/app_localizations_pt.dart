@@ -3201,6 +3201,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get browseLocalMusic => 'Browse local music';
 
   @override
+  String get enterOfflineMode => 'Enter offline mode';
+
+  @override
+  String offlineModeHintWithCount(int count) {
+    return '$count downloaded songs playable offline';
+  }
+
+  @override
+  String get offlineModeHintNoDownloads =>
+      'No downloads yet — you can still browse local music and settings';
+
+  @override
+  String get reconnect => 'Reconnect';
+
+  @override
+  String get reconnectFailed =>
+      'Still can\'t reach the server — staying offline';
+
+  @override
+  String refreshOfflineComplete(int count) {
+    return 'Offline mode: cache reloaded ($count songs)';
+  }
+
+  @override
   String get alreadyLatest => 'You are up to date';
 
   @override

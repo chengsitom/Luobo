@@ -170,6 +170,7 @@ class _MainScreenState extends State<MainScreen> {
     if (release == null || !mounted) return;
     showUpdateDialog(context, release);
   }
+
   void _openNowPlaying() {
     final transitionSw = Stopwatch()..start();
     final transitionMsSw = Stopwatch()..start();
@@ -335,47 +336,7 @@ class _MainScreenState extends State<MainScreen> {
             body: Column(
               children: [
                 if (widget.isOfflineMode || isLocalMode)
-                  Container(
-                    width: double.infinity,
-                    color: isLocalMode ? Colors.indigo : Colors.orange,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Row(
-                        children: [
-                          Icon(
-                            isLocalMode
-                                ? CupertinoIcons.folder_fill
-                                : CupertinoIcons.wifi_slash,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              isLocalMode
-                                  ? AppLocalizations.of(
-                                      context,
-                                    )!
-                                      .localFilesModeBanner
-                                  : AppLocalizations.of(
-                                      context,
-                                    )!
-                                      .offlineModeBanner,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildStatusBanner(context, isLocalMode),
                 if (isLocalMode)
                   Selector<LocalMusicService, (bool, double, String)>(
                     selector: (_, s) =>
@@ -427,28 +388,13 @@ class _MainScreenState extends State<MainScreen> {
                     },
                   ),
                 Expanded(
-                  child: Navigator(
-                    key: NavigationHelper.mobileNavigatorKey,
-                    // 维护 `NavigationHelper.secondaryDepth` → 底部条带据此在
-                    // 「底栏（一级页）」与「播放条（二级页）」之间二选一（§6.1）。
-                    observers: [NavigationHelper.secondaryDepthObserver],
-                    onGenerateRoute: (settings) {
-                      return MaterialPageRoute(
-                        builder: (_) => IndexedStack(
-                          index: _currentIndex,
-                          // IndexedStack 内部用 `Visibility(maintainAnimation:
-                          // true)` 包住未选中项，TickerMode 不会被关掉——不额外
-                          // 包一层的话，首页流体背景等动画在切走后仍会逐帧产帧。
-                          children: [
-                            for (var i = 0; i < _mobileScreens.length; i++)
-                              TickerMode(
-                                enabled: _currentIndex == i,
-                                child: _mobileScreens[i],
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                  child: _buildMainNavigator(
+                    // 横幅已经把状态栏那一截吃掉了（它内部的 SafeArea 顶开了
+                    // 文字）。若不摘掉 MediaQuery 的 padding.top，下面的
+                    // SliverAppBar / SafeArea 会**再加一次**状态栏高度 ——
+                    // 真机上表现为离线模式整页比正常模式低一截（用户反馈
+                    // 「返回、搜索按钮明显偏低」）。
+                    stripTopInset: widget.isOfflineMode || isLocalMode,
                   ),
                 ),
               ],
@@ -464,6 +410,131 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// 主内容导航器。离线/本地模式时摘掉顶部安全区（见调用处注释）。
+  Widget _buildMainNavigator({required bool stripTopInset}) {
+    final navigator = Navigator(
+      key: NavigationHelper.mobileNavigatorKey,
+      // 维护 `NavigationHelper.secondaryDepth` → 底部条带据此在
+      // 「底栏（一级页）」与「播放条（二级页）」之间二选一（§6.1）。
+      observers: [NavigationHelper.secondaryDepthObserver],
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (_) => IndexedStack(
+            index: _currentIndex,
+            // IndexedStack 内部用 `Visibility(maintainAnimation:
+            // true)` 包住未选中项，TickerMode 不会被关掉——不额外
+            // 包一层的话，首页流体背景等动画在切走后仍会逐帧产帧。
+            children: [
+              for (var i = 0; i < _mobileScreens.length; i++)
+                TickerMode(
+                  enabled: _currentIndex == i,
+                  child: _mobileScreens[i],
+                ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!stripTopInset) return navigator;
+    return MediaQuery.removePadding(
+      context: context,
+      removeTop: true,
+      child: navigator,
+    );
+  }
+
+  /// 离线 / 本地文件模式的顶部状态横幅。
+  ///
+  /// 离线时右侧带「重新连接」：离线模式此前是单向门，网络恢复了也只能看着
+  /// 横幅（用户换到有 IPv6 的网络后点刷新无效）。连接中显示转圈替代按钮，
+  /// 避免连点。
+  Widget _buildStatusBanner(BuildContext context, bool isLocalMode) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final isConnecting = auth.state == AuthState.authenticating;
+        return Container(
+          width: double.infinity,
+          color: isLocalMode ? Colors.indigo : Colors.orange,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                Icon(
+                  isLocalMode
+                      ? CupertinoIcons.folder_fill
+                      : CupertinoIcons.wifi_slash,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isLocalMode
+                        ? l10n.localFilesModeBanner
+                        : l10n.offlineModeBanner,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (!isLocalMode) ...[
+                  const SizedBox(width: 8),
+                  if (isConnecting)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  else
+                    TextButton(
+                      onPressed: () => _reconnectFromBanner(context, auth),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(0, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Text(l10n.reconnect),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 离线横幅上的「重新连接」。失败不弹系统错误页（用户正在离线听歌），
+  /// 只给一条轻提示并留在离线态。
+  Future<void> _reconnectFromBanner(
+    BuildContext context,
+    AuthProvider auth,
+  ) async {
+    final connected = await auth.reconnect();
+    if (connected || !context.mounted) return;
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) return;
+    showLuoboToast(
+      context,
+      message: l10n.reconnectFailed,
+      tone: LuoboToastTone.error,
     );
   }
 
@@ -498,8 +569,7 @@ class _MainScreenState extends State<MainScreen> {
     // 有声书播放中：二级页不再显示音乐迷你播放条（用户 2026-10-27：
     // 回到别的页面时，播放条展示的是有声书章节，视觉上属于「音乐播放条」）。
     // 有声书自己的控制条在章节页吸底，跨页时由入口重新进入。
-    final isAudiobook =
-        Provider.of<PlayerProvider>(context).isPlayingAudiobook;
+    final isAudiobook = Provider.of<PlayerProvider>(context).isPlayingAudiobook;
 
     // 二级页且没有在播内容 / 正在播有声书 → 条带整条不渲染（返回零高度）。
     if (isSecondary && (!hasSong || isAudiobook)) {
@@ -618,4 +688,3 @@ class _NavAlbumArt extends StatelessWidget {
     );
   }
 }
-

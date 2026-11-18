@@ -73,7 +73,12 @@ class AuthProvider extends ChangeNotifier {
         Connectivity().onConnectivityChanged.listen((results) async {
       if (_config == null || !_config!.hasLocalUrl) return;
       if (_state != AuthState.authenticated &&
-          _state != AuthState.serverUnreachable) return;
+          _state != AuthState.serverUnreachable &&
+          // 离线模式下网络也可能变好（换到有 IPv6 的网络）：至少把地址探测
+          // 结果刷新掉，用户点「重新连接」时不会又打一次旧地址。
+          _state != AuthState.offlineMode) {
+        return;
+      }
       // Network changed — re-probe local/remote URL
       DiagnosticsService.instance.record(
         EventType.netSwitch,
@@ -280,6 +285,46 @@ class AuthProvider extends ChangeNotifier {
     await _subsonicService.configure(_config!);
     await _subsonicService.resolveActiveUrl();
     await _verifyConnection();
+  }
+
+  /// 离线模式下的「重新连接」：**退出离线态**并走一次完整验证。
+  ///
+  /// 此前离线模式是单向门 —— `enterOfflineMode` 之后没有任何路径把它翻回来，
+  /// 网络恢复了也只能看着离线横幅（用户换到有 IPv6 的网络后点刷新无效即此）。
+  ///
+  /// 失败**回滚到离线态**（不把正在离线听歌的用户踢到失败页），由调用方用
+  /// 轻提示告知原因。返回是否连上。
+  Future<bool> reconnect() async {
+    if (_config == null) return false;
+    final wasOffline = _state == AuthState.offlineMode;
+
+    // 只切 UI 状态，**先不摘** OfflineService 的离线标记：验证要几秒，
+    // 期间用户若点已下载的歌，播放层仍应走本地文件而不是网络流。
+    if (wasOffline) {
+      _state = AuthState.authenticating;
+      notifyListeners();
+    }
+
+    // 离线期间网络可能已经变了（换 Wi-Fi / 拿到 IPv6），不能沿用旧地址记忆。
+    await _subsonicService.resolveActiveUrl(forceProbe: true);
+    await retryConnection();
+
+    if (_state == AuthState.authenticated) {
+      OfflineService().setOfflineMode(false);
+      // 离线态下 LibraryProvider 已经 initialized（只是走离线分支），
+      // MainScreen 重建时它的 `initialize()` 会因 `_isInitialized` 直接返回 →
+      // 首页仍展示离线缓存、不拉服务端数据。复用登出那条「强制重拉」标记。
+      _pendingLibraryReload = true;
+      return true;
+    }
+
+    if (wasOffline) {
+      // 重连失败回滚到离线态：不把正在离线听歌的用户踢回失败页，离线标记
+      // 也原样保留。失败原因由调用方以轻提示呈现，用户可继续听本地。
+      _state = AuthState.offlineMode;
+      notifyListeners();
+    }
+    return false;
   }
 
   Future<void> disconnect() async {

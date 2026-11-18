@@ -5758,6 +5758,42 @@ abstract class AppLocalizations {
   /// **'Browse local music'**
   String get browseLocalMusic;
 
+  /// Login-failure screen: primary button that always enters offline mode
+  ///
+  /// In en, this message translates to:
+  /// **'Enter offline mode'**
+  String get enterOfflineMode;
+
+  /// Login-failure screen: what offline mode offers when there are downloads
+  ///
+  /// In en, this message translates to:
+  /// **'{count} downloaded songs playable offline'**
+  String offlineModeHintWithCount(int count);
+
+  /// Login-failure screen: what offline mode offers when nothing is downloaded
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads yet — you can still browse local music and settings'**
+  String get offlineModeHintNoDownloads;
+
+  /// Offline banner action: try to reach the server again
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get reconnect;
+
+  /// Toast shown after a failed reconnect attempt from offline mode
+  ///
+  /// In en, this message translates to:
+  /// **'Still can\'t reach the server — staying offline'**
+  String get reconnectFailed;
+
+  /// Refresh toast in offline mode: only the local cache was reloaded
+  ///
+  /// In en, this message translates to:
+  /// **'Offline mode: cache reloaded ({count} songs)'**
+  String refreshOfflineComplete(int count);
+
   /// Toast when manual update check finds no new version
   ///
   /// In en, this message translates to:

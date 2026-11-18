@@ -423,7 +423,8 @@ class MuslyApp extends StatelessWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           // 全局下载进度卡：常驻在所有路由之上，锚定 mini player 上方。
           // builder 在 Navigator 之上，Overlay.of(rootOverlay:true) 可用。
-          builder: (context, child) => DownloadProgressOverlay(child: child ?? const SizedBox.shrink()),
+          builder: (context, child) =>
+              DownloadProgressOverlay(child: child ?? const SizedBox.shrink()),
           home: const AuthWrapper(),
           navigatorObservers: [
             AnalyticsNavigatorObserver(),
@@ -468,10 +469,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           await _showPrivacyPolicyIfNeeded();
         });
-        _stableChild = const MainScreen();
+        _stableChild = const MainScreen(key: ValueKey('main-online'));
         return _stableChild!;
       case AuthState.offlineMode:
-        _stableChild = const MainScreen(isOfflineMode: true);
+        // ⚠️ key 必须区分在线/离线：两者是同一个 widget 类型，不加 key 时
+        // 「离线 → 重新连接成功」只是复用同一个 Element，MainScreen 的
+        // initState 不会重跑 → 曲库仍是离线态、横幅状态也更新不了（真机上
+        // 表现为「重连成功了但首页还是离线内容」）。换 key 强制重建。
+        _stableChild = const MainScreen(
+          key: ValueKey('main-offline'),
+          isOfflineMode: true,
+        );
         return _stableChild!;
       case AuthState.serverUnreachable:
         _stableChild = _ServerUnreachableScreen(
@@ -507,6 +515,11 @@ class _ServerUnreachableScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    // 重试期间必须给反馈：此前点了「重试」页面毫无变化（状态切到
+    // authenticating 后本页仍是 _stableChild），用户以为按钮没响应。
+    final isConnecting = authProvider.state == AuthState.authenticating;
 
     return Scaffold(
       body: Center(
@@ -518,7 +531,7 @@ class _ServerUnreachableScreen extends StatelessWidget {
               const Icon(Icons.cloud_off_rounded, size: 72, color: Colors.grey),
               const SizedBox(height: 24),
               Text(
-                AppLocalizations.of(context)!.serverUnreachableTitle,
+                l10n.serverUnreachableTitle,
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -527,7 +540,11 @@ class _ServerUnreachableScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                AppLocalizations.of(context)!.serverUnreachableSubtitle,
+                // 服务器只有 IPv6 地址、而当前网络没有公网 IPv6 时，
+                // 泛泛的「连接超时」帮不上忙 —— 换成能指导动作的归因。
+                authProvider.ipv6OnlyUnreachable
+                    ? l10n.ipv6OnlyNetworkHint
+                    : l10n.serverUnreachableSubtitle,
                 style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
@@ -535,29 +552,49 @@ class _ServerUnreachableScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () => authProvider.retryConnection(),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(AppLocalizations.of(context)!.retry),
+                  onPressed: isConnecting
+                      ? null
+                      : () => authProvider.retryConnection(),
+                  icon: isConnecting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                  label: Text(
+                    isConnecting ? l10n.startupConnecting : l10n.retry,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               _buildSwitchProfileButton(context),
               const SizedBox(height: 12),
-              // 离线入口始终可见：服务器连不上不代表本地没东西——曲库缓存、
-              // 本地音乐、已下载歌曲都在。没下载也应能进 app（至少听本地音乐），
-              // 否则失败页就是死胡同。文案分级，诚实告诉用户进去能看到什么。
+              // 离线入口**永远只有这一个**，文案不再随有没有下载而变成
+              // 「浏览本地音乐」—— 那会让用户以为「离线模式」这个选项被删了
+              // （真机反馈）。能进去看到什么，交给下面的说明行老实交代。
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                // 次强调（tonal）而不是又一个实心主按钮：本页真正的主动作是
+                // 「重试」，两个同权重实心按钮并排反而分不清主次。
+                child: FilledButton.tonalIcon(
                   onPressed: onEnterOfflineMode,
                   icon: const Icon(Icons.offline_pin_rounded),
-                  label: Text(
-                    hasOfflineContent
-                        ? AppLocalizations.of(context)!.offlineModeWithCount(
-                            authProvider.offlinePlayableCount,
-                          )
-                        : AppLocalizations.of(context)!.browseLocalMusic,
-                  ),
+                  label: Text(l10n.enterOfflineMode),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasOfflineContent
+                    ? l10n.offlineModeHintWithCount(
+                        authProvider.offlinePlayableCount,
+                      )
+                    : l10n.offlineModeHintNoDownloads,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  color: Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 12),
@@ -566,7 +603,7 @@ class _ServerUnreachableScreen extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onDisconnect,
                   icon: const Icon(Icons.logout_rounded),
-                  label: Text(AppLocalizations.of(context)!.disconnect),
+                  label: Text(l10n.disconnect),
                 ),
               ),
             ],
