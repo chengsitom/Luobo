@@ -334,9 +334,8 @@ class _FluidBackgroundState extends State<FluidBackground>
   /// scope). Note that a `SingleTickerProviderStateMixin` allows exactly one
   /// ticker, so a private clock is created once and only released in [dispose].
   void _resolveClock() {
-    _scopeClock = widget.clock == null
-        ? FluidBackgroundScope.maybeOf(context)
-        : null;
+    _scopeClock =
+        widget.clock == null ? FluidBackgroundScope.maybeOf(context) : null;
 
     if (widget.clock != null || _scopeClock != null) {
       _ownClock?.stop();
@@ -396,22 +395,32 @@ class _FluidBackgroundState extends State<FluidBackground>
     // paints, so the area is never blank.
     final useShader = widget.useShader && _shader != null;
 
-    Widget content = RepaintBoundary(
-      child: CustomPaint(
-        painter: useShader
-            ? _FluidMeshPainter(
-                shader: _shader!,
-                colors: _colors,
-                clock: _clock,
-                seed: widget.seed,
-                style: widget.style,
-              )
-            : _FluidGradientPainter(
-                colors: _colors,
-                clock: _clock,
-                seed: widget.seed,
-              ),
-        size: Size.infinite,
+    Widget content = AnimatedSwitcher(
+      // 着色器是**异步**载入的：首帧先画渐变兜底（三个漂移光斑），几帧后才
+      // 切到流体 mesh。两者的构图完全不同，硬切在视觉上就是「动画重置了一次」
+      // ——冷启启动页要停留数秒，这一跳尤其显眼（用户真机反馈）。
+      // 320ms 交叉淡入把这次切换藏掉；payload 只有两帧，几乎零成本。
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: RepaintBoundary(
+        key: ValueKey<bool>(useShader),
+        child: CustomPaint(
+          painter: useShader
+              ? _FluidMeshPainter(
+                  shader: _shader!,
+                  colors: _colors,
+                  clock: _clock,
+                  seed: widget.seed,
+                  style: widget.style,
+                )
+              : _FluidGradientPainter(
+                  colors: _colors,
+                  clock: _clock,
+                  seed: widget.seed,
+                ),
+          size: Size.infinite,
+        ),
       ),
     );
 
