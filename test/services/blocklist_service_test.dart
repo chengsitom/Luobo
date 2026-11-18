@@ -156,6 +156,29 @@ void main() {
     expect(blocklist.isSongExcluded(song(id: 's2')), isTrue);
   });
 
+  test('成员集合没变时不重复通知（避免首页 feed 白算）', () async {
+    await blocklist.blockPlaylist(
+      'p1',
+      '儿歌',
+      mode: BlockMode.muted,
+      members: ['s1', 's2'],
+      songCount: 2,
+    );
+
+    var notifies = 0;
+    void listener() => notifies++;
+    blocklist.addListener(listener);
+    addTearDown(() => blocklist.removeListener(listener));
+
+    // 打开歌单会走到这里：内容一样就不该 notify（否则首页 feed 全量重算）
+    await blocklist.replacePlaylistMembers('p1', ['s2', 's1'], songCount: 2);
+    expect(notifies, 0);
+
+    // 内容变了才通知
+    await blocklist.replacePlaylistMembers('p1', ['s1', 's3'], songCount: 2);
+    expect(notifies, 1);
+  });
+
   test('歌单成员变化检测：songCount 不一致就要重拉', () async {
     await blocklist.blockPlaylist(
       'p1',

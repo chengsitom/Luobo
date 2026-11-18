@@ -520,8 +520,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 蓝牙/车机歌词：订阅行变化（与原生副标题那条链互不影响）。
     _lyricsService.onLineChanged = _onLyricLineChanged;
     // 默认开（目标用户就是蓝牙车机场景），用户关过就记住。
-    _bluetoothLyricsInTitle =
-        await _storageService.getBluetoothLyricsInTitle();
+    _bluetoothLyricsInTitle = await _storageService.getBluetoothLyricsInTitle();
   }
 
   Future<void> _initializeSystemServices() async {
@@ -2429,8 +2428,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 两者正是用户 2026-11-13 冷启动点歌后的反馈。
       final resolvedIndex = _queue.indexWhere((s) => s.id == song.id);
       if (resolvedIndex != -1 && resolvedIndex != _currentIndex) {
-        debugPrint(
-            '[Player] index repaired: $_currentIndex → $resolvedIndex '
+        debugPrint('[Player] index repaired: $_currentIndex → $resolvedIndex '
             '("${song.title}", queue=${_queue.length})');
         DiagnosticsService.instance.record(
           EventType.trackNext,
@@ -2717,8 +2715,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // （JWT 过期、转码管线挂了）本来都能自救 —— 见
       // services/playback_fallback_policy.dart。
       final params = _effectiveTranscodeParams;
-      final authError =
-          looksLikeAuthError(e) && _transcodeAppliesToCurrent;
+      final authError = looksLikeAuthError(e) && _transcodeAppliesToCurrent;
       final step = nextPlaybackFallbackStep(
         attempt: _playbackFallbackAttempts,
         wasTranscoded: _transcodeAppliesToCurrent,
@@ -4144,7 +4141,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final songsToAdd = await _autoDjService.getSongsToQueue(
         currentSong: _currentSong,
         currentQueue: _queue,
-        availableSongs: _libraryProvider?.cachedAllSongs,
+        // smartMix 直接在这个池里挑歌（不走 `_filterAndLimit`），所以这里
+        // 必须给"已应用屏蔽"的池；否则「仅从漫游排除」的内容会被续播塞回来。
+        availableSongs: _libraryProvider?.roamPool,
       );
 
       if (songsToAdd.isNotEmpty) {

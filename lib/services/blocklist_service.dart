@@ -198,21 +198,20 @@ class BlocklistService extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    // 先抓作用域：await 期间可能已经切服/换账号，用 `_scope` 实时值会把
-    // A 账号的规则写到 B 账号名下。
+    // ⚠️ 三样东西都要在 await 之前**快照**：`await SharedPreferences.getInstance()`
+    // 期间可能已经切服/换账号（`attachScope` 会清空 `_entries` 与 `_playlistSongs`），
+    // 用实时值会把 A 的规则清空写成空表，等于把这份名单抹掉。
     final scope = _scope;
     if (scope.isEmpty) return;
+    final payload = json.encode({
+      'entries': _entries.values.map((e) => e.toJson()).toList(),
+      'playlistSongs': _playlistSongs.map(
+        (key, value) => MapEntry(key, value.toList()),
+      ),
+    });
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        '${_keyPrefix}_$scope',
-        json.encode({
-          'entries': _entries.values.map((e) => e.toJson()).toList(),
-          'playlistSongs': _playlistSongs.map(
-            (key, value) => MapEntry(key, value.toList()),
-          ),
-        }),
-      );
+      await prefs.setString('${_keyPrefix}_$scope', payload);
     } catch (e) {
       debugPrint('[Blocklist] persist failed: $e');
     }
@@ -407,9 +406,21 @@ class BlocklistService extends ChangeNotifier {
   }) async {
     final entry = entryFor(BlockKind.playlist, playlistId);
     if (entry == null) return;
-    _playlistSongs[playlistId] = songIds.toSet();
+    final next = songIds.toSet();
+    final previous = _playlistSongs[playlistId];
+    // 内容没变就**不要**通知：打开一个被排除的歌单会走到这里，若每次都
+    // notify，会连带首页 feed 全量重算（贵）+ 写一次 prefs（频繁）。
+    if (previous != null &&
+        previous.length == next.length &&
+        previous.containsAll(next)) {
+      // 只更新"新鲜度"标记，不需要重算派生索引。
+      _entries['playlist:$playlistId'] =
+          entry.copyWith(expandedAt: DateTime.now().millisecondsSinceEpoch);
+      return;
+    }
+    _playlistSongs[playlistId] = next;
     _entries['playlist:$playlistId'] = entry.copyWith(
-      memberCount: songCount ?? songIds.length,
+      memberCount: songCount ?? next.length,
       expandedAt: DateTime.now().millisecondsSinceEpoch,
     );
     _rebuildIndexes();
@@ -501,6 +512,7 @@ class BlocklistService extends ChangeNotifier {
   /// 否则屏蔽了 A，合唱曲照样漏出来。反过来也会屏蔽 A 的合唱曲，这是符合
   /// 直觉的（用户就是不想听 A）。
   bool _nameMatches(Set<String> names, String? raw) {
+    if (names.isEmpty) return false;
     final normalized = _norm(raw);
     if (normalized.isEmpty) return false;
     if (names.contains(normalized)) return true;

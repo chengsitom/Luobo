@@ -218,7 +218,10 @@ class AutoDjService extends ChangeNotifier {
     );
 
     if (similarSongs.isNotEmpty) {
-      return _filterAndLimit(similarSongs, existingIds);
+      final filtered = _filterAndLimit(similarSongs, existingIds);
+      // 过滤后可能一首都不剩（相似的都被屏蔽了）——不能直接返回空，
+      // 否则续播静默停止，用户看到的是"放着放着不加歌了"。
+      if (filtered.isNotEmpty) return filtered;
     }
 
     if (song.genre != null) {

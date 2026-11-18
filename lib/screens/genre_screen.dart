@@ -90,8 +90,18 @@ class _GenreScreenState extends State<GenreScreen>
       );
       final albums = await libraryProvider.getAlbumsByGenre(widget.genre);
       if (mounted) {
+        // 与歌曲 tab 同口径：被屏蔽的艺人/专辑不出现在曲风页。
+        final blocklist = BlocklistService.instance;
         setState(() {
-          _albums = albums;
+          _albums = blocklist.isEmpty
+              ? albums
+              : albums
+                  .where(
+                    (a) =>
+                        !blocklist.isAlbumHidden(a.id) &&
+                        !blocklist.isArtistHidden(a.artistId, name: a.artist),
+                  )
+                  .toList();
           _isLoadingAlbums = false;
         });
       }

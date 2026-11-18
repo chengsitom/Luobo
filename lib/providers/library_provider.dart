@@ -616,6 +616,14 @@ class LibraryProvider extends ChangeNotifier {
     // 首页 feed（探索发现/每日推荐）是按曲库算出来再缓存的：屏蔽规则一变，
     // 旧 feed 里还留着被屏蔽的歌，必须连带失效，否则"屏蔽了还在首页"。
     homeRecommendationService?.clearCaches();
+    // 车机界面持有的是另一份快照，规则变了要重推一次（纯内存操作，无网络）。
+    if (_isInitialized) {
+      if (_serverOfflineMode) {
+        unawaited(_pushOfflineLibraryToAndroidAuto());
+      } else {
+        _pushLibraryToAndroidAuto();
+      }
+    }
     notifyListeners();
   }
 
@@ -1423,12 +1431,17 @@ class LibraryProvider extends ChangeNotifier {
     try {
       _randomSongs = await _subsonicService.getRandomSongs(size: 50);
       notifyListeners();
-      _androidAutoService.updateRecentSongs(_randomSongs, getCoverArtUrl);
+      // 车机也要过滤：`randomSongs` getter 已应用屏蔽规则。
+      final visibleSongs = randomSongs;
+      if (visibleSongs.isNotEmpty) {
+        _androidAutoService.updateRecentSongs(visibleSongs, getCoverArtUrl);
+      }
     } catch (e) {
       debugPrint('Error loading random songs: $e');
 
-      if (_randomSongs.isNotEmpty) {
-        _androidAutoService.updateRecentSongs(_randomSongs, getCoverArtUrl);
+      final visibleSongs = randomSongs;
+      if (visibleSongs.isNotEmpty) {
+        _androidAutoService.updateRecentSongs(visibleSongs, getCoverArtUrl);
       }
     }
   }

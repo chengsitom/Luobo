@@ -173,12 +173,15 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
               ),
             )
           else if (tracks.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: LuoboEmptyState(
                   icon: AppIcons.emptyMusic,
-                  message: '这组歌单暂时没有曲目',
+                  // 全部被屏蔽时不能说"没有曲目"：那是错的，用户会以为服务端
+                  // 返回了空歌单。
+                  message:
+                      _detail.tracks.isEmpty ? '这组歌单暂时没有曲目' : '这些曲目已按你的屏蔽规则过滤',
                 ),
               ),
             )
