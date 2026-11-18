@@ -3074,14 +3074,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get startupRetrying => '连接不稳定，正在重试…';
 
   @override
-  String offlineModeWithCount(int count) {
-    return '进入离线模式（$count 首可听）';
-  }
-
-  @override
-  String get browseLocalMusic => '浏览本地音乐';
-
-  @override
   String get enterOfflineMode => '进入离线模式';
 
   @override

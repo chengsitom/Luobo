@@ -395,32 +395,36 @@ class _FluidBackgroundState extends State<FluidBackground>
     // paints, so the area is never blank.
     final useShader = widget.useShader && _shader != null;
 
-    Widget content = AnimatedSwitcher(
-      // 着色器是**异步**载入的：首帧先画渐变兜底（三个漂移光斑），几帧后才
-      // 切到流体 mesh。两者的构图完全不同，硬切在视觉上就是「动画重置了一次」
-      // ——冷启启动页要停留数秒，这一跳尤其显眼（用户真机反馈）。
-      // 320ms 交叉淡入把这次切换藏掉；payload 只有两帧，几乎零成本。
-      duration: const Duration(milliseconds: 320),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      child: RepaintBoundary(
-        key: ValueKey<bool>(useShader),
-        child: CustomPaint(
-          painter: useShader
-              ? _FluidMeshPainter(
+    // 着色器是**异步**载入的：首帧先画渐变兜底（三个漂移光斑），几帧后才切到
+    // 流体 mesh。两者构图完全不同，硬切在视觉上就是「动画重置了一次」——冷启
+    // 启动页要停留数秒，这一跳尤其显眼（用户真机反馈）。
+    //
+    // 这里**只把 mesh 淡入**、让兜底垫在下面保持不透明（而不是两层一起交叉
+    // 淡入淡出）：双淡在正中间两层各 50%，叠加后整体只剩约 75% 不透明度，
+    // 会在满屏渐变上闪一下底色。淡入结束后把兜底层摘掉，稳态零额外开销。
+    Widget content = RepaintBoundary(
+      child: _ShaderReveal(
+        reveal: useShader,
+        fallback: CustomPaint(
+          painter: _FluidGradientPainter(
+            colors: _colors,
+            clock: _clock,
+            seed: widget.seed,
+          ),
+          size: Size.infinite,
+        ),
+        mesh: useShader
+            ? CustomPaint(
+                painter: _FluidMeshPainter(
                   shader: _shader!,
                   colors: _colors,
                   clock: _clock,
                   seed: widget.seed,
                   style: widget.style,
-                )
-              : _FluidGradientPainter(
-                  colors: _colors,
-                  clock: _clock,
-                  seed: widget.seed,
                 ),
-          size: Size.infinite,
-        ),
+                size: Size.infinite,
+              )
+            : const SizedBox.shrink(),
       ),
     );
 
@@ -438,6 +442,86 @@ class _FluidBackgroundState extends State<FluidBackground>
       );
     }
     return content;
+  }
+}
+
+/// 在着色器就绪时把 mesh 淡入到兜底画面之上，淡完丢掉兜底层。
+///
+/// 为什么不是 `AnimatedSwitcher`：双淡入淡出会在正中间让两层各 50%，叠加后
+/// 整体只剩约 75% 不透明度 —— 满屏高饱和渐变上会闪一下底色，看起来像掉帧。
+/// 这里兜底层始终不透明垫底，只有新层淡入，亮度不塌；淡完把兜底层摘掉，
+/// 稳态和直接画 mesh 一样省。
+class _ShaderReveal extends StatefulWidget {
+  const _ShaderReveal({
+    required this.reveal,
+    required this.fallback,
+    required this.mesh,
+  });
+
+  final bool reveal;
+  final Widget fallback;
+  final Widget mesh;
+
+  @override
+  State<_ShaderReveal> createState() => _ShaderRevealState();
+}
+
+class _ShaderRevealState extends State<_ShaderReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  bool _fallbackDropped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller.addStatusListener(_onStatus);
+    if (widget.reveal) {
+      // 首帧就已就绪（热重载/重建）：不播动画，直接用 mesh。
+      _controller.value = 1;
+      _fallbackDropped = true;
+    }
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && !_fallbackDropped) {
+      setState(() => _fallbackDropped = true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ShaderReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reveal && !oldWidget.reveal) {
+      _controller.forward();
+    } else if (!widget.reveal && oldWidget.reveal) {
+      _controller.value = 0;
+      _fallbackDropped = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.reveal) return widget.fallback;
+    if (_fallbackDropped) return widget.mesh;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.fallback,
+        FadeTransition(opacity: _opacity, child: widget.mesh),
+      ],
+    );
   }
 }
 

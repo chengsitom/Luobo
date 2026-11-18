@@ -776,8 +776,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   }
 
   Widget _buildDownloadTile(BuildContext context) {
-    final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
-        AuthState.offlineMode;
+    final isOffline = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).isLocalPlaybackSession;
     final l10n = AppLocalizations.of(context)!;
 
     if (_isDownloading) {

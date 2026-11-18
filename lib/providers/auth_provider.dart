@@ -64,6 +64,16 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get hasOfflineContent => _hasOfflineContent;
 
+  /// 当前会话是否「只能听本地」（离线模式 / 本地文件模式）。
+  ///
+  /// ⚠️ 别直接用 `state == AuthState.offlineMode` 判：重连期间状态是
+  /// `authenticating`，但会话本质仍是离线的（服务器还没验证通过）—— 用 state
+  /// 判会让专辑下载按钮、歌曲 ⋮ 里的"下载"在重连的几十秒里突然复活，点了
+  /// 必然失败。`OfflineService.isOfflineMode` 只在登录成功时才被摘掉，正好
+  /// 是"服务器可用"的稳定信号。
+  bool get isLocalPlaybackSession =>
+      OfflineService().isOfflineMode || _state == AuthState.offlineMode;
+
   /// 登录失败页文案用：本地可离线播放的歌曲数。
   ///
   /// 与播放层同口径（按 (服务器,账号) 过滤），但**冷启直接失败时** `serverId`
@@ -308,12 +318,17 @@ class AuthProvider extends ChangeNotifier {
   /// 轻提示告知原因。返回是否连上。
   ///
   /// 重入安全：横幅按钮与首页「刷新」两条入口可能同时触发（一次验证最长
-  /// 3×10s+2×2s ≈ 34s，够用户点第二次）。并发会让第二个调用看到
-  /// `authenticating`（`wasOffline == false`），失败时不回滚、把用户丢进
-  /// serverUnreachable —— 必须共用同一个 Future。
+  /// 3×10s+2×2s ≈ 34s，够用户点第二次）。并发时后来的调用必须**加入**正在
+  /// 跑的那次，而不是新起一次 —— 新起的那次会读到 `authenticating`，失败
+  /// 分支判断不出"我是从离线来的"，就不回滚，把用户丢进 serverUnreachable。
   Future<bool> reconnect() {
     final inflight = _reconnectFuture;
     if (inflight != null) return inflight;
+    // 只允许从离线态发起：失败页有自己的 `retryConnection`；别的状态误调会
+    // 平白置一次 `_pendingLibraryReload`（下次进 MainScreen 白刷一遍曲库）。
+    if (_config == null || isLocalOnlyMode || _state != AuthState.offlineMode) {
+      return Future<bool>.value(false);
+    }
     final future = _reconnectOnce();
     _reconnectFuture = future;
     future.whenComplete(() {
@@ -324,19 +339,14 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool>? _reconnectFuture;
 
+  /// 前置条件由 [reconnect] 保证：`_config` 非空、非本地文件模式、当前是离线态。
   Future<bool> _reconnectOnce() async {
-    if (_config == null) return false;
-    // 本地文件模式也复用 offlineMode 状态（`serverType == 'local'`），但它根本没有
-    // 服务器可连 —— 直接返回，调用方据此跳过，不要把用户拖进 30s 的无效重试。
-    if (isLocalOnlyMode) return false;
-    final wasOffline = _state == AuthState.offlineMode;
-
     // 只切 UI 状态，**先不摘** OfflineService 的离线标记：验证要几秒，
     // 期间用户若点已下载的歌，播放层仍应走本地文件而不是网络流。
-    if (wasOffline) {
-      _state = AuthState.authenticating;
-      notifyListeners();
-    }
+    _state = AuthState.authenticating;
+    // 上一次失败留下的报错不该跟着这次重连走（否则失败页/设置页可能显示旧因）。
+    _error = null;
+    notifyListeners();
 
     try {
       // 离线期间网络可能已经变了（换 Wi-Fi / 拿到 IPv6），不能沿用旧地址记忆。
@@ -356,12 +366,10 @@ class AuthProvider extends ChangeNotifier {
       return true;
     }
 
-    if (wasOffline) {
-      // 重连失败回滚到离线态：不把正在离线听歌的用户踢回失败页，离线标记
-      // 也原样保留。失败原因由调用方以轻提示呈现，用户可继续听本地。
-      _state = AuthState.offlineMode;
-      notifyListeners();
-    }
+    // 失败回滚到离线态：不把正在离线听歌的用户踢回失败页，离线标记也原样
+    // 保留。失败原因由调用方以轻提示呈现，用户可继续听本地。
+    _state = AuthState.offlineMode;
+    notifyListeners();
     return false;
   }
 

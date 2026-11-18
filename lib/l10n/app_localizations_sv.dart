@@ -3189,14 +3189,6 @@ class AppLocalizationsSv extends AppLocalizations {
   String get startupRetrying => 'Connection unstable, retrying…';
 
   @override
-  String offlineModeWithCount(int count) {
-    return 'Enter offline mode ($count songs available)';
-  }
-
-  @override
-  String get browseLocalMusic => 'Browse local music';
-
-  @override
   String get enterOfflineMode => 'Enter offline mode';
 
   @override

@@ -520,91 +520,98 @@ class _ServerUnreachableScreen extends StatelessWidget {
     final isConnecting = authProvider.state == AuthState.authenticating;
 
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_rounded, size: 72, color: Colors.grey),
-              const SizedBox(height: 24),
-              Text(
-                l10n.serverUnreachableTitle,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                // 服务器只有 IPv6 地址、而当前网络没有公网 IPv6 时，
-                // 泛泛的「连接超时」帮不上忙 —— 换成能指导动作的归因。
-                authProvider.ipv6OnlyUnreachable
-                    ? l10n.ipv6OnlyNetworkHint
-                    : l10n.serverUnreachableSubtitle,
-                style: const TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: isConnecting
-                      ? null
-                      : () => authProvider.retryConnection(),
-                  icon: isConnecting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded),
-                  label: Text(
-                    isConnecting ? l10n.startupConnecting : l10n.retry,
+      // 可滚动：多了一个多服务器场景下的「切换服务器」按钮 + 一行说明后，
+      // 363dp 高的小屏 + 大字号会整屏溢出（Column 不可滚 → 黄黑条）。
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_rounded,
+                      size: 72, color: Colors.grey),
+                  const SizedBox(height: 24),
+                  Text(
+                    l10n.serverUnreachableTitle,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    // 服务器只有 IPv6 地址、而当前网络没有公网 IPv6 时，
+                    // 泛泛的「连接超时」帮不上忙 —— 换成能指导动作的归因。
+                    authProvider.ipv6OnlyUnreachable
+                        ? l10n.ipv6OnlyNetworkHint
+                        : l10n.serverUnreachableSubtitle,
+                    style: const TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: isConnecting
+                          ? null
+                          : () => authProvider.retryConnection(),
+                      icon: isConnecting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded),
+                      label: Text(
+                        isConnecting ? l10n.startupConnecting : l10n.retry,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSwitchProfileButton(context),
+                  const SizedBox(height: 12),
+                  // 离线入口**永远只有这一个**，文案不再随有没有下载而变成
+                  // 「浏览本地音乐」—— 那会让用户以为「离线模式」这个选项被删了
+                  // （真机反馈）。能进去看到什么，交给下面的说明行老实交代。
+                  SizedBox(
+                    width: double.infinity,
+                    // 次强调（tonal）而不是又一个实心主按钮：本页真正的主动作是
+                    // 「重试」，两个同权重实心按钮并排反而分不清主次。
+                    child: FilledButton.tonalIcon(
+                      onPressed: onEnterOfflineMode,
+                      icon: const Icon(Icons.offline_pin_rounded),
+                      label: Text(l10n.enterOfflineMode),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    hasOfflineContent
+                        ? l10n.offlineModeHintWithCount(
+                            authProvider.offlinePlayableCount,
+                          )
+                        : l10n.offlineModeHintNoDownloads,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: onDisconnect,
+                      icon: const Icon(Icons.logout_rounded),
+                      label: Text(l10n.disconnect),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              _buildSwitchProfileButton(context),
-              const SizedBox(height: 12),
-              // 离线入口**永远只有这一个**，文案不再随有没有下载而变成
-              // 「浏览本地音乐」—— 那会让用户以为「离线模式」这个选项被删了
-              // （真机反馈）。能进去看到什么，交给下面的说明行老实交代。
-              SizedBox(
-                width: double.infinity,
-                // 次强调（tonal）而不是又一个实心主按钮：本页真正的主动作是
-                // 「重试」，两个同权重实心按钮并排反而分不清主次。
-                child: FilledButton.tonalIcon(
-                  onPressed: onEnterOfflineMode,
-                  icon: const Icon(Icons.offline_pin_rounded),
-                  label: Text(l10n.enterOfflineMode),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                hasOfflineContent
-                    ? l10n.offlineModeHintWithCount(
-                        authProvider.offlinePlayableCount,
-                      )
-                    : l10n.offlineModeHintNoDownloads,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.35,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: onDisconnect,
-                  icon: const Icon(Icons.logout_rounded),
-                  label: Text(l10n.disconnect),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

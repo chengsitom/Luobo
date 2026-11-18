@@ -209,8 +209,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
     }
 
 
-    final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
-        AuthState.offlineMode;
+    final isOffline = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).isLocalPlaybackSession;
 
     return Scaffold(
       body: Stack(

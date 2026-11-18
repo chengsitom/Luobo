@@ -204,6 +204,22 @@ class LibraryProvider extends ChangeNotifier {
     _serverOfflineMode = offline;
   }
 
+  /// 仅供测试：直接填充内存池，用来验证离线刷新/首页兜底池的计数口径
+  /// （单测里没有 sqflite 与服务器，`initialize()` 拿不到真实数据）。
+  /// [randomSongs]/[recentAlbums] 不传时默认与全量池一致（模拟正常状态）。
+  @visibleForTesting
+  void debugSeedPools({
+    List<Song> songs = const [],
+    List<Album> albums = const [],
+    List<Song>? randomSongs,
+    List<Album>? recentAlbums,
+  }) {
+    _cachedAllSongs = List<Song>.from(songs);
+    _cachedAllAlbums = List<Album>.from(albums);
+    _randomSongs = List<Song>.from(randomSongs ?? songs.take(50));
+    _recentAlbums = List<Album>.from(recentAlbums ?? albums.take(20));
+  }
+
   String getCoverArtUrl(String? coverArt) {
     return _subsonicService.getCoverArtUrl(coverArt,
         size: kCoverArtRequestSize);
