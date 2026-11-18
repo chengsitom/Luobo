@@ -329,9 +329,10 @@ class _HomeV2ScreenState extends State<HomeV2Screen> {
                 }
 
                 // P3：候选池用全量曲库（全量同步未完成时回退随机池）。
-                final allSongs = libraryProvider.cachedAllSongs.isNotEmpty
-                    ? libraryProvider.cachedAllSongs
-                    : libraryProvider.randomSongs;
+                // ⚠️ 用 `roamPool` 而不是 `cachedAllSongs`：推荐流和漫游同源，
+                // 「仅从漫游排除」的内容也不该被推进每日推荐/探索发现
+                // （R2.2）；`cachedAllSongs` 只过滤了"彻底屏蔽"那一档。
+                final allSongs = libraryProvider.roamPool;
                 // feed 门控 = 曲库 id 串 + 推荐服务的 feedRevision：曲库没变但
                 // 服务内部缓存失效（收藏变化 / 知识库重建）时同样要重建 feed，
                 // 否则「点了喜欢推荐跟着变」永远不生效（§3.4）。

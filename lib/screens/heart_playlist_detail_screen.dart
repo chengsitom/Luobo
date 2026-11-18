@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/heart_playlist.dart';
+import '../models/song.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
+import '../services/blocklist_service.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
@@ -74,6 +76,14 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
     if (show != _showTopTitle.value) _showTopTitle.value = show;
   }
 
+  /// 过滤后的曲目（隐藏 + 仅排除，与漫游同口径）。
+  List<Song> get _visibleTracks {
+    final all = _detail.tracks;
+    final blocklist = BlocklistService.instance;
+    if (blocklist.isEmpty) return all;
+    return all.where((s) => !blocklist.isSongExcluded(s)).toList();
+  }
+
   Future<void> _load() async {
     final service = Provider.of<SubsonicService>(context, listen: false);
     final detail = await service.getHeartPlaylistDetail(widget.playlist.id);
@@ -105,6 +115,10 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
     // `MediaQuery.padding.bottom`，最后一行会被播放条压住。
     // 用设置页/所有二级页同一套净空 helper，不要写死 100。
     final bottomPadding = LuoboSpacing.pageBottomWithStrip(context);
+    // 心动歌单是服务端按曲库风格生成的**推荐**，和漫游同源：彻底屏蔽与
+    // 「仅从漫游排除」都不该出现在这里。在读取处过滤（不改写 `_detail`），
+    // 解除屏蔽后重新进来即恢复。build 里只算一次，别放进 itemBuilder（O(n²)）。
+    final tracks = _visibleTracks;
     return Scaffold(
       backgroundColor: c.bg,
       extendBodyBehindAppBar: true,
@@ -158,7 +172,7 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
                 ),
               ),
             )
-          else if (_detail.tracks.isEmpty)
+          else if (tracks.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
@@ -172,7 +186,7 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final songs = _detail.tracks;
+                  final songs = tracks;
                   return SongTile(
                     song: songs[index],
                     playlist: songs,
@@ -180,7 +194,7 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
                     showAlbum: true,
                   );
                 },
-                childCount: _detail.tracks.length,
+                childCount: tracks.length,
               ),
             ),
           SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
@@ -286,7 +300,7 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
   }
 
   void _playAll() {
-    final songs = _detail.tracks;
+    final songs = _visibleTracks;
     if (songs.isEmpty) return;
     Provider.of<PlayerProvider>(context, listen: false).playSong(
       songs.first,
@@ -297,7 +311,7 @@ class _HeartPlaylistDetailScreenState extends State<HeartPlaylistDetailScreen> {
   }
 
   void _shuffleAll() {
-    final songs = List.of(_detail.tracks);
+    final songs = List.of(_visibleTracks);
     if (songs.isEmpty) return;
     songs.shuffle(Random());
     Provider.of<PlayerProvider>(context, listen: false).playSong(

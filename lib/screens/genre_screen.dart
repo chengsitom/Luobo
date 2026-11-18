@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import 'package:provider/provider.dart';
 import '../models/album.dart';
 import '../models/song.dart';
@@ -57,8 +58,13 @@ class _GenreScreenState extends State<GenreScreen>
         count: 200,
       );
       if (mounted) {
+        // 服务端按曲风返回，不知道本地屏蔽规则 → 列表口径兜一刀。
         setState(() {
-          _songs = songs;
+          _songs = BlocklistService.instance.isEmpty
+              ? songs
+              : songs
+                  .where((s) => !BlocklistService.instance.isSongHidden(s))
+                  .toList();
           _isLoadingSongs = false;
         });
       }
