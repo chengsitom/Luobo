@@ -5830,6 +5830,18 @@ abstract class AppLocalizations {
   /// **'{count} songs excluded from roaming'**
   String blocklistExcludedSongs(int count);
 
+  /// Placeholder title on a blocked artist/album page
+  ///
+  /// In en, this message translates to:
+  /// **'This is blocked'**
+  String get contentBlockedTitle;
+
+  /// Shown in content filter when the blocked playlist was deleted elsewhere
+  ///
+  /// In en, this message translates to:
+  /// **'Playlist no longer exists'**
+  String get blocklistPlaylistGone;
+
   /// Login-failure screen: what offline mode offers when there are downloads
   ///
   /// In en, this message translates to:

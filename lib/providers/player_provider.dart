@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../utils/image_cache.dart';
 import '../services/subsonic_service.dart';
+import '../services/blocklist_service.dart';
 import '../services/offline_service.dart';
 import '../services/android_auto_service.dart';
 import '../services/android_system_service.dart';
@@ -917,10 +918,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         albumCount: 0,
         artistCount: 0,
       );
-      if (results.songs.isNotEmpty) {
+      // 车机搜索是直连服务端的，不知道本地屏蔽规则 → 这里兜一刀。
+      // 用"可见性"口径：被「仅从漫游排除」的歌仍可被点名播放（显式意图）。
+      final songs = results.songs
+          .where((s) => !BlocklistService.instance.isSongHidden(s))
+          .toList();
+      if (songs.isNotEmpty) {
         await playSong(
-          results.songs.first,
-          playlist: results.songs,
+          songs.first,
+          playlist: songs,
           startIndex: 0,
         );
       } else {

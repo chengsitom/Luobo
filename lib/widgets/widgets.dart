@@ -5,6 +5,7 @@ export 'artist_grid_card.dart';
 export 'artist_collage_cover.dart';
 export 'artist_placeholder.dart';
 export 'block_sheet.dart';
+export 'blocked_placeholder.dart';
 export 'song_tile.dart';
 export 'animated_equalizer.dart';
 export 'mini_player.dart';

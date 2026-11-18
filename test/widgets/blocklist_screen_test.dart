@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:luobo/l10n/app_localizations.dart';
+import 'package:luobo/models/playlist.dart';
+import 'package:luobo/providers/library_provider.dart';
 import 'package:luobo/screens/blocklist_screen.dart';
 import 'package:luobo/services/blocklist_service.dart';
+import 'package:luobo/services/subsonic_service.dart';
 
 import '../bootstrap.dart';
 
@@ -20,13 +24,23 @@ void main() {
     await blocklist.attachScope('ui-scope');
   });
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    List<Playlist> playlists = const [],
+  }) async {
+    final library = LibraryProvider(SubsonicService())
+      ..debugSeedPools(playlists: playlists);
+    addTearDown(library.dispose);
+
     await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: const BlocklistScreen(),
+      ChangeNotifierProvider<LibraryProvider>.value(
+        value: library,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const BlocklistScreen(),
+        ),
       ),
     );
     await tester.pump();
@@ -58,6 +72,23 @@ void main() {
     // 歌单额外标出"排除了多少首"
     expect(find.textContaining('仅从漫游排除'), findsWidgets);
     expect(find.textContaining('2 首'), findsOneWidget);
+  });
+
+  testWidgets('规则指向的歌单已不存在时会标出来', (tester) async {
+    await blocklist.blockPlaylist(
+      'gone',
+      '旧歌单',
+      mode: BlockMode.muted,
+      members: ['s1'],
+      songCount: 1,
+    );
+    // 现有歌单里没有 'gone'
+    await pumpPage(
+      tester,
+      playlists: [Playlist(id: 'p1', name: '儿歌', songCount: 2)],
+    );
+
+    expect(find.textContaining('歌单已不存在'), findsOneWidget);
   });
 
   testWidgets('点条目弹出选择，可解除屏蔽', (tester) async {

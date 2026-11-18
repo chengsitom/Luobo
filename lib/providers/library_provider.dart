@@ -500,6 +500,10 @@ class LibraryProvider extends ChangeNotifier {
   List<Playlist> get playlists =>
       _playlistViewCache.of(_playlists, _blocklist.revision, _visiblePlaylists);
 
+  /// **未过滤**的歌单列表，只给屏蔽管理页判断"规则指向的歌单是否还存在"用。
+  /// 不能用 `playlists`：那个已经滤掉了被隐藏的歌单，会把它们误判成"已删除"。
+  List<Playlist> get rawPlaylists => List<Playlist>.unmodifiable(_playlists);
+
   /// 全部专辑（已应用屏蔽）。
   List<Album> get cachedAllAlbums {
     final raw = _mergedAllAlbums;
@@ -520,55 +524,64 @@ class LibraryProvider extends ChangeNotifier {
     return _artistViewCache.of(raw, _blocklist.revision, _visibleArtists);
   }
 
-  // ── 合并本地库（原逻辑，不做过滤）──────────────────────────────────────
+  // ── 合并本地库（不做屏蔽过滤）────────────────────────────────────────
+  //
+  // 三件事必须一起做，否则每帧都在白烧 CPU：
+  //   1. 合并结果 memo（源列表 identity 不变就复用）；
+  //   2. 去重用 **Set**（原来 `merged.any(...)` 是 O(n·m)，万级曲库 × 几百首
+  //      本地歌，每帧几百万次比较）；
+  //   3. 合并后再过一遍屏蔽过滤（见各 getter）。
 
   List<Album> get _mergedAllAlbums {
-    if (!_mergeLocalLibrary ||
-        _localMusicService == null ||
-        _localMusicService!.isEmpty) {
-      return _cachedAllAlbums;
-    }
-    final localAlbums = _localMusicService!.albums;
-    final merged = [..._cachedAllAlbums];
-    for (final localAlbum in localAlbums) {
-      if (!merged.any((a) => a.id == localAlbum.id)) {
-        merged.add(localAlbum);
+    final local = _localAlbumsForMerge;
+    if (local == null) return _cachedAllAlbums;
+    return _mergedAlbumCache.of(_cachedAllAlbums, local, () {
+      final ids = {for (final a in _cachedAllAlbums) a.id};
+      final merged = [..._cachedAllAlbums];
+      for (final album in local) {
+        if (ids.add(album.id)) merged.add(album);
       }
-    }
-    return merged;
+      return merged;
+    });
   }
 
   List<Song> get _mergedAllSongs {
-    if (!_mergeLocalLibrary ||
-        _localMusicService == null ||
-        _localMusicService!.isEmpty) {
-      return _cachedAllSongs;
-    }
-    final localSongs = _localMusicService!.songs;
-    final merged = [..._cachedAllSongs];
-    for (final localSong in localSongs) {
-      if (!merged.any((s) => s.id == localSong.id)) {
-        merged.add(localSong);
+    final local = _localSongsForMerge;
+    if (local == null) return _cachedAllSongs;
+    return _mergedSongCache.of(_cachedAllSongs, local, () {
+      final ids = {for (final s in _cachedAllSongs) s.id};
+      final merged = [..._cachedAllSongs];
+      for (final song in local) {
+        if (ids.add(song.id)) merged.add(song);
       }
-    }
-    return merged;
+      return merged;
+    });
   }
 
   List<Artist> get _mergedArtists {
-    if (!_mergeLocalLibrary ||
-        _localMusicService == null ||
-        _localMusicService!.isEmpty) {
-      return _artists;
-    }
-    final localArtists = _localMusicService!.artists;
-    final merged = [..._artists];
-    for (final localArtist in localArtists) {
-      if (!merged.any((a) => a.id == localArtist.id)) {
-        merged.add(localArtist);
+    final local = _localArtistsForMerge;
+    if (local == null) return _artists;
+    return _mergedArtistCache.of(_artists, local, () {
+      final ids = {for (final a in _artists) a.id};
+      final merged = [..._artists];
+      for (final artist in local) {
+        if (ids.add(artist.id)) merged.add(artist);
       }
-    }
-    return merged;
+      return merged;
+    });
   }
+
+  bool get _canMergeLocal =>
+      _mergeLocalLibrary &&
+      _localMusicService != null &&
+      !_localMusicService!.isEmpty;
+
+  List<Song>? get _localSongsForMerge =>
+      _canMergeLocal ? _localMusicService!.songs : null;
+  List<Album>? get _localAlbumsForMerge =>
+      _canMergeLocal ? _localMusicService!.albums : null;
+  List<Artist>? get _localArtistsForMerge =>
+      _canMergeLocal ? _localMusicService!.artists : null;
 
   // ── 屏蔽过滤 ─────────────────────────────────────────────────────────
   //
@@ -587,6 +600,10 @@ class LibraryProvider extends ChangeNotifier {
   final _artistViewCache = _FilteredListCache<Artist>();
   final _playlistViewCache = _FilteredListCache<Playlist>();
   final _roamPoolCache = _FilteredListCache<Song>();
+  // 合并本地库的结果也 memo：否则每次 build 都重建（合并本身 + 去重都是 O(n)）。
+  final _mergedSongCache = _MergedListCache<Song>();
+  final _mergedAlbumCache = _MergedListCache<Album>();
+  final _mergedArtistCache = _MergedListCache<Artist>();
 
   /// 列表/搜索可见：只有**彻底屏蔽**的才消失（`muted` 仍要能浏览）。
   List<Song> _visibleSongs(List<Song> src) =>
@@ -1797,9 +1814,8 @@ List<String> artistAlbumCoverArt(List<Album> albums, Artist artist) {
 /// 不加缓存的话，`cachedAllSongs` 每次 build 都要对全库做一遍 `Set.contains`
 /// （万首级），首页/列表每帧都会白算一次。
 ///
-/// ⚠️ 已知局限：`_mergeLocalLibrary` 开启时源列表每次都是新实例（合并会新建
-/// 一个 List），identity 必然不同 → 缓存不命中、每帧重算一次。这是"合并本地库"
-/// 模式本身的重建成本，不是过滤器引入的；要消掉得先把合并结果也 memo 起来。
+/// 与 [_MergedListCache] 配合：合并本地库时先 memo 合并结果，这里拿到的是稳定
+/// 实例，过滤缓存才能正常命中。
 class _FilteredListCache<T> {
   Object? _src;
   int _rev = -1;
@@ -1810,6 +1826,24 @@ class _FilteredListCache<T> {
     _src = src;
     _rev = rev;
     _out = build(src);
+    return _out;
+  }
+}
+
+/// 两份列表合并的 memo：两边 identity 都没变就复用结果。
+///
+/// "合并本地库"模式下源列表本身是稳定的（`_cachedAllSongs` 与
+/// `LocalMusicService.songs` 都只在内容变化时整体替换），所以这里能稳定命中。
+class _MergedListCache<T> {
+  Object? _base;
+  Object? _local;
+  List<T> _out = const [];
+
+  List<T> of(List<T> base, List<T> local, List<T> Function() build) {
+    if (identical(_base, base) && identical(_local, local)) return _out;
+    _base = base;
+    _local = local;
+    _out = build();
     return _out;
   }
 }

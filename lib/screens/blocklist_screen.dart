@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/library_provider.dart';
 import '../services/blocklist_service.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/block_sheet.dart';
@@ -38,6 +40,15 @@ class BlocklistScreen extends StatelessWidget {
             );
           }
 
+          // 规则指向的歌单可能在别的设备被删了：标出来，否则用户会疑惑
+          // "为什么这条规则还在"。列表为空（还没加载）时不做判断。
+          final rawPlaylistIds = context
+              .watch<LibraryProvider>()
+              .rawPlaylists
+              .map((p) => p.id)
+              .toSet();
+          final canJudgePlaylists = rawPlaylistIds.isNotEmpty;
+
           final artists = entries.where((e) => e.kind == BlockKind.artist);
           final albums = entries.where((e) => e.kind == BlockKind.album);
           final playlists = entries.where((e) => e.kind == BlockKind.playlist);
@@ -55,7 +66,13 @@ class BlocklistScreen extends StatelessWidget {
               ],
               if (playlists.isNotEmpty) ...[
                 _sectionHeader(context, l10n.playlists, playlists.length),
-                for (final e in playlists) _tile(context, e),
+                for (final e in playlists)
+                  _tile(
+                    context,
+                    e,
+                    playlistGone: canJudgePlaylists &&
+                        !rawPlaylistIds.contains(e.targetId),
+                  ),
               ],
             ],
           );
@@ -75,7 +92,11 @@ class BlocklistScreen extends StatelessWidget {
     );
   }
 
-  Widget _tile(BuildContext context, BlockEntry entry) {
+  Widget _tile(
+    BuildContext context,
+    BlockEntry entry, {
+    bool playlistGone = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     final c = LuoboColors.of(context);
     final blocklist = BlocklistService.instance;
@@ -83,10 +104,13 @@ class BlocklistScreen extends StatelessWidget {
     final members = blocklist.membersOf(entry.targetId);
 
     // 歌单额外标出"排除了多少首"，让用户能判断规则是否生效。
-    final subtitle = entry.kind == BlockKind.playlist && members != null
+    var subtitle = entry.kind == BlockKind.playlist && members != null
         ? '${isHidden ? l10n.blockModeHide : l10n.blockModeMute} · '
             '${l10n.songsCount(members.length)}'
         : (isHidden ? l10n.blockModeHide : l10n.blockModeMute);
+    if (playlistGone) {
+      subtitle = '$subtitle · ${l10n.blocklistPlaylistGone}';
+    }
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),

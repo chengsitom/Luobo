@@ -3242,6 +3242,12 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get contentBlockedTitle => 'This is blocked';
+
+  @override
+  String get blocklistPlaylistGone => 'Playlist no longer exists';
+
+  @override
   String offlineModeHintWithCount(int count) {
     return '$count downloaded songs playable offline';
   }

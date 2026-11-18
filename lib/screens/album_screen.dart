@@ -15,6 +15,7 @@ import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/multi_select.dart';
 import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import '../services/offline_service.dart';
 
 class AlbumScreen extends StatefulWidget {
@@ -207,6 +208,19 @@ class _AlbumScreenState extends State<AlbumScreen> {
       );
     }
 
+    // 彻底屏蔽的专辑正常入口都已过滤，只剩"从播放队列点进来"能到这儿。
+    if (BlocklistService.instance.isAlbumHidden(_album!.id)) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: BlockedPlaceholder(
+          onUnblock: () async {
+            await BlocklistService.instance
+                .unblock(BlockKind.album, _album!.id);
+            if (mounted) setState(() {});
+          },
+        ),
+      );
+    }
 
     final isOffline = Provider.of<AuthProvider>(
       context,
@@ -223,7 +237,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
                 child: LuoboHeroCardHeader(
                   title: _album!.name,
                   subtitle: [
-                    _album!.artist ?? AppLocalizations.of(context)!.unknownArtist,
+                    _album!.artist ??
+                        AppLocalizations.of(context)!.unknownArtist,
                     if (_album!.year != null) _album!.year.toString(),
                   ].join(' · '),
                   countLabel: AppLocalizations.of(context)!.songsCount(
@@ -262,7 +277,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   );
                 }, childCount: _songs.length),
               ),
-              SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
+              SliverToBoxAdapter(
+                  child: SizedBox(
+                      height: LuoboSpacing.pageBottomWithStrip(context))),
             ],
           ),
           // 悬浮顶栏（圆返回 + 下载；滚动常驻、无实色栏，同歌单/收藏）。

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/list_sort_preference.dart';
@@ -14,6 +15,7 @@ import '../theme/design_tokens.dart';
 import '../utils/image_cache.dart';
 import '../utils/song_sort.dart';
 import '../widgets/album_artwork.dart';
+import '../widgets/blocked_placeholder.dart';
 import '../widgets/luobo/anchored_menu.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/luobo_toast.dart';
@@ -60,6 +62,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   // ── 折叠参数（dp）──
   /// 照片头高度（fnos 实测 ≈375；Luobo 用方形专辑封面裁切，取 340）。
   static const double _photoHeight = 340;
+
   /// 折叠起点/终点（滚动偏移，dp）：照片滚出后开始，标题块在「共 N 首」行
   /// 抵达顶栏下方（≈95dp）时完成——此时名字/分段控件已完全迁入顶栏。
   static const double _collapseStart = 240;
@@ -378,6 +381,22 @@ class _ArtistScreenState extends State<ArtistScreen> {
       );
     }
 
+    // 彻底屏蔽的艺人正常入口都已过滤，只剩"从播放队列点进来"能到这儿。
+    if (BlocklistService.instance
+        .isArtistHidden(widget.artistId, name: _artist!.name)) {
+      return Scaffold(
+        body: SafeArea(
+          child: BlockedPlaceholder(
+            onUnblock: () async {
+              await BlocklistService.instance
+                  .unblock(BlockKind.artist, widget.artistId);
+              if (mounted) setState(() {});
+            },
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -385,11 +404,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
             controller: _scrollController,
             slivers: [
               SliverToBoxAdapter(child: _buildHeader(context)),
-              if (_tab == 0)
-                _buildSongSliver()
-              else
-                _buildAlbumSliver(),
-              SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
+              if (_tab == 0) _buildSongSliver() else _buildAlbumSliver(),
+              SliverToBoxAdapter(
+                  child: SizedBox(
+                      height: LuoboSpacing.pageBottomWithStrip(context))),
             ],
           ),
           _buildFloatingBar(context),
@@ -687,8 +705,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               final segT = ((t - 0.6) / 0.4).clamp(0.0, 1.0);
               // 固定内距合计 40 + 14t（左 10+2t / 图标 20 / 间距 6t / 右 10+6t），
               // 留 8dp 余量 —— 之前按 +10 算少了 4dp，两个字的名字也会被裁。
-              final width =
-                  40 + (name.isEmpty ? 0 : _nameWidth(context, name) + 22) * nameT;
+              final width = 40 +
+                  (name.isEmpty ? 0 : _nameWidth(context, name) + 22) * nameT;
 
               return Stack(
                 children: [
@@ -799,12 +817,10 @@ class _ArtistTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = LuoboColors.of(context);
     final isDark = c.isDark;
-    final container = isDark
-        ? Colors.white.withValues(alpha: 0.14)
-        : Colors.white;
-    final selectedFill = isDark
-        ? Colors.white.withValues(alpha: 0.24)
-        : const Color(0xFFE6E7E6);
+    final container =
+        isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white;
+    final selectedFill =
+        isDark ? Colors.white.withValues(alpha: 0.24) : const Color(0xFFE6E7E6);
     final l10n = AppLocalizations.of(context)!;
 
     return Container(

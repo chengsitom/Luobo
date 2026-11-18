@@ -3120,6 +3120,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get contentBlockedTitle => '此内容已屏蔽';
+
+  @override
+  String get blocklistPlaylistGone => '歌单已不存在';
+
+  @override
   String offlineModeHintWithCount(int count) {
     return '$count 首已下载歌曲可离线播放';
   }
