@@ -298,12 +298,27 @@ class _FluidBackgroundState extends State<FluidBackground>
     return url == null || url.isEmpty ? null : NetworkImage(url);
   }
 
+  /// 进程级缓存：`FragmentProgram.fromAsset` 只该真正加载一次。
+  ///
+  /// 不缓存的话，每个**新挂载**的 FluidBackground（首页卡片重建、切 tab 回来、
+  /// 详情页 push）都要重走一遍"首帧兜底 → 淡入 mesh"，那 320ms 的渐变到 mesh
+  /// 就变成每次挂载都重演一遍的闪烁 —— 比原本的硬切更显眼。
+  static FragmentProgram? _program;
+
   @override
   void initState() {
     super.initState();
     _colors = widget.colors ?? FluidPalette.defaultColors;
     if (widget.colors == null) _resolvePalette();
-    if (widget.useShader) _resolveShader();
+    if (widget.useShader) {
+      final cached = _program;
+      if (cached != null) {
+        // 已加载过：首帧就绪，直接画 mesh，不做兜底过渡。
+        _shader = cached.fragmentShader();
+      } else {
+        _resolveShader();
+      }
+    }
   }
 
   @override
@@ -370,7 +385,8 @@ class _FluidBackgroundState extends State<FluidBackground>
     FragmentProgram? program;
     Object? error;
     try {
-      program = await FragmentProgram.fromAsset(FluidBackground.shaderAsset);
+      program = _program ??=
+          await FragmentProgram.fromAsset(FluidBackground.shaderAsset);
     } catch (e) {
       error = e;
     }
@@ -469,7 +485,7 @@ class _ShaderReveal extends StatefulWidget {
 class _ShaderRevealState extends State<_ShaderReveal>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _opacity;
+  late final CurvedAnimation _opacity;
   bool _fallbackDropped = false;
 
   @override
@@ -480,12 +496,16 @@ class _ShaderRevealState extends State<_ShaderReveal>
       duration: const Duration(milliseconds: 320),
     );
     _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _controller.addStatusListener(_onStatus);
     if (widget.reveal) {
       // 首帧就已就绪（热重载/重建）：不播动画，直接用 mesh。
-      _controller.value = 1;
+      // ⚠️ 标记要在改 value 之前置好：`value = 1` 会同步派发 completed，
+      // 监听器里若还没标记就会在 initState 期间 setState。
       _fallbackDropped = true;
+      _controller.value = 1;
     }
+    // 监听器无条件挂上：reveal 之后可能被翻回 false 再翻回 true（着色器重建），
+    // 那时仍要靠它把兜底层摘掉。
+    _controller.addStatusListener(_onStatus);
   }
 
   void _onStatus(AnimationStatus status) {
@@ -507,6 +527,7 @@ class _ShaderRevealState extends State<_ShaderReveal>
 
   @override
   void dispose() {
+    _opacity.dispose(); // CurvedAnimation 会给 parent 挂状态监听，必须自己摘
     _controller.dispose();
     super.dispose();
   }

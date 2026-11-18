@@ -359,6 +359,12 @@ class AuthProvider extends ChangeNotifier {
     if (_state == AuthState.authenticated) {
       // 离线标记已由 `_verifyConnection` 的成功路径统一摘掉（不变量：
       // 已登录 ⇒ 非离线）。
+      // ⚠️ 这里必须自己再 notify 一次：`_verifyConnection` 在置 authenticated
+      // 之后还有 `await offlineService.initialize()`，那一步若抛异常会一路冒到
+      // 上面的 catch —— 状态已是 authenticated、但末尾那次 notifyListeners
+      // 没跑到。不补这一下，UI 永远停在"重连中"（横幅永久转圈、按钮被替换），
+      // 而 in-flight future 又已清空，用户无路可走。
+      notifyListeners();
       // 离线态下 LibraryProvider 已经 initialized（只是走离线分支），
       // MainScreen 重建时它的 `initialize()` 会因 `_isInitialized` 直接返回 →
       // 首页仍展示离线缓存、不拉服务端数据。复用登出那条「强制重拉」标记。

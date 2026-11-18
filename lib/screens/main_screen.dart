@@ -466,10 +466,13 @@ class _MainScreenState extends State<MainScreen> {
       },
     );
 
-    if (!stripTopInset) return navigator;
-    return MediaQuery.removePadding(
-      context: context,
-      removeTop: true,
+    // 恒定插一层 MediaQuery，只在**数据**上取舍：
+    // `Navigator` 挂的是全局 GlobalKey，包/不包会改变 widget 树形状，形状一变
+    // 就要重新挂接 Navigator（路由还在，但正在跑的转场动画会断）。离线↔在线
+    // 切换时正处在一个大动作里，不该再叠加这种扰动。
+    final data = MediaQuery.of(context);
+    return MediaQuery(
+      data: stripTopInset ? data.removePadding(removeTop: true) : data,
       child: navigator,
     );
   }
@@ -515,30 +518,45 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 if (!isLocalMode) ...[
                   const SizedBox(width: 8),
-                  if (isConnecting)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  else
-                    TextButton(
-                      onPressed: () => _reconnectFromBanner(context, auth),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        minimumSize: const Size(0, 30),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      child: Text(l10n.reconnect),
-                    ),
+                  // 固定槽位（88×30）：spinner 与按钮宽度/高度一致，横幅在
+                  // 「连接中 ↔ 可点」之间切换时不会因为宽度变化让标题文字
+                  // 换行、也不会因为高度变化让整页内容上下抖。
+                  SizedBox(
+                    width: 88,
+                    height: 30,
+                    child: isConnecting
+                        ? const Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : TextButton(
+                            onPressed: () =>
+                                _reconnectFromBanner(context, auth),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              minimumSize: const Size(0, 30),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              textStyle: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            // 长语种（本地化后）缩排而不是溢出。
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(l10n.reconnect),
+                            ),
+                          ),
+                  ),
                 ],
               ],
             ),
