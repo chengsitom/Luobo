@@ -33,8 +33,31 @@ void showLuoboToast(
   String? actionLabel,
   VoidCallback? onAction,
 }) {
+  showLuoboToastOnOverlay(
+    Overlay.of(context, rootOverlay: true),
+    message: message,
+    tone: tone,
+    actionLabel: actionLabel,
+    onAction: onAction,
+  );
+}
+
+/// 同上，但直接给 **root overlay**：用于「发起 toast 的那个 widget 已经
+/// （或即将）被销毁」的场景。
+///
+/// 例：多选 → 添加到歌单。用户在选歌单后 sheet 立刻 pop，网络请求回来时
+/// 原来的 context 已经 unmounted，`showLuoboToast(context)` 只能静默放弃
+/// （表现为"加进去了但没有任何提示"）。这条换不掉的路径只有 overlay 是稳的：
+/// 它属于 Navigator，页面/弹窗销毁不影响它。
+void showLuoboToastOnOverlay(
+  OverlayState overlay, {
+  required String message,
+  LuoboToastTone tone = LuoboToastTone.info,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
+  if (!overlay.mounted) return;
   _toastEntry?.remove();
-  final overlay = Overlay.of(context, rootOverlay: true);
   final overlayBox = overlay.context.findRenderObject() as RenderBox?;
   final anchorBox =
       luoboToastAnchorKey.currentContext?.findRenderObject() as RenderBox?;
@@ -213,8 +236,10 @@ class _LuoboProgressCard extends StatelessWidget {
     final c = LuoboColors.of(context);
     final (icon, color) = switch (data.tone) {
       LuoboToastTone.success => (Icons.check_rounded, LuoboAccent.accent),
-      LuoboToastTone.error =>
-        (Icons.error_outline_rounded, LuoboAccent.warn(context)),
+      LuoboToastTone.error => (
+          Icons.error_outline_rounded,
+          LuoboAccent.warn(context)
+        ),
       LuoboToastTone.info => (Icons.file_download_rounded, c.fg2),
     };
 
@@ -324,7 +349,10 @@ class _LuoboToastCardState extends State<_LuoboToastCard>
 
     final (icon, color) = switch (widget.tone) {
       LuoboToastTone.success => (Icons.check_rounded, LuoboAccent.accent),
-      LuoboToastTone.error => (Icons.error_outline_rounded, LuoboAccent.warn(context)),
+      LuoboToastTone.error => (
+          Icons.error_outline_rounded,
+          LuoboAccent.warn(context)
+        ),
       LuoboToastTone.info => (Icons.info_outline_rounded, c.fg2),
     };
 

@@ -217,8 +217,9 @@ Future<void> runMultiAction(
       break;
     case LuoboMultiAction.download:
       // 依赖 context 的读取都在 await 之前完成，避免 async gap 后用 context。
-      final isMobile = context.read<TranscodingService>().currentConnectionType !=
-          ConnectionType.wifi;
+      final isMobile =
+          context.read<TranscodingService>().currentConnectionType !=
+              ConnectionType.wifi;
       final subsonicService =
           Provider.of<SubsonicService>(context, listen: false);
       final offline = OfflineService();
@@ -278,6 +279,10 @@ Future<void> showBatchPlaylistPicker(
     listen: false,
   );
   final l10n = AppLocalizations.of(context)!;
+  // 提前抓 root overlay：用户点歌单后 sheet 会立刻 pop，等网络回来时
+  // `context` 已经 unmounted，`showLuoboToast(context)` 会静默放弃 ——
+  // 表现就是"加进去了，但没有任何提示"（连失败也不提示）。
+  final toastOverlay = Overlay.of(context, rootOverlay: true);
 
   await showLuoboSheet(
     context: context,
@@ -306,17 +311,18 @@ Future<void> showBatchPlaylistPicker(
                       songIdsToAdd: songs.map((s) => s.id).toList(),
                     );
                     await libraryProvider.loadPlaylists();
-                    if (!context.mounted) return;
-                    showLuoboToast(
-                      context,
-                      message: l10n.addedSongsToPlaylist(songs.length, playlist.name),
+                    showLuoboToastOnOverlay(
+                      toastOverlay,
+                      message: l10n.addedSongsToPlaylist(
+                        songs.length,
+                        playlist.name,
+                      ),
                       tone: LuoboToastTone.success,
                       // 撤销已移除（服务端 songIndexToRemove 不可靠；fnos 亦无撤销）。
                     );
                   } catch (e) {
-                    if (!context.mounted) return;
-                    showLuoboToast(
-                      context,
+                    showLuoboToastOnOverlay(
+                      toastOverlay,
                       message: l10n.errorAddingToPlaylist(e),
                       tone: LuoboToastTone.error,
                     );
@@ -329,6 +335,7 @@ Future<void> showBatchPlaylistPicker(
     ),
   );
 }
+
 /// **多选全屏弹窗**（fnos v1_0064 实测：全屏 sheet + 把手 + 全选/完成 +
 /// 圆形勾选行 + 底部 4 等分操作——**不是**页面内选择模式）。
 ///
@@ -393,151 +400,151 @@ class _MultiSelectSheetState extends State<_MultiSelectSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: c.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: c.divider,
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() {
-                      if (allSelected) {
-                        _selected.clear();
-                      } else {
-                        _selected.addAll(
-                          List.generate(widget.songs.length, (i) => i),
-                        );
-                      }
-                    }),
-                    child: Text(
-                      allSelected ? l10n.deselectAll : l10n.selectAll,
-                      style: LuoboType.body.copyWith(color: c.fg2),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() {
+                    if (allSelected) {
+                      _selected.clear();
+                    } else {
+                      _selected.addAll(
+                        List.generate(widget.songs.length, (i) => i),
+                      );
+                    }
+                  }),
+                  child: Text(
+                    allSelected ? l10n.deselectAll : l10n.selectAll,
+                    style: LuoboType.body.copyWith(color: c.fg2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    l10n.selectedSongsCount(_selected.length),
+                    style: LuoboType.body.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      l10n.selectedSongsCount(_selected.length),
-                      style: LuoboType.body.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Text(
+                    l10n.done,
+                    style: LuoboType.body.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Text(
-                      l10n.done,
-                      style: LuoboType.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                itemCount: widget.songs.length,
-                itemBuilder: (context, index) {
-                  // 行样式与歌曲列表一致（封面 48/标题 15/副标题 12），
-                  // 只是少了 ⋮；分隔线从封面右缘往后一点开始（含选择框 → 106）。
-                  return Column(
-                    children: [
-                      SongTile(
-                        song: widget.songs[index],
-                        playlist: widget.songs,
-                        index: index,
-                        selectionMode: true,
-                        selected: _selected.contains(index),
-                        onTap: () => setState(() {
-                          if (!_selected.remove(index)) _selected.add(index);
-                        }),
-                      ),
-                      if (index < widget.songs.length - 1)
-                        const LuoboSongDivider(indent: 106),
-                    ],
-                  );
-                },
-              ),
-            ),
-            LuoboMultiSelectActionBar(
-              // 底部安全区放在**栏内**：栏背景延伸到屏幕底（通底）。
-              bottomInset: MediaQuery.of(context).padding.bottom,
-              actions: [
-                (
-                  icon: Icons.play_arrow_rounded,
-                  label: l10n.play,
-                  onTap: _selected.isEmpty
-                      ? null
-                      : () => _run(() => runMultiAction(
-                            context,
-                            action: LuoboMultiAction.play,
-                            songs: _selectedSongs,
-                          )),
                 ),
-                (
-                  icon: Icons.queue_music_rounded,
-                  label: l10n.addToPlaybackQueue,
-                  onTap: _selected.isEmpty
-                      ? null
-                      : () => _run(() => runMultiAction(
-                            context,
-                            action: LuoboMultiAction.addToQueue,
-                            songs: _selectedSongs,
-                          )),
-                ),
-                (
-                  icon: Icons.download_rounded,
-                  label: l10n.download,
-                  onTap: _selected.isEmpty
-                      ? null
-                      : () => _run(() => runMultiAction(
-                            context,
-                            action: LuoboMultiAction.download,
-                            songs: _selectedSongs,
-                          )),
-                ),
-                // 「添加到歌单」与「从歌单移除」互斥（fnos 歌单内多选只有移除）。
-                if (widget.onRemove == null)
-                  (
-                    icon: Icons.playlist_add_rounded,
-                    label: l10n.addToPlaylist,
-                    onTap: _selected.isEmpty
-                        ? null
-                        : () => _run(() => runMultiAction(
-                              context,
-                              action: LuoboMultiAction.addToPlaylist,
-                              songs: _selectedSongs,
-                            )),
-                  ),
-                if (widget.onRemove != null)
-                  (
-                    icon: Icons.playlist_remove_rounded,
-                    label: widget.removeLabel ?? l10n.removeFromPlaylist,
-                    onTap: _selected.isEmpty
-                        ? null
-                        : () => _run(() async {
-                              final songs = _selectedSongs;
-                              Navigator.pop(context);
-                              await widget.onRemove!(songs);
-                            }),
-                  ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemCount: widget.songs.length,
+              itemBuilder: (context, index) {
+                // 行样式与歌曲列表一致（封面 48/标题 15/副标题 12），
+                // 只是少了 ⋮；分隔线从封面右缘往后一点开始（含选择框 → 106）。
+                return Column(
+                  children: [
+                    SongTile(
+                      song: widget.songs[index],
+                      playlist: widget.songs,
+                      index: index,
+                      selectionMode: true,
+                      selected: _selected.contains(index),
+                      onTap: () => setState(() {
+                        if (!_selected.remove(index)) _selected.add(index);
+                      }),
+                    ),
+                    if (index < widget.songs.length - 1)
+                      const LuoboSongDivider(indent: 106),
+                  ],
+                );
+              },
+            ),
+          ),
+          LuoboMultiSelectActionBar(
+            // 底部安全区放在**栏内**：栏背景延伸到屏幕底（通底）。
+            bottomInset: MediaQuery.of(context).padding.bottom,
+            actions: [
+              (
+                icon: Icons.play_arrow_rounded,
+                label: l10n.play,
+                onTap: _selected.isEmpty
+                    ? null
+                    : () => _run(() => runMultiAction(
+                          context,
+                          action: LuoboMultiAction.play,
+                          songs: _selectedSongs,
+                        )),
+              ),
+              (
+                icon: Icons.queue_music_rounded,
+                label: l10n.addToPlaybackQueue,
+                onTap: _selected.isEmpty
+                    ? null
+                    : () => _run(() => runMultiAction(
+                          context,
+                          action: LuoboMultiAction.addToQueue,
+                          songs: _selectedSongs,
+                        )),
+              ),
+              (
+                icon: Icons.download_rounded,
+                label: l10n.download,
+                onTap: _selected.isEmpty
+                    ? null
+                    : () => _run(() => runMultiAction(
+                          context,
+                          action: LuoboMultiAction.download,
+                          songs: _selectedSongs,
+                        )),
+              ),
+              // 「添加到歌单」与「从歌单移除」互斥（fnos 歌单内多选只有移除）。
+              if (widget.onRemove == null)
+                (
+                  icon: Icons.playlist_add_rounded,
+                  label: l10n.addToPlaylist,
+                  onTap: _selected.isEmpty
+                      ? null
+                      : () => _run(() => runMultiAction(
+                            context,
+                            action: LuoboMultiAction.addToPlaylist,
+                            songs: _selectedSongs,
+                          )),
+                ),
+              if (widget.onRemove != null)
+                (
+                  icon: Icons.playlist_remove_rounded,
+                  label: widget.removeLabel ?? l10n.removeFromPlaylist,
+                  onTap: _selected.isEmpty
+                      ? null
+                      : () => _run(() async {
+                            final songs = _selectedSongs;
+                            Navigator.pop(context);
+                            await widget.onRemove!(songs);
+                          }),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
