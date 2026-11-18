@@ -4108,9 +4108,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (library == null) return false;
 
     // 池子优先用本地全量缓存（真·全曲库）；全量同步还没完成时退回服务端随机池。
-    final pool = library.cachedAllSongs.isNotEmpty
-        ? library.cachedAllSongs
-        : library.randomSongs;
+    // `roamPool` 已经应用了屏蔽规则：彻底屏蔽与「仅从漫游排除」都不会被抽到。
+    final pool = library.roamPool;
     if (pool.isEmpty) return false;
 
     final shuffled = List<Song>.from(pool)..shuffle();

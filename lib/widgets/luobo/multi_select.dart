@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/blocklist_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/song.dart';
 import '../../providers/library_provider.dart';
@@ -303,13 +304,16 @@ Future<void> showBatchPlaylistPicker(
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
+                    final ids = songs.map((s) => s.id).toList();
                     await Provider.of<SubsonicService>(
                       context,
                       listen: false,
                     ).updatePlaylist(
                       playlistId: playlist.id,
-                      songIdsToAdd: songs.map((s) => s.id).toList(),
+                      songIdsToAdd: ids,
                     );
+                    await BlocklistService.instance
+                        .noteSongsAdded(playlist.id, ids);
                     await libraryProvider.loadPlaylists();
                     showLuoboToastOnOverlay(
                       toastOverlay,

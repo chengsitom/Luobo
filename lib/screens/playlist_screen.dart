@@ -24,6 +24,7 @@ import '../widgets/luobo/song_divider.dart';
 import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import '../utils/song_sort.dart';
 import '../widgets/luobo/anchored_menu.dart';
 
@@ -129,7 +130,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-
   void _showPlaylistSettings() {
     final l10n = AppLocalizations.of(context)!;
     showPlaylistSettingsSheet(
@@ -139,6 +139,18 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         if (!_isDownloading) _downloadPlaylist();
       },
       isDownloading: _isDownloading,
+      onBlock: () {
+        final playlist = _playlist!;
+        // 详情页通常已经加载了成员 → 一次到位，之后漫游排除 0 请求。
+        showBlockSheet(
+          context,
+          kind: BlockKind.playlist,
+          targetId: playlist.id,
+          name: playlist.name,
+          members: playlist.songs?.map((s) => s.id),
+          songCount: playlist.songCount ?? playlist.songs?.length,
+        );
+      },
       onDelete: () async {
         final confirmed = await showLuoboConfirmSheet(
           context: context,
@@ -155,7 +167,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       },
     );
   }
-
 
   void _playAll({bool shuffle = false}) {
     if (_playlist?.songs == null || _playlist!.songs!.isEmpty) return;
@@ -218,6 +229,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         playlistId: widget.playlistId,
         songIndexesToRemove: [index],
       );
+      // 若该歌单被「排除漫游」：精确摘掉这首歌（0 请求），不要让排除名单
+      // 继续把它算进去（否则删了歌却还被"排除"，用户会以为规则没生效）。
+      await BlocklistService.instance
+          .noteSongsRemoved(widget.playlistId, [song.id]);
       setState(() {
         final updatedSongs = List<Song>.from(_playlist!.songs!)
           ..removeAt(index);
@@ -228,18 +243,18 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       });
       if (mounted) {
         showLuoboToast(
-      context,
-      message: l10n.songRemovedFromPlaylist,
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.songRemovedFromPlaylist,
+          tone: LuoboToastTone.info,
+        );
       }
     } catch (e) {
       if (mounted) {
         showLuoboToast(
-      context,
-      message: l10n.errorRemovingSong(e),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.errorRemovingSong(e),
+          tone: LuoboToastTone.info,
+        );
       }
     }
   }
@@ -289,10 +304,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     } catch (e) {
       if (mounted) {
         showLuoboToast(
-      context,
-      message: l10n.errorReorderingSong(e),
-      tone: LuoboToastTone.info,
-    );
+          context,
+          message: l10n.errorReorderingSong(e),
+          tone: LuoboToastTone.info,
+        );
       }
       _loadPlaylist();
     }
@@ -408,7 +423,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
-
   Future<void> _downloadPlaylist() async {
     final songs = _playlist?.songs;
     if (songs == null || songs.isEmpty) return;
@@ -436,9 +450,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     // 进度与结果提示由全局 DownloadProgressOverlay 统一负责（进度卡 + 终态卡），
     // 这里只管本页按钮的 loading 态，避免两套提示重复弹。
-    offlineService
-        .startBackgroundDownload(songs, subsonicService)
-        .then((_) {
+    offlineService.startBackgroundDownload(songs, subsonicService).then((_) {
       if (mounted) setState(() => _isDownloading = false);
     });
   }
@@ -593,97 +605,99 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       body: Stack(
         children: [
           CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeroHeader(context)),
-          const SliverToBoxAdapter(child: Divider()),
-          if (_playlist!.songs?.isEmpty ?? true)
-            SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 40),
-                  child: Text(
-                    l10n.noSongsInPlaylist,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.lightSecondaryText,
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final songs = _displaySongs;
-                  final song = songs[index];
-                  final tile = SongTile(
-                    song: song,
-                    playlist: songs,
-                    index: index,
-                    showArtist: true,
-                    
-                    // ⋮ 菜单变体 C（设计稿/09）：歌单内 = 横排 + 收藏 + 从当前歌单移除。
-                    menuContext: SongMenuContext.playlist,
-                    onRemoveFromPlaylist: () {
-                      _removeSongFromPlaylist(song);
-                    },
-                    // 逐首播放也记录「最近播放的歌单」。
-                    onTap: () {
-                      _recordPlayback();
-                      // 队列必须用展示顺序 songs（= _displaySongs，可能已排序），
-                      // 而不是服务端原序 _playlist!.songs——否则 startIndex(展示位)
-                      // 落到原序列表上会指向另一首歌，底栏显示选中歌、实际播放却是
-                      // 另一首（排序开启时必现）。
-                      Provider.of<PlayerProvider>(context, listen: false)
-                          .playSong(
-                        song,
-                        playlist: songs,
-                        startIndex: index,
-                      );
-                    },
-                    onLongPress: _toggleSelectMode,
-                  );
-                  return Dismissible(
-                    key: ValueKey('${song.id}_$index'),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: Colors.red,
-                      child: const Icon(
-                        CupertinoIcons.trash,
-                        color: Colors.white,
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeroHeader(context)),
+              const SliverToBoxAdapter(child: Divider()),
+              if (_playlist!.songs?.isEmpty ?? true)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Text(
+                        l10n.noSongsInPlaylist,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.lightSecondaryText,
+                        ),
                       ),
                     ),
-                    confirmDismiss: (_) async {
-                      return await showLuoboConfirmSheet(
-                            context: context,
-                            title: l10n.removeFromPlaylist,
-                            message: l10n.removeSongFromPlaylistConfirm(
-                              song.title,
-                            ),
-                            confirmLabel: l10n.remove,
-                          ) ??
-                          false;
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final songs = _displaySongs;
+                      final song = songs[index];
+                      final tile = SongTile(
+                        song: song,
+                        playlist: songs,
+                        index: index,
+                        showArtist: true,
+
+                        // ⋮ 菜单变体 C（设计稿/09）：歌单内 = 横排 + 收藏 + 从当前歌单移除。
+                        menuContext: SongMenuContext.playlist,
+                        onRemoveFromPlaylist: () {
+                          _removeSongFromPlaylist(song);
+                        },
+                        // 逐首播放也记录「最近播放的歌单」。
+                        onTap: () {
+                          _recordPlayback();
+                          // 队列必须用展示顺序 songs（= _displaySongs，可能已排序），
+                          // 而不是服务端原序 _playlist!.songs——否则 startIndex(展示位)
+                          // 落到原序列表上会指向另一首歌，底栏显示选中歌、实际播放却是
+                          // 另一首（排序开启时必现）。
+                          Provider.of<PlayerProvider>(context, listen: false)
+                              .playSong(
+                            song,
+                            playlist: songs,
+                            startIndex: index,
+                          );
+                        },
+                        onLongPress: _toggleSelectMode,
+                      );
+                      return Dismissible(
+                        key: ValueKey('${song.id}_$index'),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: Colors.red,
+                          child: const Icon(
+                            CupertinoIcons.trash,
+                            color: Colors.white,
+                          ),
+                        ),
+                        confirmDismiss: (_) async {
+                          return await showLuoboConfirmSheet(
+                                context: context,
+                                title: l10n.removeFromPlaylist,
+                                message: l10n.removeSongFromPlaylistConfirm(
+                                  song.title,
+                                ),
+                                confirmLabel: l10n.remove,
+                              ) ??
+                              false;
+                        },
+                        onDismissed: (_) => _removeSongFromPlaylist(song),
+                        child: Column(
+                          children: [
+                            tile,
+                            // 行间分隔线（fnos v6_0060 实测：左右各缩 16dp，
+                            // 行高 64dp）。
+                            if (index < _playlist!.songs!.length - 1)
+                              const LuoboSongDivider(),
+                          ],
+                        ),
+                      );
                     },
-                    onDismissed: (_) => _removeSongFromPlaylist(song),
-                    child: Column(
-                      children: [
-                        tile,
-                        // 行间分隔线（fnos v6_0060 实测：左右各缩 16dp，
-                        // 行高 64dp）。
-                        if (index < _playlist!.songs!.length - 1)
-                          const LuoboSongDivider(),
-                      ],
-                    ),
-                  );
-                },
-                childCount: _playlist!.songs!.length,
-              ),
-            ),
-          SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
-        ],
-      ),
+                    childCount: _playlist!.songs!.length,
+                  ),
+                ),
+              SliverToBoxAdapter(
+                  child: SizedBox(
+                      height: LuoboSpacing.pageBottomWithStrip(context))),
+            ],
+          ),
           // 悬浮顶栏（圆返回 + 圆⋮；滚动时常驻、无实色栏——帧实测）。
           Positioned(
             top: 0,

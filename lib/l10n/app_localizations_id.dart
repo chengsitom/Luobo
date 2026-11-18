@@ -3188,6 +3188,52 @@ class AppLocalizationsId extends AppLocalizations {
   String get enterOfflineMode => 'Enter offline mode';
 
   @override
+  String get blockArtistAction => 'Block this artist';
+
+  @override
+  String get blockAlbumAction => 'Block this album';
+
+  @override
+  String get blockPlaylistAction => 'Block this playlist';
+
+  @override
+  String get blockModeHide => 'Hide completely';
+
+  @override
+  String get blockModeHideDesc =>
+      'Won\'t appear in my lists, search or roaming';
+
+  @override
+  String get blockModeMute => 'Exclude from roaming only';
+
+  @override
+  String get blockModeMuteDesc =>
+      'Still browsable and playable, just never picked at random';
+
+  @override
+  String get unblockAction => 'Unblock';
+
+  @override
+  String blockedSuccess(String name) {
+    return 'Blocked \"$name\" · restore it in Settings → Content filter';
+  }
+
+  @override
+  String get blocklistTitle => 'Content filter';
+
+  @override
+  String get blocklistSubtitle =>
+      'Blocked artists, albums and playlists stay out of lists, search and roaming';
+
+  @override
+  String get blocklistEmpty => 'Nothing blocked yet';
+
+  @override
+  String blocklistExcludedSongs(int count) {
+    return '$count songs excluded from roaming';
+  }
+
+  @override
   String offlineModeHintWithCount(int count) {
     return '$count downloaded songs playable offline';
   }

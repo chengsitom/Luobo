@@ -7,6 +7,7 @@ export 'android_system_service.dart';
 export 'windows_system_service.dart';
 export 'bluetooth_avrcp_service.dart';
 export 'samsung_integration_service.dart';
+export 'blocklist_service.dart';
 export 'offline_service.dart';
 export 'cache_settings_service.dart';
 export 'bpm_analyzer_service.dart';

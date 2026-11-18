@@ -3077,6 +3077,49 @@ class AppLocalizationsZh extends AppLocalizations {
   String get enterOfflineMode => '进入离线模式';
 
   @override
+  String get blockArtistAction => '屏蔽该艺人';
+
+  @override
+  String get blockAlbumAction => '屏蔽该专辑';
+
+  @override
+  String get blockPlaylistAction => '屏蔽此歌单';
+
+  @override
+  String get blockModeHide => '彻底屏蔽';
+
+  @override
+  String get blockModeHideDesc => '在我的列表、搜索和漫游中都不再出现';
+
+  @override
+  String get blockModeMute => '仅从漫游排除';
+
+  @override
+  String get blockModeMuteDesc => '仍然可以浏览和播放，只是不会被随机抽到';
+
+  @override
+  String get unblockAction => '解除屏蔽';
+
+  @override
+  String blockedSuccess(String name) {
+    return '已屏蔽「$name」· 可在 设置 → 内容过滤 中恢复';
+  }
+
+  @override
+  String get blocklistTitle => '内容过滤';
+
+  @override
+  String get blocklistSubtitle => '被屏蔽的艺人、专辑与歌单不会出现在列表、搜索和漫游里';
+
+  @override
+  String get blocklistEmpty => '还没有屏蔽任何内容';
+
+  @override
+  String blocklistExcludedSongs(int count) {
+    return '已在漫游中排除 $count 首';
+  }
+
+  @override
   String offlineModeHintWithCount(int count) {
     return '$count 首已下载歌曲可离线播放';
   }

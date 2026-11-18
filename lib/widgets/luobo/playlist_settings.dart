@@ -24,6 +24,9 @@ Future<void> showPlaylistSettingsSheet(
   VoidCallback? onMultiSelect,
   VoidCallback? onDownload,
   bool isDownloading = false,
+
+  /// 屏蔽该歌单（彻底屏蔽 / 仅从漫游排除，二选一交给统一的屏蔽弹窗）。
+  VoidCallback? onBlock,
 }) async {
   final libraryProvider = Provider.of<LibraryProvider>(
     context,
@@ -45,7 +48,8 @@ Future<void> showPlaylistSettingsSheet(
           onPressed: () {
             Navigator.pop(ctx);
             (onRename ??
-                () => showRenamePlaylistDialog(context, playlist, libraryProvider))();
+                () => showRenamePlaylistDialog(
+                    context, playlist, libraryProvider))();
           },
         ),
         if (onToggleFavorite != null) ...[
@@ -90,6 +94,16 @@ Future<void> showPlaylistSettingsSheet(
                     Navigator.pop(ctx);
                     onDownload();
                   },
+          ),
+        ],
+        if (onBlock != null) ...[
+          const SizedBox(height: 16),
+          LuoboCapsuleButton(
+            label: l10n.blockPlaylistAction,
+            onPressed: () {
+              Navigator.pop(ctx);
+              onBlock();
+            },
           ),
         ],
         if (onDelete != null) ...[

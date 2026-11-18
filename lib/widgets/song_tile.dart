@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import '../services/blocklist_service.dart';
+import 'block_sheet.dart';
 import '../l10n/app_localizations.dart';
 import '../models/artist_ref.dart';
 import '../models/song.dart';
@@ -748,6 +750,44 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             _showPlaylistPicker(context, song);
           },
         ),
+        // 屏蔽：一个弹窗两档强度。缺 artistId/albumId 时不给入口
+        // （没有稳定 id 的屏蔽会"看起来生效但其实没匹配上"）。
+        // 没有 artistId 就不给"屏蔽艺人"入口：名字兜底只用于**匹配**，
+        // 不能用来建规则（同名不同人 + 改名后规则失联），点了也只会空转。
+        if (song.artistId != null && song.artistId!.isNotEmpty)
+          LuoboSheetRow(
+            title: l10n.blockArtistAction,
+            contentPadding: _rowPadding,
+            gap: _rowGap,
+            trailing: const Icon(Icons.visibility_off_rounded,
+                size: 18, color: LuoboAccent.accent),
+            onTap: () {
+              Navigator.pop(context);
+              showBlockSheet(
+                context,
+                kind: BlockKind.artist,
+                targetId: song.artistId ?? '',
+                name: song.artist ?? song.title,
+              );
+            },
+          ),
+        if (song.albumId != null && song.albumId!.isNotEmpty)
+          LuoboSheetRow(
+            title: l10n.blockAlbumAction,
+            contentPadding: _rowPadding,
+            gap: _rowGap,
+            trailing: const Icon(Icons.visibility_off_rounded,
+                size: 18, color: LuoboAccent.accent),
+            onTap: () {
+              Navigator.pop(context);
+              showBlockSheet(
+                context,
+                kind: BlockKind.album,
+                targetId: song.albumId!,
+                name: song.album ?? song.title,
+              );
+            },
+          ),
         if (isPlaylist && widget.onRemoveFromPlaylist != null)
           LuoboSheetRow(
             title: l10n.removeFromPlaylist,
@@ -1106,6 +1146,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                         playlistId: playlist.id,
                         songIdsToAdd: [song.id],
                       );
+                      // 若这个歌单被「排除漫游」，精确补进排除集合（0 请求），
+                      // 否则要等 songCount 变化检测再拉一次详情。
+                      await BlocklistService.instance
+                          .noteSongsAdded(playlist.id, [song.id]);
                       await libraryProvider.loadPlaylists();
 
                       // 轻提示（设计稿/08 §6）：可逆操作带「撤销」——刚加的歌

@@ -5752,6 +5752,84 @@ abstract class AppLocalizations {
   /// **'Enter offline mode'**
   String get enterOfflineMode;
 
+  /// Song menu: block the artist of this song
+  ///
+  /// In en, this message translates to:
+  /// **'Block this artist'**
+  String get blockArtistAction;
+
+  /// Song menu: block the album of this song
+  ///
+  /// In en, this message translates to:
+  /// **'Block this album'**
+  String get blockAlbumAction;
+
+  /// Playlist menu: block this playlist
+  ///
+  /// In en, this message translates to:
+  /// **'Block this playlist'**
+  String get blockPlaylistAction;
+
+  /// Block sheet option: completely hide from lists, search and roaming
+  ///
+  /// In en, this message translates to:
+  /// **'Hide completely'**
+  String get blockModeHide;
+
+  /// Explanation under the hide option
+  ///
+  /// In en, this message translates to:
+  /// **'Won\'t appear in my lists, search or roaming'**
+  String get blockModeHideDesc;
+
+  /// Block sheet option: keep browsable, never picked by shuffle
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude from roaming only'**
+  String get blockModeMute;
+
+  /// Explanation under the mute option
+  ///
+  /// In en, this message translates to:
+  /// **'Still browsable and playable, just never picked at random'**
+  String get blockModeMuteDesc;
+
+  /// Remove an existing block rule
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get unblockAction;
+
+  /// Toast after blocking; tells the user where to undo
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked \"{name}\" · restore it in Settings → Content filter'**
+  String blockedSuccess(String name);
+
+  /// Settings entry + page title
+  ///
+  /// In en, this message translates to:
+  /// **'Content filter'**
+  String get blocklistTitle;
+
+  /// Settings entry subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked artists, albums and playlists stay out of lists, search and roaming'**
+  String get blocklistSubtitle;
+
+  /// Empty state of the content filter page
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing blocked yet'**
+  String get blocklistEmpty;
+
+  /// How many songs the playlist rules currently exclude
+  ///
+  /// In en, this message translates to:
+  /// **'{count} songs excluded from roaming'**
+  String blocklistExcludedSongs(int count);
+
   /// Login-failure screen: what offline mode offers when there are downloads
   ///
   /// In en, this message translates to:

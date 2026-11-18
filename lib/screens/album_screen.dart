@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/luobo/luobo_toast.dart';
 import '../widgets/luobo/sheet_shell.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../models/models.dart';
@@ -287,6 +286,17 @@ class _AlbumScreenState extends State<AlbumScreen> {
                         icon: Icons.download_rounded,
                         onTap: _isDownloading ? () {} : _downloadAlbum,
                       ),
+                    const SizedBox(width: 8),
+                    // 屏蔽入口：一个弹窗两档强度（彻底屏蔽 / 仅从漫游排除）。
+                    LuoboTopCircleButton(
+                      icon: Icons.block_rounded,
+                      onTap: () => showBlockSheet(
+                        context,
+                        kind: BlockKind.album,
+                        targetId: _album!.id,
+                        name: _album!.name,
+                      ),
+                    ),
                   ],
                 ),
               ),

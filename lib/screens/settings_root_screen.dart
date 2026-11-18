@@ -16,6 +16,7 @@ import '../widgets/luobo/hero_detail_header.dart';
 import '../widgets/luobo/luobo_card.dart';
 import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/settings_sub_page.dart';
+import 'blocklist_screen.dart';
 import 'settings_about_page.dart';
 import 'settings_ai_playlist_tab.dart';
 import 'settings_app_page.dart';
@@ -104,6 +105,16 @@ class SettingsRootScreen extends StatelessWidget {
                           context,
                           l10n.serverManagement,
                           const SettingsServerTab(),
+                        ),
+                      ),
+                      // 内容过滤：被屏蔽的艺人/专辑/歌单只在这里能解除
+                      // （彻底屏蔽后原详情页进不去），所以入口必须常驻。
+                      LuoboRow(
+                        icon: Icons.visibility_off_rounded,
+                        title: l10n.blocklistTitle,
+                        onTap: () => NavigationHelper.push(
+                          context,
+                          const BlocklistScreen(),
                         ),
                       ),
                     ],
