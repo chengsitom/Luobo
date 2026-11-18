@@ -197,7 +197,11 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       listen: false,
     );
     try {
-      final artists = await subsonicService.getArtists();
+      final blocklist = BlocklistService.instance;
+      // 逐歌手兜底同样要过滤：被屏蔽的艺人连"去拉他的专辑"这一步都该跳过。
+      final artists = (await subsonicService.getArtists())
+          .where((a) => !blocklist.isArtistHidden(a.id, name: a.name))
+          .toList();
       final collected = <String, Album>{};
       for (var i = 0; i < artists.length; i += 8) {
         final chunk = artists.skip(i).take(8);
@@ -210,6 +214,10 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         );
         for (final list in results) {
           for (final album in list) {
+            if (blocklist.isAlbumHidden(album.id) ||
+                blocklist.isArtistHidden(album.artistId, name: album.artist)) {
+              continue;
+            }
             collected[album.id] = album;
           }
         }

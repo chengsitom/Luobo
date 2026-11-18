@@ -291,6 +291,10 @@ class BlocklistService extends ChangeNotifier {
   /// 1. 从没展开过（成员集合为空）；
   /// 2. 服务端 `songCount` 与展开时记的不一致（本机/别处增删过）；
   /// 3. 兜底：距上次展开超过 7 天（防止服务端不更新 songCount）。
+  ///
+  /// 最坏情况：若服务端"列表 songCount"与"详情 songCount"口径不一致，
+  /// 每次 `loadPlaylists()` 都会多一次详情请求 —— 该函数只由启动和用户的
+  /// 歌单操作触发，不是循环，量有界；换来的是一直能收敛到最新成员。
   bool playlistNeedsMembers(Playlist playlist) {
     final entry = entryFor(BlockKind.playlist, playlist.id);
     if (entry == null) return false;
