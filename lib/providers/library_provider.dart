@@ -705,20 +705,36 @@ class LibraryProvider extends ChangeNotifier {
       final List<Album> allAlbums = [];
       final seenSongIds = <String>{};
 
-      // Clear DB before refresh so we don't accumulate stale data.
+      // ⚠️ 顺序很重要：**先拿第一页，成功了才清库**。
+      //
+      // 原实现是"先 clearServerData() 再拉"，一旦首个请求就失败（服务器挂了 /
+      // 网络刚断），DB 里一个专辑一首歌都不剩；本会话还有内存 `_cachedAllSongs`
+      // 兜着看不出来，但**下次冷启** `_loadCachedData` 读到空库 → 首页「一首歌
+      // 都没有」，要等下一次全量同步成功才恢复（离线场景下就是一直空着）。
+      // 这就是"本地明明有歌，却提示 0 首"的来源之一。
+      //
+      // 只能挡住首个请求失败这种最常见的情况；中途失败仍会留下不完整数据，
+      // 但那至少是"部分可用"，而且失败相册会计入 failedAlbumLoads。
+      var page = await _subsonicService.getAlbumList(
+        type: 'alphabeticalByName',
+        size: pageSize,
+        offset: 0,
+      );
+
+      // First page is in hand — safe to replace the cached library now.
       await _db.clearServerData();
 
       while (true) {
-        final page = await _subsonicService.getAlbumList(
-          type: 'alphabeticalByName',
-          size: pageSize,
-          offset: offset,
-        );
         if (page.isEmpty) break;
         allAlbums.addAll(page);
         await _db.insertAlbumsBatch(page);
         if (page.length < pageSize) break;
         offset += pageSize;
+        page = await _subsonicService.getAlbumList(
+          type: 'alphabeticalByName',
+          size: pageSize,
+          offset: offset,
+        );
       }
 
       if (_subsonicService.isJellyfin) {
