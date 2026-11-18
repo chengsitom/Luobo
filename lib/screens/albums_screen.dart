@@ -12,6 +12,7 @@ import '../widgets/luobo/list_rows.dart';
 import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/song_divider.dart';
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import 'search_screen.dart';
 
 class AlbumsScreen extends StatefulWidget {
@@ -163,9 +164,19 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         offset: _offset,
       );
       if (!mounted) return;
+      // 服务端分页不知道本地屏蔽规则，这里兜一刀：被屏蔽的艺人和专辑不出现
+      // （否则「全部专辑」页会越过曲库 getter 直接把它们列出来）。
+      final blocklist = BlocklistService.instance;
+      final visible = page
+          .where(
+            (a) =>
+                !blocklist.isAlbumHidden(a.id) &&
+                !blocklist.isArtistHidden(a.artistId, name: a.artist),
+          )
+          .toList();
       setState(() {
         if (reset) _albums.clear();
-        _albums.addAll(page);
+        _albums.addAll(visible);
         _offset += page.length;
         _hasMore = page.length == _pageSize;
         _isLoading = false;
@@ -236,8 +247,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       appBar: LuoboListTopBar(
         actions: [
           LuoboTopSearchButton(
-            onTap: () =>
-                NavigationHelper.push(context, const SearchScreen()),
+            onTap: () => NavigationHelper.push(context, const SearchScreen()),
           ),
         ],
       ),

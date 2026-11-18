@@ -97,18 +97,94 @@ void main() {
     expect(library.roamPool.length, 3);
   });
 
-  test('revision 变化后过滤结果会重算（memo 不粘住旧结果）', () async {
-    expect(library.cachedAllSongs.length, 3);
+  test('列表过滤有 memo：不变时复用同一个 List 实例，变更后重算', () async {
+    // 先放一条规则让过滤生效（空名单时直接返回原始列表，测不到 memo）
+    await blocklist.blockArtist('a2', 'Artist 2', mode: BlockMode.muted);
+
+    final first = library.cachedAllSongs;
+    final second = library.cachedAllSongs;
+    expect(identical(first, second), isTrue, reason: '同一 revision 应命中缓存');
+
     await blocklist.blockArtist('a1', 'Artist 1', mode: BlockMode.hidden);
-    expect(library.cachedAllSongs.length, 1);
-    await blocklist.setMode(BlockKind.artist, 'a1', BlockMode.muted);
-    // 切档后列表恢复（muted 仍可见）
-    expect(library.cachedAllSongs.length, 3);
-    expect(library.roamPool.length, 1);
+    final third = library.cachedAllSongs;
+    expect(identical(first, third), isFalse, reason: '名单变了必须重算');
+    expect(third.map((s) => s.id), ['s3']);
   });
 
-  test('Playlist 隐藏判定不影响歌曲可见性', () {
-    // 防回归：曾想把「歌单被隐藏」等同于「成员歌曲被隐藏」，那会让别处凭空少歌。
-    expect(Playlist(id: 'p1', name: '儿歌').id, 'p1');
+  test('切档后列表与漫游池各自重算', () async {
+    await blocklist.blockArtist('a1', 'Artist 1', mode: BlockMode.hidden);
+    expect(library.cachedAllSongs.length, 1);
+    expect(library.roamPool.length, 1);
+
+    await blocklist.setMode(BlockKind.artist, 'a1', BlockMode.muted);
+    // muted 仍可见，但漫游依旧排除
+    expect(library.cachedAllSongs.length, 3);
+    expect(library.roamPool.map((s) => s.id), ['s3']);
   });
+
+  test('删歌单会连带清掉它的屏蔽规则（否则成员被永久排除）', () async {
+    final fake = _FakeSubsonic();
+    final provider = LibraryProvider(fake)
+      ..debugSeedPools(
+        songs: [
+          Song(id: 's1', title: 'A', artistId: 'a1', artist: 'Artist 1'),
+          Song(id: 's9', title: '儿歌', artistId: 'a9', artist: 'Kid'),
+        ],
+      );
+    addTearDown(provider.dispose);
+
+    await blocklist.blockPlaylist(
+      'p1',
+      '儿歌',
+      mode: BlockMode.muted,
+      members: ['s9'],
+      songCount: 1,
+    );
+    expect(
+        blocklist.isSongExcluded(
+          Song(id: 's9', title: '儿歌'),
+        ),
+        isTrue);
+
+    await provider.deletePlaylist('p1');
+
+    expect(blocklist.entryFor(BlockKind.playlist, 'p1'), isNull);
+    expect(blocklist.isSongExcluded(Song(id: 's9', title: '儿歌')), isFalse);
+  });
+
+  test('删除失败时保留规则（不能把用户的设置弄丢）', () async {
+    final provider = LibraryProvider(_FakeSubsonic(failDelete: true));
+    addTearDown(provider.dispose);
+
+    await blocklist.blockPlaylist(
+      'p1',
+      '儿歌',
+      mode: BlockMode.muted,
+      members: ['s9'],
+      songCount: 1,
+    );
+
+    await expectLater(provider.deletePlaylist('p1'), throwsA(anything));
+    expect(blocklist.entryFor(BlockKind.playlist, 'p1'), isNotNull);
+  });
+
+  test('隐藏歌单不影响成员歌曲的可见性', () async {
+    await blocklist.blockPlaylist('p1', '儿歌', mode: BlockMode.hidden);
+    // 歌单条目消失，但它里面的歌属于各自的艺人/专辑 —— 不该在别处凭空少歌
+    expect(library.playlists.map((p) => p.id), ['p2']);
+    expect(library.cachedAllSongs.length, 3);
+  });
+}
+
+/// 只替换需要的方法，其余走真实实现（真实实现会因"未配置服务器"直接抛错，
+/// 正好用来证明「删除失败时不该清规则」）。
+class _FakeSubsonic extends SubsonicService {
+  _FakeSubsonic({this.failDelete = false});
+
+  final bool failDelete;
+
+  @override
+  Future<void> deletePlaylist(String id) async {
+    if (failDelete) throw Exception('boom');
+  }
 }

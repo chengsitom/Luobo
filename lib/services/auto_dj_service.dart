@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import 'bpm_analyzer_service.dart';
+import 'blocklist_service.dart';
 import 'subsonic_service.dart';
 import 'recommendation_service.dart';
 
@@ -329,8 +330,15 @@ class AutoDjService extends ChangeNotifier {
   }
 
   List<Song> _filterAndLimit(List<Song> songs, Set<String> existingIds) {
+    final blocklist = BlocklistService.instance;
     final filtered = songs.where((s) {
-      return !existingIds.contains(s.id) && !_recentlyAddedIds.contains(s.id);
+      if (existingIds.contains(s.id) || _recentlyAddedIds.contains(s.id)) {
+        return false;
+      }
+      // 续播的候选还有一部分来自**服务端**（getRandomSongs / 相似歌曲 /
+      // 同风格 / 同艺人）——那些不经过 LibraryProvider 的漫游池，必须在这里
+      // 兜一刀，否则「屏蔽了但 AutoDJ 还在往里加」。
+      return !blocklist.isSongExcluded(s);
     }).toList();
 
     filtered.shuffle(Random());

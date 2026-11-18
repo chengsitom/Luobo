@@ -20,12 +20,12 @@ void main() {
   const lastKey = Key('last-item');
 
   Widget host(Widget scrollView) => MaterialApp(
-    home: Scaffold(
-      extendBody: true,
-      bottomNavigationBar: const SizedBox(height: stripHeight),
-      body: scrollView,
-    ),
-  );
+        home: Scaffold(
+          extendBody: true,
+          bottomNavigationBar: const SizedBox(height: stripHeight),
+          body: scrollView,
+        ),
+      );
 
   /// 滚到底后，「最后一行的底边」到「条带顶边」的间距（< 0 表示被压住）。
   Future<double> gapAboveStrip(WidgetTester tester) async {

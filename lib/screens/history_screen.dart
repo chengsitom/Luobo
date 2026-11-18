@@ -3,6 +3,7 @@ import 'package:fluid_mesh_background/fluid_mesh_background.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/blocklist_service.dart';
 import '../models/song.dart';
 import '../providers/providers.dart';
 import '../services/recommendation_service.dart';
@@ -107,7 +108,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (mounted) {
       setState(() {
-        _recentSongs = playedSongs.map((e) => e.key).take(100).toList();
+        // 已屏蔽的对象不出现在「最近播放」里（历史记录本身保留，
+        // 解除屏蔽后重新进来就能看到）。
+        _recentSongs = playedSongs
+            .map((e) => e.key)
+            .where((s) => !BlocklistService.instance.isSongHidden(s))
+            .take(100)
+            .toList();
         _isLoading = false;
       });
     }
@@ -168,7 +175,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           childCount: _recentSongs.length,
                         ),
                       ),
-                    SliverToBoxAdapter(child: SizedBox(height: LuoboSpacing.pageBottomWithStrip(context))),
+                    SliverToBoxAdapter(
+                        child: SizedBox(
+                            height: LuoboSpacing.pageBottomWithStrip(context))),
                   ],
                 ),
                 // 悬浮顶栏（圆返回 + 听歌报告；滚动常驻、无实色栏）。

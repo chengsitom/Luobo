@@ -198,11 +198,14 @@ class BlocklistService extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    if (_scope.isEmpty) return;
+    // 先抓作用域：await 期间可能已经切服/换账号，用 `_scope` 实时值会把
+    // A 账号的规则写到 B 账号名下。
+    final scope = _scope;
+    if (scope.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        '${_keyPrefix}_$_scope',
+        '${_keyPrefix}_$scope',
         json.encode({
           'entries': _entries.values.map((e) => e.toJson()).toList(),
           'playlistSongs': _playlistSongs.map(
@@ -223,8 +226,7 @@ class BlocklistService extends ChangeNotifier {
     if (id != null && id.isNotEmpty && _hiddenArtistIds.contains(id)) {
       return true;
     }
-    final n = _norm(name);
-    return n.isNotEmpty && _hiddenArtistNames.contains(n);
+    return _nameMatches(_hiddenArtistNames, name);
   }
 
   /// 该艺人是否「不参与随机/推荐」（屏蔽 ∪ 仅排除）。
@@ -233,8 +235,7 @@ class BlocklistService extends ChangeNotifier {
     if (id != null && id.isNotEmpty && _excludedArtistIds.contains(id)) {
       return true;
     }
-    final n = _norm(name);
-    return n.isNotEmpty && _excludedArtistNames.contains(n);
+    return _nameMatches(_excludedArtistNames, name);
   }
 
   bool isAlbumHidden(String? id) {
@@ -293,13 +294,14 @@ class BlocklistService extends ChangeNotifier {
   bool playlistNeedsMembers(Playlist playlist) {
     final entry = entryFor(BlockKind.playlist, playlist.id);
     if (entry == null) return false;
-    final members = _playlistSongs[playlist.id];
-    if (members == null || members.isEmpty) return true;
+    // 从没展开过（或名单丢了）→ 必须拉。注意不能用 `members.isEmpty` 判：
+    // 空歌单的成员集合本来就是空，否则每次 loadPlaylists 都要白拉一次。
+    if (entry.expandedAt == null) return true;
+    if (!_playlistSongs.containsKey(playlist.id)) return true;
     final expected = playlist.songCount;
     if (expected != null && entry.memberCount != expected) return true;
-    final expandedAt = entry.expandedAt;
-    return expandedAt == null ||
-        DateTime.now().millisecondsSinceEpoch - expandedAt > _memberStaleMs;
+    return DateTime.now().millisecondsSinceEpoch - entry.expandedAt! >
+        _memberStaleMs;
   }
 
   Set<String>? membersOf(String playlistId) => _playlistSongs[playlistId];
@@ -418,10 +420,14 @@ class BlocklistService extends ChangeNotifier {
     if (entry == null) return;
     final members = _playlistSongs.putIfAbsent(playlistId, () => <String>{});
     members.addAll(songIds);
-    _entries['playlist:$playlistId'] = entry.copyWith(
-      // 同步基线，避免 `songCount` 变化检测把这次新增当成"别处改的"再拉一次。
-      memberCount: (entry.memberCount ?? 0) + songIds.length,
-    );
+    // 只有"已展开过"才维护基线；从没展开过时保持 null，让
+    // `playlistNeedsMembers` 继续要求一次真正的展开（此时集合只是部分，
+    // 编一个 memberCount 会让它误以为已是最新）。
+    if (entry.memberCount != null) {
+      _entries['playlist:$playlistId'] = entry.copyWith(
+        memberCount: entry.memberCount! + songIds.length,
+      );
+    }
     _rebuildIndexes();
     notifyListeners();
     await _persist();
@@ -437,9 +443,11 @@ class BlocklistService extends ChangeNotifier {
     final members = _playlistSongs[playlistId];
     if (members == null) return;
     members.removeAll(songIds);
-    _entries['playlist:$playlistId'] = entry.copyWith(
-      memberCount: (entry.memberCount ?? members.length) - songIds.length,
-    );
+    if (entry.memberCount != null) {
+      _entries['playlist:$playlistId'] = entry.copyWith(
+        memberCount: (entry.memberCount! - songIds.length).clamp(0, 1 << 30),
+      );
+    }
     _rebuildIndexes();
     notifyListeners();
     await _persist();
@@ -482,6 +490,34 @@ class BlocklistService extends ChangeNotifier {
   }
 
   String _norm(String? value) => (value ?? '').trim().toLowerCase();
+
+  /// 名字兜底匹配（`artistId` 缺失时用）。
+  ///
+  /// 除了整串相等，还要能命中「A feat. B」「A & B」「A, B」这类多艺人写法 ——
+  /// 否则屏蔽了 A，合唱曲照样漏出来。反过来也会屏蔽 A 的合唱曲，这是符合
+  /// 直觉的（用户就是不想听 A）。
+  bool _nameMatches(Set<String> names, String? raw) {
+    final normalized = _norm(raw);
+    if (normalized.isEmpty) return false;
+    if (names.contains(normalized)) return true;
+    for (final sep in const [
+      ',',
+      '&',
+      '/',
+      '、',
+      ';',
+      ' feat. ',
+      ' ft. ',
+      ' with '
+    ]) {
+      if (!normalized.contains(sep)) continue;
+      for (final part in normalized.split(sep)) {
+        final trimmed = part.trim();
+        if (trimmed.isNotEmpty && names.contains(trimmed)) return true;
+      }
+    }
+    return false;
+  }
 
   @visibleForTesting
   Future<void> resetForTest() async {

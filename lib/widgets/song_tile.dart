@@ -767,7 +767,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                 context,
                 kind: BlockKind.artist,
                 targetId: song.artistId ?? '',
-                name: song.artist ?? song.title,
+                name: song.artist ?? '—',
               );
             },
           ),
@@ -784,7 +784,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                 context,
                 kind: BlockKind.album,
                 targetId: song.albumId!,
-                name: song.album ?? song.title,
+                name: song.album ?? '—',
               );
             },
           ),

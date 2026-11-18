@@ -48,7 +48,8 @@ void main() {
       final d = await Ipv6Reachability.diagnose(
         'ipv6only.example.com',
         lookup: (_) async => [
-          InternetAddress('2408:820c:8fac:f7f1::6c0', type: InternetAddressType.IPv6),
+          InternetAddress('2408:820c:8fac:f7f1::6c0',
+              type: InternetAddressType.IPv6),
         ],
         listInterfaces: () async => [],
       );

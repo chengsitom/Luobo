@@ -25,7 +25,8 @@ void main() {
       expect(fresh.totalCount, 5);
     });
 
-    test('cancelled state can coexist with failedCount from in-flight tasks', () {
+    test('cancelled state can coexist with failedCount from in-flight tasks',
+        () {
       // 取消时，在途任务返回 false 计入 failedCount；终态卡应看 cancelled
       // 而非 failedCount 决定文案，这里保证两者能同时存在且不互相覆盖。
       final state = DownloadState(

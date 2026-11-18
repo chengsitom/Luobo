@@ -25,7 +25,11 @@ void main() {
 
     test('只有 expiresInSeconds 时按剩余秒算', () {
       final parsed = SubsonicService.parseAlbumCoverTicket(
-        {'ticket': 'tk', 'url': '/api/cover?albumId=a&ticket=tk', 'expiresInSeconds': 90},
+        {
+          'ticket': 'tk',
+          'url': '/api/cover?albumId=a&ticket=tk',
+          'expiresInSeconds': 90
+        },
         now,
       );
       expect(parsed!.expiresAt.difference(now).inSeconds, 90);
@@ -59,7 +63,6 @@ void main() {
       );
     });
   });
-
 
   group('parseArtistStats', () {
     test('解析 trackCount / albumCount', () {

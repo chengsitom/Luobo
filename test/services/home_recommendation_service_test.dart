@@ -456,8 +456,7 @@ void main() {
       expect(daily.map((s) => s.albumId).toSet().length, daily.length);
     });
 
-    test('缓存无时间戳时 refreshKnowledgeFromCache 只同步一次（防无限重建循环）',
-        () async {
+    test('缓存无时间戳时 refreshKnowledgeFromCache 只同步一次（防无限重建循环）', () async {
       // 复现线上事故：缓存文件存在但 meta 没有时间戳时
       // （getLastUpdateTime() == null），旧守卫 `updated != null && …` 永远
       // 放行，rebuildKnowledge + notifyListeners 会在每次 build 的

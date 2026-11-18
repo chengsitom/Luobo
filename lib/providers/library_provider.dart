@@ -458,30 +458,38 @@ class LibraryProvider extends ChangeNotifier {
   List<Album> get newestAlbums => _newestAlbums;
   List<Album> get randomAlbums => _randomAlbums;
   List<Album> get recentAlbums =>
-      _albumViewCache.of(_recentAlbums, _blocklist.revision, _visibleAlbums);
+      _recentAlbumsCache.of(_recentAlbums, _blocklist.revision, _visibleAlbums);
   List<Song> get randomSongs =>
-      _songViewCache.of(_randomSongs, _blocklist.revision, _excludedSongs);
+      _randomSongsCache.of(_randomSongs, _blocklist.revision, _excludedSongs);
 
   /// 漫游/AutoDJ 的候选池：**屏蔽（hidden）与仅排除（muted）都不出现**。
   ///
   /// 单独开一个 getter 而不是改 `cachedAllSongs`：`muted` 的内容在列表/搜索里
   /// 必须照常可见可播（R2.3），只有"被随机抽中"这一件事要排除。
-  List<Song> get roamPool => _roamPoolCache.of(
-        _cachedAllSongs.isEmpty ? _randomSongs : _cachedAllSongs,
-        _blocklist.revision,
-        _excludedSongs,
-      );
+  List<Song> get roamPool {
+    // 用合并后的曲库：只读 `_cachedAllSongs` 会让"合并本地库"模式下的本地歌
+    // 永远进不了漫游（它们在 `_cachedAllSongs` 里不存在）。
+    final source = _mergedAllSongs.isNotEmpty ? _mergedAllSongs : _randomSongs;
+    return _roamPoolCache.of(source, _blocklist.revision, _excludedSongs);
+  }
 
   List<String> get genres => _genres;
   List<Genre> get richGenres => _richGenres;
   SearchResult? get starred {
     final result = _starred;
     if (result == null || _blocklist.isEmpty) return result;
-    final songs = _visibleSongs(result.songs);
     return SearchResult(
-      albums: result.albums,
-      artists: result.artists,
-      songs: songs,
+      albums: result.albums
+          .where(
+            (a) =>
+                !_blocklist.isAlbumHidden(a.id) &&
+                !_blocklist.isArtistHidden(a.artistId, name: a.artist),
+          )
+          .toList(),
+      artists: result.artists
+          .where((a) => !_blocklist.isArtistHidden(a.id, name: a.name))
+          .toList(),
+      songs: _visibleSongs(result.songs),
     );
   }
 
@@ -496,14 +504,14 @@ class LibraryProvider extends ChangeNotifier {
   List<Album> get cachedAllAlbums {
     final raw = _mergedAllAlbums;
     if (_blocklist.isEmpty) return raw;
-    return _albumViewCache.of(raw, _blocklist.revision, _visibleAlbums);
+    return _allAlbumsCache.of(raw, _blocklist.revision, _visibleAlbums);
   }
 
   /// 全部歌曲（已应用屏蔽）。
   List<Song> get cachedAllSongs {
     final raw = _mergedAllSongs;
     if (_blocklist.isEmpty) return raw;
-    return _songViewCache.of(raw, _blocklist.revision, _visibleSongs);
+    return _allSongsCache.of(raw, _blocklist.revision, _visibleSongs);
   }
 
   List<Artist> get artists {
@@ -569,8 +577,13 @@ class LibraryProvider extends ChangeNotifier {
 
   BlocklistService get _blocklist => BlocklistService.instance;
 
-  final _songViewCache = _FilteredListCache<Song>();
-  final _albumViewCache = _FilteredListCache<Album>();
+  // ⚠️ 每个 getter **一个独立缓存**：一个缓存只记住"最后一次的源列表"，
+  // 两个 getter 共用会互相驱逐（首页的 randomSongs 和列表页的 cachedAllSongs
+  // 交替调用 → 每次都 miss + 重新过滤万首）。
+  final _allSongsCache = _FilteredListCache<Song>();
+  final _randomSongsCache = _FilteredListCache<Song>();
+  final _allAlbumsCache = _FilteredListCache<Album>();
+  final _recentAlbumsCache = _FilteredListCache<Album>();
   final _artistViewCache = _FilteredListCache<Artist>();
   final _playlistViewCache = _FilteredListCache<Playlist>();
   final _roamPoolCache = _FilteredListCache<Song>();
@@ -599,7 +612,12 @@ class LibraryProvider extends ChangeNotifier {
         ...src.where((p) => !_blocklist.isPlaylistHidden(p.id)),
       ];
 
-  void _onBlocklistChanged() => notifyListeners();
+  void _onBlocklistChanged() {
+    // 首页 feed（探索发现/每日推荐）是按曲库算出来再缓存的：屏蔽规则一变，
+    // 旧 feed 里还留着被屏蔽的歌，必须连带失效，否则"屏蔽了还在首页"。
+    homeRecommendationService?.clearCaches();
+    notifyListeners();
+  }
 
   /// 保证「被排除歌单」的成员名单是新的。
   ///
@@ -655,11 +673,14 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> initialize(
       {bool force = false, bool scheduleBackground = true}) async {
-    // 屏蔽名单按 (服务器, 账号) 隔离，作用域就用封面缓存那套 md5(baseUrl|user)。
+    // 屏蔽名单按 (服务器, 账号) 隔离。⚠️ 必须用**稳定**标识：
+    // `coverCacheServerId` 跟着当前生效地址在 LAN/远程之间变，会让同一账号在
+    // 家和在外各有一份名单（表现为"设置过但出门就失效"）。
     // 放在 `_isInitialized` 早退之前：切服/换账号后即便曲库已初始化，作用域
-    // 也必须跟着换（内部同作用域会直接返回，代价可忽略）。
+    // 也必须跟着换（同作用域内部直接返回，代价可忽略）。
+    final scope = _subsonicService.stableServerScope;
     await BlocklistService.instance
-        .attachScope(_subsonicService.coverCacheServerId);
+        .attachScope(scope.isEmpty ? 'local' : scope);
 
     if (_isInitialized && !force) return;
 
@@ -1043,17 +1064,22 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   void _pushLibraryToAndroidAuto() {
-    if (_artists.isNotEmpty) {
-      _androidAutoService.updateArtists(_artists);
+    // 用过滤后的 getter：被屏蔽的艺人/专辑/歌单/歌曲不该出现在车机界面上。
+    final visibleArtists = artists;
+    final visibleAlbums = recentAlbums;
+    final visiblePlaylists = playlists;
+    final visibleSongs = randomSongs;
+    if (visibleArtists.isNotEmpty) {
+      _androidAutoService.updateArtists(visibleArtists);
     }
-    if (_recentAlbums.isNotEmpty) {
-      _androidAutoService.updateAlbums(_recentAlbums, getCoverArtUrl);
+    if (visibleAlbums.isNotEmpty) {
+      _androidAutoService.updateAlbums(visibleAlbums, getCoverArtUrl);
     }
-    if (_playlists.isNotEmpty) {
-      _androidAutoService.updatePlaylists(_playlists, getCoverArtUrl);
+    if (visiblePlaylists.isNotEmpty) {
+      _androidAutoService.updatePlaylists(visiblePlaylists, getCoverArtUrl);
     }
-    if (_randomSongs.isNotEmpty) {
-      _androidAutoService.updateRecentSongs(_randomSongs, getCoverArtUrl);
+    if (visibleSongs.isNotEmpty) {
+      _androidAutoService.updateRecentSongs(visibleSongs, getCoverArtUrl);
     }
   }
 
@@ -1097,7 +1123,7 @@ class LibraryProvider extends ChangeNotifier {
     }
 
     if (_playlists.isNotEmpty) {
-      _androidAutoService.updatePlaylists(_playlists, getCoverArtUrl);
+      _androidAutoService.updatePlaylists(playlists, getCoverArtUrl);
     }
   }
 
@@ -1376,7 +1402,7 @@ class LibraryProvider extends ChangeNotifier {
       _cachedPlaylists = _playlists;
       _saveCachedData();
       notifyListeners();
-      _androidAutoService.updatePlaylists(_playlists, getCoverArtUrl);
+      _androidAutoService.updatePlaylists(playlists, getCoverArtUrl);
       // 被排除歌单的成员可能是新的（别处增删过）：用 songCount 变化检测。
       unawaited(_refreshBlockedPlaylistMembers());
     } catch (e) {
@@ -1387,7 +1413,7 @@ class LibraryProvider extends ChangeNotifier {
       }
 
       if (_playlists.isNotEmpty) {
-        _androidAutoService.updatePlaylists(_playlists, getCoverArtUrl);
+        _androidAutoService.updatePlaylists(playlists, getCoverArtUrl);
       }
     }
   }
@@ -1515,6 +1541,9 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> deletePlaylist(String playlistId) async {
     await _subsonicService.deletePlaylist(playlistId);
+    // 歌单没了，针对它的规则必须一起清 —— 否则那些歌曲 id 会被永久排除出
+    // 漫游（歌单已删、成员还在曲库里），而且管理页上会留下一条点了没反应的规则。
+    await BlocklistService.instance.unblock(BlockKind.playlist, playlistId);
     await loadPlaylists();
   }
 
@@ -1754,6 +1783,10 @@ List<String> artistAlbumCoverArt(List<Album> albums, Artist artist) {
 ///
 /// 不加缓存的话，`cachedAllSongs` 每次 build 都要对全库做一遍 `Set.contains`
 /// （万首级），首页/列表每帧都会白算一次。
+///
+/// ⚠️ 已知局限：`_mergeLocalLibrary` 开启时源列表每次都是新实例（合并会新建
+/// 一个 List），identity 必然不同 → 缓存不命中、每帧重算一次。这是"合并本地库"
+/// 模式本身的重建成本，不是过滤器引入的；要消掉得先把合并结果也 memo 起来。
 class _FilteredListCache<T> {
   Object? _src;
   int _rev = -1;

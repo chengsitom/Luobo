@@ -103,7 +103,8 @@ void main() {
       expect(recordBelongsToServer(legacy, ''), isTrue);
     });
 
-    test('records are isolated by serverId to avoid cross-server songId clash', () {
+    test('records are isolated by serverId to avoid cross-server songId clash',
+        () {
       final onA = DownloadRecord(
         songId: '123', // 两服可能用相同的数字 id
         serverId: 'serverA',

@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:luobo/models/album.dart';
 import 'package:luobo/models/artist_ref.dart';
 import 'package:luobo/models/playlist.dart';
 import 'package:luobo/models/song.dart';
@@ -90,6 +89,23 @@ void main() {
     expect(blocklist.isSongHidden(song(artistId: null, artist: '别人')), isFalse);
   });
 
+  test('名字兜底能命中多艺人写法（A feat. B / A & B）', () async {
+    await blocklist.blockArtist('a9', '周杰伦', mode: BlockMode.hidden);
+
+    expect(
+      blocklist.isSongHidden(song(artistId: null, artist: '周杰伦 feat. 方文山')),
+      isTrue,
+    );
+    expect(
+      blocklist.isSongHidden(song(artistId: null, artist: '周杰伦 & 五月天')),
+      isTrue,
+    );
+    expect(
+      blocklist.isSongHidden(song(artistId: null, artist: '五月天')),
+      isFalse,
+    );
+  });
+
   test('歌单：排除的是成员歌曲，两档都生效', () async {
     await blocklist.blockPlaylist(
       'p1',
@@ -120,7 +136,8 @@ void main() {
     expect(blocklist.isSongExcluded(song(id: 's9')), isTrue);
     // 基线同步了，不会因为 songCount 检测再触发一次拉取
     expect(
-      blocklist.playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 2)),
+      blocklist
+          .playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 2)),
       isFalse,
     );
   });
@@ -150,19 +167,22 @@ void main() {
 
     // 一致 → 不需要
     expect(
-      blocklist.playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 1)),
+      blocklist
+          .playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 1)),
       isFalse,
     );
     // 别处加了歌 → 需要
     expect(
-      blocklist.playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 2)),
+      blocklist
+          .playlistNeedsMembers(Playlist(id: 'p1', name: '儿歌', songCount: 2)),
       isTrue,
     );
   });
 
   test('没被屏蔽的歌单永远不需要展开', () async {
     expect(
-      blocklist.playlistNeedsMembers(Playlist(id: 'px', name: '其他', songCount: 9)),
+      blocklist
+          .playlistNeedsMembers(Playlist(id: 'px', name: '其他', songCount: 9)),
       isFalse,
     );
   });
@@ -198,8 +218,21 @@ void main() {
     expect(blocklist.isSongHidden(song()), isTrue);
   });
 
-  test('Album/Playlist 模型在过滤里只读字段，不改对象', () async {
-    // 防回归：屏蔽只影响判定，不应要求调用方改数据模型。
-    expect(Album(id: 'al1', name: 'Album 1').id, 'al1');
+  test('空歌单的成员集合为空，但不需要反复重拉', () async {
+    await blocklist.blockPlaylist(
+      'empty',
+      '空歌单',
+      mode: BlockMode.muted,
+      members: const [],
+      songCount: 0,
+    );
+
+    // 展开过了（成员为空是事实，不是"没拉到"）→ 不该每次 loadPlaylists 都拉一次
+    expect(
+      blocklist.playlistNeedsMembers(
+        Playlist(id: 'empty', name: '空歌单', songCount: 0),
+      ),
+      isFalse,
+    );
   });
 }

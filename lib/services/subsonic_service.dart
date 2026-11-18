@@ -1001,6 +1001,19 @@ class SubsonicService {
     return md5.convert(utf8.encode('$base|$user')).toString();
   }
 
+  /// 与**当前走哪条网络路径无关**的稳定 (服务器, 账号) 标识。
+  ///
+  /// `coverCacheServerId` 会跟着 `_activeBaseUrl` 在 LAN / 远程之间变化 —— 对封面
+  /// 缓存可以接受，对**本地规则数据是致命的**：同一账号在家和在外会分裂成两份
+  /// 屏蔽名单，表现为"设置过但出门就失效"。凡是必须跨网络切换保持一致的数据
+  /// （屏蔽名单）都用这个。
+  String get stableServerScope {
+    final base = _config?.normalizedUrl ?? '';
+    final user = _config?.username ?? '';
+    if (base.isEmpty) return '';
+    return md5.convert(utf8.encode('$base|$user')).toString();
+  }
+
   String getStreamUrl(String songId, {int? maxBitRate, String? format}) {
     if (_jellyfin != null)
       return _jellyfin!
