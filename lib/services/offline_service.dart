@@ -297,6 +297,10 @@ class OfflineService {
     return getDownloadedSongIds().length;
   }
 
+  /// 全部下载记录数（不分服务器）。登录失败页用它判定"本地是否有内容"——
+  /// 失败时当前 serverId 归属可能尚未注册，按服过滤会误判为 0。
+  int getTotalDownloadedCount() => _records.length;
+
   Future<int> getDownloadedSize() async {
     if (_offlineDir == null) return 0;
     // 统一口径：只算音频文件本身（封面/歌词是附属小文件，不混入"下了多少MB"）。

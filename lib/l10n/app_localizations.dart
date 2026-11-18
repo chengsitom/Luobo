@@ -5745,6 +5745,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connection unstable, retrying…'**
   String get startupRetrying;
+
+  /// Login-failure screen: enter offline mode, with count of playable downloaded songs
+  ///
+  /// In en, this message translates to:
+  /// **'Enter offline mode ({count} songs available)'**
+  String offlineModeWithCount(int count);
+
+  /// Login-failure screen: button to enter app with no downloaded songs
+  ///
+  /// In en, this message translates to:
+  /// **'Browse local music'**
+  String get browseLocalMusic;
 }
 
 class _AppLocalizationsDelegate

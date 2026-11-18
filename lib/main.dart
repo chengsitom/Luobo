@@ -543,17 +543,24 @@ class _ServerUnreachableScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _buildSwitchProfileButton(context),
               const SizedBox(height: 12),
-              if (hasOfflineContent) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: onEnterOfflineMode,
-                    icon: const Icon(Icons.offline_pin_rounded),
-                    label: Text(AppLocalizations.of(context)!.openOfflineMode),
+              // 离线入口始终可见：服务器连不上不代表本地没东西——曲库缓存、
+              // 本地音乐、已下载歌曲都在。没下载也应能进 app（至少听本地音乐），
+              // 否则失败页就是死胡同。文案分级，诚实告诉用户进去能看到什么。
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onEnterOfflineMode,
+                  icon: const Icon(Icons.offline_pin_rounded),
+                  label: Text(
+                    hasOfflineContent
+                        ? AppLocalizations.of(context)!.offlineModeWithCount(
+                            authProvider.offlinePlayableCount,
+                          )
+                        : AppLocalizations.of(context)!.browseLocalMusic,
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(

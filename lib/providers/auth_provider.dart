@@ -64,6 +64,10 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get hasOfflineContent => _hasOfflineContent;
 
+  /// 登录失败页文案用：本地已下载总数。与 hasOfflineContent 判定同口径 —
+  /// 失败时 serverId 归属未必就绪，按服过滤会显示"0 首可听"却又有入口，自相矛盾。
+  int get offlinePlayableCount => OfflineService().getTotalDownloadedCount();
+
   void _listenToConnectivityChanges() {
     _connectivitySubscription =
         Connectivity().onConnectivityChanged.listen((results) async {
@@ -197,7 +201,9 @@ class AuthProvider extends ChangeNotifier {
 
       final offlineService = OfflineService();
       await offlineService.initialize();
-      _hasOfflineContent = offlineService.getDownloadedCount() > 0;
+      // 用全局数判定"本地有没有内容"：失败时当前 serverId 归属未必已注册，
+      // 按服过滤会把有下载误判成 0、藏掉离线入口（登录失败页是死胡同的根源）。
+      _hasOfflineContent = offlineService.getTotalDownloadedCount() > 0;
       debugPrint(
           '[Auth] State: authenticating → serverUnreachable (offlineContent=$_hasOfflineContent)');
       _state = AuthState.serverUnreachable;
