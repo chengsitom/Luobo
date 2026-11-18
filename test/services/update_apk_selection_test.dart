@@ -62,5 +62,23 @@ void main() {
       );
       expect(picked?.name, 'app-release.apk');
     });
+
+    test('x86 does not match x86_64 (32-bit device must not get 64-bit apk)', () {
+      // 32 位 x86 设备 ABI 首项是 "x86"，不能因子串命中 x86_64 资产；
+      // CI 未产出 32 位包时应回退通用包。
+      final picked = UpdateService.pickBestApkFor(
+        _releaseWith(['app-x86_64-release.apk', 'app-release.apk']),
+        ['x86'],
+      );
+      expect(picked?.name, 'app-release.apk');
+    });
+
+    test('x86_64 device still matches its own apk', () {
+      final picked = UpdateService.pickBestApkFor(
+        _releaseWith(['app-x86_64-release.apk', 'app-release.apk']),
+        ['x86_64', 'x86'],
+      );
+      expect(picked?.name, 'app-x86_64-release.apk');
+    });
   });
 }

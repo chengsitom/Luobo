@@ -76,7 +76,13 @@ class UpdateService {
     try {
       final response = await _dio.get<Map<String, dynamic>>(_apiUrl);
       final data = response.data;
-      if (data == null) return null;
+      if (data == null) {
+        // 2xx 但空响应体也按失败处理，否则沿用上次 lastCheckSucceeded=true
+        // 会让主动检查谎报"已是最新版本"。
+        debugPrint('UpdateService: empty response body');
+        lastCheckSucceeded = false;
+        return null;
+      }
 
       final release = ReleaseInfo.fromJson(data);
       lastCheckSucceeded = true;
@@ -110,9 +116,14 @@ class UpdateService {
         .toList();
     if (apks.isEmpty) return null;
 
+    // 从 CI 固定命名 app-{abi}-release.apk 中精确提取 abi 段再比对。
+    // 不能用子串 contains：32 位 x86 设备的 "x86" 会命中 x86_64 的资产，
+    // 下载到无法安装的 64 位包。
+    final abiPattern = RegExp(r'^app-(.+)-release\.apk$', caseSensitive: false);
     for (final abi in abis) {
       for (final apk in apks) {
-        if (apk.name.toLowerCase().contains(abi.toLowerCase())) {
+        final match = abiPattern.firstMatch(apk.name);
+        if (match != null && match.group(1)!.toLowerCase() == abi.toLowerCase()) {
           return apk;
         }
       }
