@@ -110,22 +110,25 @@ class _SplashLoadingScreenState extends State<SplashLoadingScreen>
         CurvedAnimation(parent: _breath, curve: Curves.easeInOut),
       ),
       child: Container(
+        key: const ValueKey('splashLogoCard'),
         width: size,
         height: size,
+        // ⚠️ logobig.png 是「透明底 + 近白色(251,251,251)图形」。这里绝不能给
+        // 白底——否则白图压白卡，冷启时 logo 几乎看不见。与登录页同源：容器
+        // 无底色，白色 logo 直接叠在暖色流体渐变上，靠玫红阴影托出轮廓。
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(size * 0.24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.16),
-              blurRadius: 24,
+              color: LuoboAccent.accent.withValues(alpha: 0.4),
+              blurRadius: 20,
               offset: const Offset(0, 10),
             ),
           ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(size * 0.24),
-          child: Image.asset('assets/logobig.png', fit: BoxFit.cover),
+          child: Image.asset('assets/logobig.png', fit: BoxFit.contain),
         ),
       ),
     );

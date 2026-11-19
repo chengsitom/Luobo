@@ -8,20 +8,26 @@ import '../theme/design_tokens.dart';
 import '../widgets/block_sheet.dart';
 import '../widgets/luobo/empty_state.dart';
 import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/luobo_card.dart';
+import '../widgets/luobo/luobo_tile.dart';
 import '../widgets/settings_sub_page.dart';
 
 /// 设置 → 内容过滤：已屏蔽内容的唯一管理入口。
 ///
 /// 为什么它是硬需求：被「彻底屏蔽」的艺人/专辑在普通列表里点不进去，
 /// 这里是用户**唯一**能解除屏蔽的地方（见方案 R4.4）。
+///
+/// 样式与所有设置子页同源：`LuoboGroup`（小节标题 + 白卡 + 自动分隔线）
+/// + `LuoboRow`（玫红图标 + 主副标题 + chevron）。不要退回裸 ListTile：
+/// 那会让本页在设置族里显得是另一套样式（2026-11-19 用户反馈）。
 class BlocklistScreen extends StatelessWidget {
   const BlocklistScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // 与 SettingsSubPage 同一个 build → 用 listTopInset（自己加 56）；
-    // listScrollTopInset 是给"body 内部再构造滚动视图"的场景用的。
+    // 与 SettingsSubPage 同一个 build → 用 listTopInset；body 自身就是滚动视图，
+    // 顶部留白落在这里，内容才会从返回圆钮下方流过。
     final topInset = listTopInset(context);
 
     return SettingsSubPage(
@@ -54,40 +60,41 @@ class BlocklistScreen extends StatelessWidget {
           final playlists = entries.where((e) => e.kind == BlockKind.playlist);
 
           return ListView(
-            padding: EdgeInsets.only(top: topInset + 8, bottom: 40),
+            padding: LuoboSpacing.scrollPadding(
+              context,
+              top: topInset + LuoboSpacing.pageY,
+              bottom: LuoboSpacing.pageBottom,
+            ),
             children: [
-              if (artists.isNotEmpty) ...[
-                _sectionHeader(context, l10n.artists, artists.length),
-                for (final e in artists) _tile(context, e),
-              ],
-              if (albums.isNotEmpty) ...[
-                _sectionHeader(context, l10n.albums, albums.length),
-                for (final e in albums) _tile(context, e),
-              ],
-              if (playlists.isNotEmpty) ...[
-                _sectionHeader(context, l10n.playlists, playlists.length),
-                for (final e in playlists)
-                  _tile(
-                    context,
-                    e,
-                    playlistGone: canJudgePlaylists &&
-                        !rawPlaylistIds.contains(e.targetId),
-                  ),
-              ],
+              if (artists.isNotEmpty)
+                LuoboGroup(
+                  title: '${l10n.artists} · ${artists.length}',
+                  hasIcon: true,
+                  rows: [for (final e in artists) _tile(context, e)],
+                ),
+              if (albums.isNotEmpty)
+                LuoboGroup(
+                  title: '${l10n.albums} · ${albums.length}',
+                  hasIcon: true,
+                  rows: [for (final e in albums) _tile(context, e)],
+                ),
+              if (playlists.isNotEmpty)
+                LuoboGroup(
+                  title: '${l10n.playlists} · ${playlists.length}',
+                  hasIcon: true,
+                  rows: [
+                    for (final e in playlists)
+                      _tile(
+                        context,
+                        e,
+                        playlistGone: canJudgePlaylists &&
+                            !rawPlaylistIds.contains(e.targetId),
+                      ),
+                  ],
+                ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _sectionHeader(BuildContext context, String label, int count) {
-    final c = LuoboColors.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Text(
-        '$label · $count',
-        style: LuoboType.caption.copyWith(color: c.fg2),
       ),
     );
   }
@@ -98,7 +105,6 @@ class BlocklistScreen extends StatelessWidget {
     bool playlistGone = false,
   }) {
     final l10n = AppLocalizations.of(context)!;
-    final c = LuoboColors.of(context);
     final blocklist = BlocklistService.instance;
     final isHidden = entry.mode == BlockMode.hidden;
     final members = blocklist.membersOf(entry.targetId);
@@ -112,22 +118,12 @@ class BlocklistScreen extends StatelessWidget {
       subtitle = '$subtitle · ${l10n.blocklistPlaylistGone}';
     }
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: Icon(
-        isHidden ? Icons.visibility_off_rounded : Icons.shuffle_rounded,
-        size: 20,
-        color: c.fg2,
-      ),
-      title: Text(
-        entry.name.isEmpty ? entry.targetId : entry.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        subtitle,
-        style: LuoboType.caption.copyWith(color: c.fg2),
-      ),
+    return LuoboRow(
+      icon: isHidden ? Icons.visibility_off_rounded : Icons.shuffle_rounded,
+      // 档位靠图标区分：hidden=闭眼、muted=洗牌；图标色沿用 LuoboRow 的
+      // 玫红强调色，与其它设置行一致，不再用灰色小图标。
+      title: entry.name.isEmpty ? entry.targetId : entry.name,
+      subtitle: subtitle,
       onTap: () => showBlockSheet(
         context,
         kind: entry.kind,

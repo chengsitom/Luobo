@@ -66,6 +66,21 @@ void main() {
     expect(identical(fluidBefore, fluidAfter), isTrue);
   });
 
+  /// logobig.png 是「透明底 + 近白色图形」，logo 卡一旦给了白底就会白上加白、
+  /// 冷启时几乎看不见（2026-11-19 用户反馈）。守住「卡体无纯白填充」这条。
+  testWidgets('logo 卡不给白底（白色图形需叠在流体上）', (tester) async {
+    final phase = ValueNotifier<StartupPhase>(StartupPhase.connecting);
+    addTearDown(phase.dispose);
+
+    await pumpSplash(tester, phase);
+    await tester.pump();
+
+    final card = tester.widget<Container>(find.byKey(const ValueKey('splashLogoCard')));
+    final decoration = card.decoration as BoxDecoration?;
+    // 允许 null 或任意非纯白底色；绝不能是 Colors.white。
+    expect(decoration?.color, isNot(Colors.white));
+  });
+
   testWidgets('phase 为空时退化为默认「连接中」', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
