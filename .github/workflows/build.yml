@@ -265,6 +265,9 @@ jobs:
     runs-on: macos-latest
     needs: prepare
     timeout-minutes: 60
+    # macOS runner 偶发排队超时被取消（2026-11 的 v1.1.26 就遇到），
+    # iOS 是未签名侧载包，不作为发版硬门槛——失败/被取消时照常发其他平台。
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -468,8 +471,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [prepare, build-android, build-ios, build-windows, build-linux, build-macos]
-    # 桌面端允许失败，但 Android/iOS 失败时仍然不产出 Release
-    if: ${{ !cancelled() && needs.build-android.result == 'success' && needs.build-ios.result == 'success' }}
+    # Android 是唯一硬门槛（主交付物）；其余平台允许失败/被取消，有则附带。
+    # 用 always() 而非 !cancelled()：某个可选 job 被 cancel 时 overall 仍算 cancelled，
+    # 会把安卓包连坐跳过——v1.1.26 就是这么丢的。
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build-android.result == 'success' }}
     permissions:
       contents: write
     steps:
@@ -565,7 +570,7 @@ jobs:
           print("  - `app-armeabi-v7a-release.apk` — 老款 32 位手机")
           print("  - `app-x86_64-release.apk` — 模拟器 / ChromeOS")
           print("  - `app-release.apk` — 通用包，不确定机型时用（体积最大）")
-          print("- **iOS**：`luobo-ios.ipa`（未签名，用 AltStore / Sideloadly 侧载）")
+          print("- **iOS**：`luobo-ios.ipa`（如构建成功；未签名，用 AltStore / Sideloadly 侧载）")
           print("- **Windows**：`musly-setup.exe`（如构建成功）")
           print("- **macOS**：`luobo-macos.dmg`（如构建成功，未公证）")
           print("- **Linux**：`luobo-linux-x64.tar.gz`（如构建成功）")
