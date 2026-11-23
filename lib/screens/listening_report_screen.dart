@@ -4,7 +4,9 @@ import '../services/recommendation_service.dart';
 import '../services/listening_report_service.dart';
 import '../providers/library_provider.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
 import '../widgets/luobo/luobo_toast.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 
 /// 听歌报告：从「统计报表」改成「关于你的一本小册子」。
 ///
@@ -57,23 +59,20 @@ class _ListeningReportScreenState extends State<ListeningReportScreen> {
           .toSet(),
     ).build();
 
-    return Scaffold(
+    final topInset = listTopInset(context);
+
+    return ScrollRevealScaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('听歌报告'),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded),
-            onPressed: () => _showReportHelp(context),
-          ),
-        ],
+      title: '听歌报告',
+      trailing: IconButton(
+        icon: const Icon(Icons.help_outline_rounded),
+        onPressed: () => _showReportHelp(context),
       ),
       body: !insight.hasData
           ? const Center(child: Text('还没有听歌数据，多听几首再来看吧'))
           : ListView(
               padding: LuoboSpacing.scrollPadding(
-                  context, horizontal: 16, top: 12, bottom: 40),
+                  context, horizontal: 16, top: 12 + topInset, bottom: 40),
               children: [
                 _PersonaHero(insight: insight),
                 const SizedBox(height: 28),

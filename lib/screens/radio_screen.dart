@@ -11,6 +11,8 @@ import '../widgets/glass_surface.dart';
 import '../widgets/load_error_view.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 
 class RadioScreen extends StatefulWidget {
   const RadioScreen({super.key});
@@ -190,23 +192,20 @@ class _RadioScreenState extends State<RadioScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final topInset = listTopInset(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.radioStations),
-        actions: [
-          IconButton(
-            icon: const Icon(CupertinoIcons.refresh),
-            onPressed: _loadStations,
-            tooltip: AppLocalizations.of(context)!.refresh,
-          ),
-        ],
+    return ScrollRevealScaffold(
+      title: AppLocalizations.of(context)!.radioStations,
+      trailing: IconButton(
+        icon: const Icon(CupertinoIcons.refresh),
+        onPressed: _loadStations,
+        tooltip: AppLocalizations.of(context)!.refresh,
       ),
-      body: _buildBody(isDark),
+      body: _buildBody(isDark, topInset),
     );
   }
 
-  Widget _buildBody(bool isDark) {
+  Widget _buildBody(bool isDark, double topInset) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -258,6 +257,7 @@ class _RadioScreenState extends State<RadioScreen> {
       child: ListView.builder(
         padding: EdgeInsets.only(
           bottom: LuoboSpacing.pageBottomWithStrip(context),
+          top: topInset,
         ),
         itemCount: _stations.length,
         itemBuilder: (context, index) {

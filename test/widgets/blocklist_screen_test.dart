@@ -9,6 +9,7 @@ import 'package:luobo/providers/library_provider.dart';
 import 'package:luobo/screens/blocklist_screen.dart';
 import 'package:luobo/services/blocklist_service.dart';
 import 'package:luobo/services/subsonic_service.dart';
+import 'package:luobo/theme/app_icons.dart';
 
 import '../bootstrap.dart';
 
@@ -72,6 +73,21 @@ void main() {
     // 歌单额外标出"排除了多少首"
     expect(find.textContaining('仅从漫游排除'), findsWidgets);
     expect(find.textContaining('2 首'), findsOneWidget);
+  });
+
+  testWidgets('样式对齐内容列表：类型图标块 + 行尾 ⋮，不用设置页白卡', (tester) async {
+    await blocklist.blockArtist('a1', '周杰伦', mode: BlockMode.hidden);
+    await blocklist.blockAlbum('al1', '范特西', mode: BlockMode.muted);
+    await blocklist.blockPlaylist('p1', '儿歌', mode: BlockMode.muted);
+
+    await pumpPage(tester);
+
+    // 三类对象的图标块：艺人圆形、专辑/歌单方形。
+    expect(find.byIcon(Icons.person_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.album_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.queue_music_rounded), findsOneWidget);
+    // 行尾 ⋮ 数量与条目数一致（点它和点整行都打开同一 sheet）。
+    expect(find.byIcon(AppIcons.moreV), findsNWidgets(3));
   });
 
   testWidgets('规则指向的歌单已不存在时会标出来', (tester) async {

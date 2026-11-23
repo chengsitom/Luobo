@@ -123,6 +123,10 @@ class SettingsAboutPage extends StatelessWidget {
               ),
             ],
           ),
+
+          // 本页内容短、不满一屏。垫一屏高度让列表可上滑，回到全局一致的
+          // 「初始只有返回钮、上滑才渐显标题」行为（否则会走短页兜底、默认挂标题）。
+          SizedBox(height: MediaQuery.sizeOf(context).height),
         ],
       ),
     );

@@ -4,12 +4,12 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_provider.dart';
 import '../services/blocklist_service.dart';
+import '../theme/app_icons.dart';
 import '../theme/design_tokens.dart';
 import '../widgets/block_sheet.dart';
 import '../widgets/luobo/empty_state.dart';
 import '../widgets/luobo/list_top_bar.dart';
-import '../widgets/luobo/luobo_card.dart';
-import '../widgets/luobo/luobo_tile.dart';
+import '../widgets/luobo/song_divider.dart';
 import '../widgets/settings_sub_page.dart';
 
 /// 设置 → 内容过滤：已屏蔽内容的唯一管理入口。
@@ -17,9 +17,13 @@ import '../widgets/settings_sub_page.dart';
 /// 为什么它是硬需求：被「彻底屏蔽」的艺人/专辑在普通列表里点不进去，
 /// 这里是用户**唯一**能解除屏蔽的地方（见方案 R4.4）。
 ///
-/// 样式与所有设置子页同源：`LuoboGroup`（小节标题 + 白卡 + 自动分隔线）
-/// + `LuoboRow`（玫红图标 + 主副标题 + chevron）。不要退回裸 ListTile：
-/// 那会让本页在设置族里显得是另一套样式（2026-11-19 用户反馈）。
+/// 样式对齐「资料库内容列表」（歌曲/专辑/艺术家/歌单）而非设置页：
+/// 64dp 行 + 48px 类型图标块 + 16/600 标题 + 12px 副标题 + 行尾 ⋮，
+/// 分组用内容页同款「计数行 + 分隔线」，不用 LuoboGroup 白卡。
+/// 屏蔽条目的对象本质（艺人/专辑/歌单）与资料库同类，观感应一致
+///（2026-11-23 用户反馈：旧版 LuoboRow 太像设置页）。
+///
+/// 顶栏仍是 SettingsSubPage（全局渐显标题），只是列表 body 换了一套视觉。
 class BlocklistScreen extends StatelessWidget {
   const BlocklistScreen({super.key});
 
@@ -63,26 +67,26 @@ class BlocklistScreen extends StatelessWidget {
             padding: LuoboSpacing.scrollPadding(
               context,
               top: topInset + LuoboSpacing.pageY,
-              bottom: LuoboSpacing.pageBottom,
+              bottom: LuoboSpacing.pageBottomWithStrip(context),
             ),
             children: [
               if (artists.isNotEmpty)
-                LuoboGroup(
-                  title: '${l10n.artists} · ${artists.length}',
-                  hasIcon: true,
-                  rows: [for (final e in artists) _tile(context, e)],
+                ..._section(
+                  context,
+                  '${l10n.artists} · ${artists.length}',
+                  [for (final e in artists) _tile(context, e)],
                 ),
               if (albums.isNotEmpty)
-                LuoboGroup(
-                  title: '${l10n.albums} · ${albums.length}',
-                  hasIcon: true,
-                  rows: [for (final e in albums) _tile(context, e)],
+                ..._section(
+                  context,
+                  '${l10n.albums} · ${albums.length}',
+                  [for (final e in albums) _tile(context, e)],
                 ),
               if (playlists.isNotEmpty)
-                LuoboGroup(
-                  title: '${l10n.playlists} · ${playlists.length}',
-                  hasIcon: true,
-                  rows: [
+                ..._section(
+                  context,
+                  '${l10n.playlists} · ${playlists.length}',
+                  [
                     for (final e in playlists)
                       _tile(
                         context,
@@ -97,6 +101,26 @@ class BlocklistScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// 内容页同款分组：卡外「计数行」+ 1px 分隔 + 行间 [LuoboSongDivider]。
+  /// 不用 LuoboGroup 的白卡/圆角/玫红图标——那是设置页的视觉语言。
+  List<Widget> _section(BuildContext context, String title, List<Widget> rows) {
+    final c = LuoboColors.of(context);
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Text(
+          title,
+          style: LuoboType.body.copyWith(fontSize: 14, color: c.fg2),
+        ),
+      ),
+      const Divider(height: 1),
+      for (var i = 0; i < rows.length; i++) ...[
+        rows[i],
+        if (i < rows.length - 1) const LuoboSongDivider(),
+      ],
+    ];
   }
 
   Widget _tile(
@@ -118,11 +142,8 @@ class BlocklistScreen extends StatelessWidget {
       subtitle = '$subtitle · ${l10n.blocklistPlaylistGone}';
     }
 
-    return LuoboRow(
-      icon: isHidden ? Icons.visibility_off_rounded : Icons.shuffle_rounded,
-      // 档位靠图标区分：hidden=闭眼、muted=洗牌；图标色沿用 LuoboRow 的
-      // 玫红强调色，与其它设置行一致，不再用灰色小图标。
-      title: entry.name.isEmpty ? entry.targetId : entry.name,
+    return _BlockEntryTile(
+      entry: entry,
       subtitle: subtitle,
       onTap: () => showBlockSheet(
         context,
@@ -132,6 +153,99 @@ class BlocklistScreen extends StatelessWidget {
         // 带上已知成员：在管理页切档时不要丢掉已展开的名单、也别再重拉一次。
         members: members,
         songCount: entry.memberCount,
+      ),
+    );
+  }
+}
+
+/// 与资料库内容行同构的屏蔽条目行：
+/// 48px 类型图标块 + 12 间距 + 16/600 标题 + 12px 副标题 + 行尾 ⋮，整行 64dp。
+///
+/// 不用封面：BlockEntry 无封面字段，反查库缓存会在条目被删时退化成占位；
+/// 改用灰调类型图标块占住封面位，标题起点（16+48+12=76）与
+/// [LuoboSongDivider] 的缩进严格对齐内容列表。
+/// 档位靠副标题文案（彻底屏蔽 / 仅从漫游排除）区分，不再用玫红图标。
+class _BlockEntryTile extends StatelessWidget {
+  final BlockEntry entry;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _BlockEntryTile({
+    required this.entry,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuoboColors.of(context);
+    final isArtist = entry.kind == BlockKind.artist;
+    final icon = switch (entry.kind) {
+      BlockKind.artist => Icons.person_rounded,
+      BlockKind.album => Icons.album_rounded,
+      BlockKind.playlist => Icons.queue_music_rounded,
+    };
+
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: c.card,
+                  // 艺人圆形头像、专辑/歌单方形封面，沿用内容列表的形状约定。
+                  borderRadius: BorderRadius.circular(isArtist ? 24 : 6),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 22, color: c.fg3),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.name.isEmpty ? entry.targetId : entry.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.body.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: c.fg,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LuoboType.caption.copyWith(color: c.fg2),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 行尾 ⋮ 与整行同效（都打开屏蔽设置 sheet），点击靠 opaque
+              // 自身消费，不会冒泡触发整行 onTap 而弹两次。
+              GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Icon(AppIcons.moreV, size: 18, color: c.fg2),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

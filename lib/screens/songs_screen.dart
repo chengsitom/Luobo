@@ -5,6 +5,8 @@ import '../models/song.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/design_tokens.dart';
+import '../widgets/luobo/list_top_bar.dart';
+import '../widgets/luobo/scroll_reveal_scaffold.dart';
 import '../widgets/widgets.dart';
 
 class SongsScreen extends StatefulWidget {
@@ -37,30 +39,27 @@ class _SongsScreenState extends State<SongsScreen> {
   @override
   Widget build(BuildContext context) {
     final libraryProvider = Provider.of<LibraryProvider>(context);
+    final topInset = listTopInset(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.songs),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.shuffle_rounded),
-            onPressed: () {
-              final songs = libraryProvider.randomSongs;
-              if (songs.isNotEmpty) {
-                final playerProvider = Provider.of<PlayerProvider>(
-                  context,
-                  listen: false,
-                );
-                final shuffled = List<Song>.from(songs)..shuffle();
-                playerProvider.playSong(
-                  shuffled.first,
-                  playlist: shuffled,
-                  startIndex: 0,
-                );
-              }
-            },
-          ),
-        ],
+    return ScrollRevealScaffold(
+      title: AppLocalizations.of(context)!.songs,
+      trailing: IconButton(
+        icon: const Icon(Icons.shuffle_rounded),
+        onPressed: () {
+          final songs = libraryProvider.randomSongs;
+          if (songs.isNotEmpty) {
+            final playerProvider = Provider.of<PlayerProvider>(
+              context,
+              listen: false,
+            );
+            final shuffled = List<Song>.from(songs)..shuffle();
+            playerProvider.playSong(
+              shuffled.first,
+              playlist: shuffled,
+              startIndex: 0,
+            );
+          }
+        },
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -69,6 +68,7 @@ class _SongsScreenState extends State<SongsScreen> {
               : ListView.builder(
                   padding: EdgeInsets.only(
                     bottom: LuoboSpacing.pageBottomWithStrip(context),
+                    top: topInset,
                   ),
                   itemCount: libraryProvider.randomSongs.length,
                   itemBuilder: (context, index) {

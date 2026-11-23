@@ -575,115 +575,104 @@ class MusicService : MediaBrowserServiceCompat() {
         showNotification()
     }
 
-    private fun updateMediaSessionMetadata() {
-        Log.d(TAG, "updateMediaSessionMetadata: song=$currentTitle, artworkUrl=$currentArtworkUrl")
-        
-        val metadataBuilder = MediaMetadataCompat.Builder()
+    /**
+     * 构建并发布 MediaSession metadata（G1 修复）。
+     *
+     * 关键：DISPLAY_SUBTITLE（歌词）与封面必须解耦。旧实现里封面 URL 变化时会走
+     * 异步加载分支，失败/超时直接 return 而不 setMetadata —— 歌词因此永远写不进
+     * metadata，CarLife 车机第二行停在歌手名（docs/车机媒体会话与歌词推送技术方案.md §9.4 G1）。
+     *
+     * 新实现：歌词等文字字段**先无条件发布**，封面作为可选增量在异步成功后补发。
+     * [bitmap] 为 null 也照常发布（通知栏/车机立刻拿到歌词，只是没有大图）。
+     */
+    private fun publishMetadata(bitmap: Bitmap?, artworkUrl: String?) {
+        val builder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, currentSongId)
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentAlbum)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration)
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, currentTitle)
-            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, currentArtworkUrl)
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, artworkUrl)
 
         if (hasLyrics && !currentLyricsLine.isNullOrEmpty()) {
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentLyricsLine)
+            builder.putString(
+                MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
+                currentLyricsLine,
+            )
+        }
+        if (bitmap != null) {
+            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
         }
 
-        val url = currentArtworkUrl
+        mediaSession.setMetadata(builder.build())
+        Log.d(
+            TAG,
+            "[LyricProbe] published: songId=$currentSongId " +
+                "hasLyrics=$hasLyrics line=$currentLyricsLine " +
+                "artwork=${if (bitmap != null) "bitmap" else "none"} url=$artworkUrl",
+        )
+    }
 
+    private fun updateMediaSessionMetadata() {
+        val url = currentArtworkUrl
+        val songIdAtCall = currentSongId
+        Log.d(TAG, "[LyricProbe] updateMetadata: song=$currentTitle artworkUrl=$url")
+
+        // ① 先发布"含歌词、无封面"的 metadata —— 无论封面后续成功与否，
+        //    通知栏与车机都能立刻拿到当前歌词行（G1 核心）。
+        publishMetadata(bitmap = null, artworkUrl = url)
+
+        // ② 封面缓存命中：补发一次带缓存大图的 metadata。
         if (!url.isNullOrEmpty() && url == lastLoadedArtworkUrl && currentArtworkBitmap != null) {
-            Log.d(TAG, "updateMediaSessionMetadata: Artwork URL unchanged, reusing cached bitmap")
-            val cachedMetadata = MediaMetadataCompat.Builder()
-                .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, currentSongId)
-                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
-                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentAlbum)
-                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration)
-                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, currentArtworkBitmap)
-                .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, currentTitle)
-                .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, url)
-                .apply {
-                    if (hasLyrics && !currentLyricsLine.isNullOrEmpty()) {
-                        putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentLyricsLine)
-                    }
-                }
-                .build()
-            mediaSession.setMetadata(cachedMetadata)
+            Log.d(TAG, "[LyricProbe] artwork cache hit, republish with bitmap")
+            publishMetadata(bitmap = currentArtworkBitmap, artworkUrl = url)
             return
         }
 
+        // ③ 无封面 URL：若有旧 bitmap（同歌）补发；否则 ① 已发布文字版，直接结束。
         if (url.isNullOrEmpty()) {
-            Log.w(TAG, "updateMediaSessionMetadata: No artwork URL provided")
             if (currentArtworkBitmap != null) {
-                Log.d(TAG, "updateMediaSessionMetadata: Using cached bitmap")
-                val updatedMetadata = MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, currentSongId)
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentAlbum)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration)
-                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, currentArtworkBitmap)
-                    .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, currentTitle)
-                    .apply {
-                        if (hasLyrics && !currentLyricsLine.isNullOrEmpty()) {
-                            putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentLyricsLine)
-                        }
-                    }
-                    .build()
-                mediaSession.setMetadata(updatedMetadata)
-            } else {
-                Log.d(TAG, "updateMediaSessionMetadata: No cached bitmap, setting metadata without artwork")
-                mediaSession.setMetadata(metadataBuilder.build())
+                publishMetadata(bitmap = currentArtworkBitmap, artworkUrl = null)
             }
             return
         }
 
+        // ④ 异步加载封面，成功后补发带图 metadata（歌词已在 ① 发布，不受加载结果影响）。
         isLoadingArtwork = true
         setBufferingState(true)
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                Log.d(TAG, "updateMediaSessionMetadata: Loading artwork from URL: $url")
+                Log.d(TAG, "[LyricProbe] loading artwork: $url")
                 val bitmap = BitmapFactory.decodeStream(URL(url).openStream())
-                
+
                 if (bitmap == null) {
-                    Log.e(TAG, "updateMediaSessionMetadata: Failed to decode bitmap from URL: $url")
+                    Log.w(TAG, "[LyricProbe] artwork decode null ($url); lyrics already published")
                     isLoadingArtwork = false
                     withContext(Dispatchers.Main) {
                         setBufferingState(false)
                     }
                     return@launch
                 }
-                
+
                 currentArtworkBitmap = bitmap
                 lastLoadedArtworkUrl = url
                 isLoadingArtwork = false
-                
-                Log.d(TAG, "updateMediaSessionMetadata: Artwork loaded successfully: ${bitmap.width}x${bitmap.height}")
-                
+
+                Log.d(TAG, "[LyricProbe] artwork loaded ${bitmap.width}x${bitmap.height}")
+
                 withContext(Dispatchers.Main) {
-                    val updatedMetadata = MediaMetadataCompat.Builder()
-                        .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, currentSongId)
-                        .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
-                        .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-                        .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentAlbum)
-                        .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration)
-                        .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
-                        .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, currentTitle)
-                        .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, url)
-                        .apply {
-                            if (hasLyrics && !currentLyricsLine.isNullOrEmpty()) {
-                                putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentLyricsLine)
-                            }
-                        }
-                        .build()
-                    
-                    mediaSession.setMetadata(updatedMetadata)
+                    // 守卫：加载期间可能已切歌，别把旧封面写到新歌 metadata（歌词行取当前值）。
+                    if (songIdAtCall != currentSongId) {
+                        Log.w(TAG, "[LyricProbe] stale artwork for $songIdAtCall, current=$currentSongId; skip")
+                        setBufferingState(false)
+                        return@withContext
+                    }
+                    publishMetadata(bitmap = bitmap, artworkUrl = url)
                     setBufferingState(false)
                     showNotification()
-                    
+
                     val artworkExtras = Bundle().apply {
                         putBoolean("android.media.metadata.ANIMATED", true)
                         putString("android.media.metadata.TRANSITION", "fade")
@@ -691,7 +680,7 @@ class MusicService : MediaBrowserServiceCompat() {
                     mediaSession.setExtras(artworkExtras)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "updateMediaSessionMetadata: Error loading artwork: ${e.message}", e)
+                Log.e(TAG, "[LyricProbe] artwork load error: ${e.message}; lyrics already published", e)
                 isLoadingArtwork = false
                 withContext(Dispatchers.Main) {
                     setBufferingState(false)
@@ -914,24 +903,32 @@ class MusicService : MediaBrowserServiceCompat() {
         volumeProvider?.currentVolume = providerVolume
     }
 
+    /**
+     * 歌词更新专用通道：只重发 metadata + 通知，**不触碰封面加载**。
+     * 用当前已缓存的 bitmap（没有就传 null），避免每句歌词都触发一次封面网络请求。
+     * 这是 G1 解耦的另一半：歌词行与封面加载彻底分离。
+     */
+    private fun publishLyricsUpdate() {
+        publishMetadata(bitmap = currentArtworkBitmap, artworkUrl = currentArtworkUrl)
+        showNotification()
+    }
+
     fun updateLyrics(lyricsLine: String?) {
         if (lyricsLine == null || lyricsLine == currentLyricsLine) return
-        
+
         currentLyricsLine = lyricsLine
         hasLyrics = true
 
-        updateMediaSessionMetadata()
-        showNotification()
-        
-        Log.d(TAG, "Updated lyrics: $lyricsLine")
+        publishLyricsUpdate()
+        Log.d(TAG, "[LyricProbe] line changed: $lyricsLine")
     }
-    
+
     fun clearLyrics() {
         currentLyricsLine = null
         hasLyrics = false
-        updateMediaSessionMetadata()
-        showNotification()
-        Log.d(TAG, "Cleared lyrics")
+
+        publishLyricsUpdate()
+        Log.d(TAG, "[LyricProbe] cleared")
     }
 
     override fun onDestroy() {
