@@ -214,21 +214,6 @@ class AnalyticsService {
     await prefs.setBool('has_rated_app', true);
   }
 
-  /// Get whether rating dialog should be shown
-  Future<bool> shouldShowRatingPrompt() async {
-    final prefs = await SharedPreferences.getInstance();
-    final launches = prefs.getInt('app_launches') ?? 0;
-    final hasRated = prefs.getBool('has_rated_app') ?? false;
-    final lastPrompt = prefs.getInt('last_rating_prompt') ?? 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final daysSinceLastPrompt = (now - lastPrompt) / (1000 * 60 * 60 * 24);
-
-    return !hasRated &&
-        launches >= 5 &&
-        launches % 20 == 0 &&
-        daysSinceLastPrompt > 30;
-  }
-
   /// Change consent for specific feature
   Future<void> setConsent(String consent, bool enabled) async {
     if (!_initialized) return;

@@ -22,6 +22,19 @@ class ListeningReportScreen extends StatefulWidget {
 class _ListeningReportScreenState extends State<ListeningReportScreen> {
   bool _creatingPlaylist = false;
 
+  /// 在相邻卡片之间统一插入 12dp 间距。
+  ///
+  /// 条件渲染的卡片列表不要在每张卡片的「前面」或「后面」各自写
+  /// SizedBox —— 混用会导致某些卡片缺席时出现 24dp 双倍间距。
+  List<Widget> _spacedCards(List<Widget> cards) {
+    final result = <Widget>[];
+    for (var i = 0; i < cards.length; i++) {
+      if (i > 0) result.add(const SizedBox(height: 12));
+      result.add(cards[i]);
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final recService = Provider.of<RecommendationService>(context);
@@ -72,7 +85,15 @@ class _ListeningReportScreenState extends State<ListeningReportScreen> {
           ? const Center(child: Text('还没有听歌数据，多听几首再来看吧'))
           : ListView(
               padding: LuoboSpacing.scrollPadding(
-                  context, horizontal: 16, top: 12 + topInset, bottom: 40),
+                context,
+                horizontal: 16,
+                top: 12 + topInset,
+                // scrollPadding 内部会自动叠加一次 MediaQuery.padding.bottom
+                // （= 悬浮条带净空），这里 bottom 只传设计留白本身。
+                // 若再传 pageBottomWithStrip，条带净空会被加两次，底部多出
+                // 一整条播放条的空白。
+                bottom: LuoboSpacing.pageBottom,
+              ),
               children: [
                 _PersonaHero(insight: insight),
                 const SizedBox(height: 28),
@@ -80,7 +101,11 @@ class _ListeningReportScreenState extends State<ListeningReportScreen> {
                   _ChapterHeader(
                       number: '01', title: '你的口味指纹', subtitle: '哪些风格，真正构成了你'),
                   const SizedBox(height: 12),
-                  _FlavorPrintCard(genres: insight.flavorPrint),
+                  ..._spacedCards([
+                    _FlavorPrintCard(genres: insight.flavorPrint),
+                    if (insight.discoveries.isNotEmpty)
+                      _NewDiscoveriesCard(items: insight.discoveries),
+                  ]),
                   const SizedBox(height: 28),
                 ],
                 if (insight.flavorShift != null) ...[
@@ -90,49 +115,52 @@ class _ListeningReportScreenState extends State<ListeningReportScreen> {
                   _FlavorShiftCard(shift: insight.flavorShift!),
                   const SizedBox(height: 28),
                 ],
-                if (insight.timeCapsule.isNotEmpty ||
+                if (insight.companionDays > 0 ||
+                    insight.streakDays > 0 ||
+                    insight.timeCapsule.isNotEmpty ||
                     insight.powerDay != null ||
                     insight.forgottenTreasures.isNotEmpty ||
                     insight.topAlbums.isNotEmpty) ...[
                   _ChapterHeader(
                       number: '03', title: '你和它们的故事', subtitle: '有些歌，早就悄悄陪了你很久'),
                   const SizedBox(height: 12),
-                  if (insight.timeCapsule.isNotEmpty)
-                    _TimeCapsuleCard(items: insight.timeCapsule),
-                  if (insight.powerDay != null) ...[
-                    const SizedBox(height: 12),
-                    _PowerDayCard(day: insight.powerDay!),
-                  ],
-                  if (insight.forgottenTreasures.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _ForgottenTreasuresCard(items: insight.forgottenTreasures),
-                  ],
-                  if (insight.topAlbums.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _AlbumStayCard(
-                      albums: insight.topAlbums,
-                      albumNames: albumNames,
-                    ),
-                  ],
+                  ..._spacedCards([
+                    if (insight.companionDays > 0 || insight.streakDays > 0)
+                      _CompanionCard(
+                          companionDays: insight.companionDays,
+                          streakDays: insight.streakDays),
+                    if (insight.timeCapsule.isNotEmpty)
+                      _TimeCapsuleCard(items: insight.timeCapsule),
+                    if (insight.powerDay != null)
+                      _PowerDayCard(day: insight.powerDay!),
+                    if (insight.forgottenTreasures.isNotEmpty)
+                      _ForgottenTreasuresCard(items: insight.forgottenTreasures),
+                    if (insight.topAlbums.isNotEmpty)
+                      _AlbumStayCard(
+                        albums: insight.topAlbums,
+                        albumNames: albumNames,
+                      ),
+                  ]),
                   const SizedBox(height: 28),
                 ],
                 _ChapterHeader(
                     number: '04', title: '接下来听点什么', subtitle: '给未来的你一点小建议'),
                 const SizedBox(height: 12),
-                if (insight.guiltyPleasure != null) ...[
-                  _GuiltyPleasureCard(guilty: insight.guiltyPleasure!),
-                  const SizedBox(height: 12),
-                ],
-                if (insight.rhythm != null) ...[
-                  _RhythmCard(rhythm: insight.rhythm!),
-                  const SizedBox(height: 12),
-                ],
-                _SuggestionsCard(
-                  insight: insight,
-                  exploration: exploration,
-                  creating: _creatingPlaylist,
-                  onCreatePlaylist: () => _createExplorationPlaylist(exploration),
-                ),
+                ..._spacedCards([
+                  if (insight.guiltyPleasure != null)
+                    _GuiltyPleasureCard(guilty: insight.guiltyPleasure!),
+                  if (insight.rhythm != null)
+                    _RhythmCard(rhythm: insight.rhythm!),
+                  if (insight.drought != null)
+                    _DroughtCard(drought: insight.drought!),
+                  _SuggestionsCard(
+                    insight: insight,
+                    exploration: exploration,
+                    creating: _creatingPlaylist,
+                    onCreatePlaylist: () =>
+                        _createExplorationPlaylist(exploration),
+                  ),
+                ]),
               ],
             ),
     );
@@ -355,15 +383,14 @@ class _PersonaHero extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.25),
         ),
         const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _HeroStat(value: duration, label: '累计聆听'),
-            _HeroStat(value: '${insight.totalPlays}', label: '次播放'),
-            _HeroStat(value: '${insight.uniqueArtists}', label: '位歌手'),
-            _HeroStat(value: '${insight.activeDays}', label: '天陪伴'),
-          ],
-        ),
+        // 累计聆听字符串最长（如「123 小时 45 分」），给它双倍宽度，
+        // 否则四个统计平分时会被 ellipsis 截成「3 小时 3...」。
+        Row(children: [
+          Expanded(flex: 2, child: _HeroStat(value: duration, label: '累计聆听')),
+          Expanded(child: _HeroStat(value: '${insight.totalPlays}', label: '次播放')),
+          Expanded(child: _HeroStat(value: '${insight.uniqueArtists}', label: '位歌手')),
+          Expanded(child: _HeroStat(value: '${insight.activeDays}', label: '天陪伴')),
+        ]),
       ]),
     );
   }
@@ -375,19 +402,17 @@ class _HeroStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Flexible(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-        const SizedBox(height: 3),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11, color: Colors.white.withValues(alpha: 0.75))),
-      ]),
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+      const SizedBox(height: 3),
+      Text(label,
+          style: TextStyle(
+              fontSize: 11, color: Colors.white.withValues(alpha: 0.75))),
+    ]);
   }
 }
 
@@ -439,13 +464,16 @@ class _FlavorPrintCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (genres.isEmpty) return const SizedBox.shrink();
     final max = genres.first.percent;
     return _CardWrap(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        ...genres.map((g) {
+        ...genres.asMap().entries.map((entry) {
+          final i = entry.key;
+          final g = entry.value;
           final ratio = max > 0 ? g.percent / max : 0.0;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+            padding: EdgeInsets.only(bottom: i == genres.length - 1 ? 0 : 14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text(g.name,
@@ -479,6 +507,75 @@ class _FlavorPrintCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ]),
+          );
+        }),
+      ]),
+    );
+  }
+}
+
+/// 新朋友：最近 14 天第一次进你耳朵、且已经循环过几次的歌。
+class _NewDiscoveriesCard extends StatelessWidget {
+  final List<NewDiscovery> items;
+  const _NewDiscoveriesCard({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+    return _CardWrap(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.auto_awesome_rounded, size: 16, color: LuoboAccent.accent),
+          const SizedBox(width: 6),
+          Text('最近的新朋友',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: muted)),
+        ]),
+        const SizedBox(height: 12),
+        ...items.asMap().entries.map((entry) {
+          final i = entry.key;
+          final d = entry.value;
+          return Padding(
+            padding: EdgeInsets.only(bottom: i == items.length - 1 ? 0 : 10),
+            child: Row(children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: LuoboAccent.soft(),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Center(
+                  child: Text('${i + 1}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: LuoboAccent.accent)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(d.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  if (d.artist != null && d.artist!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(d.artist!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: muted)),
+                  ],
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Text('${d.plays} 次',
+                  style: TextStyle(fontSize: 11, color: muted)),
             ]),
           );
         }),
@@ -658,27 +755,7 @@ class _SuggestionsCard extends StatelessWidget {
     final muted = Theme.of(context).textTheme.bodySmall?.color;
     return _CardWrap(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (insight.drought != null) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: LuoboAccent.soft(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(children: [
-              Icon(Icons.lightbulb_outline_rounded,
-                  size: 20, color: LuoboAccent.accent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '最近一周，你 ${(insight.drought!.concentration * 100).toStringAsFixed(0)}% 的播放都集中在少数几首歌上。是时候换换口味了。',
-                  style: TextStyle(fontSize: 13, height: 1.5, color: muted),
-                ),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 18),
-        ],
+        // 歌荒提示已提升为 04 章节的独立 _DroughtCard，这里不再重复展示。
         if (insight.discoveries.isNotEmpty) ...[
           const Text('最近的新宠',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
@@ -772,6 +849,69 @@ class _SuggestionsCard extends StatelessWidget {
 }
 
 // ─── 03 故事章节的补充卡片 ──────────────────────────────────────────────────
+
+/// 陪伴：从第一次打开到现在，以及最近没断过的连续天数。
+class _CompanionCard extends StatelessWidget {
+  final int companionDays;
+  final int streakDays;
+  const _CompanionCard({required this.companionDays, required this.streakDays});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardWrap(
+      child: Row(children: [
+        Expanded(
+          child: _CompanionStat(
+            value: '$companionDays',
+            label: '天一起走过',
+            caption: '从第一次打开 App 算起',
+            color: LuoboAccent.accent,
+          ),
+        ),
+        Container(
+            width: 1,
+            height: 52,
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+        Expanded(
+          child: _CompanionStat(
+            value: streakDays >= 2 ? '$streakDays' : '—',
+            label: '天连续在听',
+            caption: streakDays >= 2 ? '最近这段没断过' : '还没有连续记录',
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _CompanionStat extends StatelessWidget {
+  final String value, label, caption;
+  final Color color;
+  const _CompanionStat({
+    required this.value,
+    required this.label,
+    required this.caption,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+    return Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+      Text(value,
+          style: TextStyle(
+              fontSize: 26, fontWeight: FontWeight.w800, color: color)),
+      const SizedBox(height: 2),
+      Text(label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 3),
+      Text(caption,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 10, color: muted)),
+    ]);
+  }
+}
 
 /// 那一天：一个有具体日期的记忆锚点。
 class _PowerDayCard extends StatelessWidget {
@@ -912,6 +1052,51 @@ class _AlbumStayCard extends StatelessWidget {
 }
 
 // ─── 04 建议章节的补充卡片 ──────────────────────────────────────────────────
+
+/// 歌荒预警：最近 7 天听的歌不算少，但前 5 首占了绝大多数播放。
+/// 注意不是「你没歌听」，而是「有点在循环同一小撮」。
+class _DroughtCard extends StatelessWidget {
+  final DroughtInfo drought;
+  const _DroughtCard({required this.drought});
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+    final percent = (drought.concentration * 100).round();
+    return _CardWrap(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.loop_rounded,
+              size: 16, color: LuoboAccent.warn(context)),
+          const SizedBox(width: 6),
+          Text('最近有点在循环',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 10),
+        Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 13, color: muted, height: 1.55),
+            children: [
+              const TextSpan(text: '这一周你听了 '),
+              TextSpan(
+                text: '${drought.recentSongs} 首歌',
+                style: const TextStyle(
+                    color: LuoboAccent.accent, fontWeight: FontWeight.w600),
+              ),
+              const TextSpan(text: '，但 '),
+              TextSpan(
+                text: '$percent% 的播放',
+                style: const TextStyle(
+                    color: LuoboAccent.accent, fontWeight: FontWeight.w600),
+              ),
+              const TextSpan(text: ' 都给了最常听的 5 首。\n要不要给下一章的探索歌单一个机会？'),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+}
 
 /// 口是心非：收藏却总跳过 vs 没收藏却反复听。
 class _GuiltyPleasureCard extends StatelessWidget {

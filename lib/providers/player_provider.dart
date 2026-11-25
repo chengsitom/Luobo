@@ -233,8 +233,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final TranscodingService _transcodingService;
 
   double _playbackSpeed = 1.0;
-  double _pitch = 1.0;
-  bool _pitchCorrection = true;
 
   PlayerProvider(
     this._subsonicService,
@@ -1511,52 +1509,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   double get playbackSpeed => _playbackSpeed;
 
-  double get pitch => _pitch;
-
-  bool get pitchCorrection => _pitchCorrection;
-
   Future<void> setPlaybackSpeed(double speed) async {
     _playbackSpeed = speed.clamp(0.25, 4.0);
 
-    final targetPitch = _pitchCorrection ? 1.0 : _playbackSpeed;
-    _pitch = targetPitch.clamp(0.5, 2.0);
-
+    // 变速不变调：pitch 固定 1.0（原 _pitchCorrection 恒 true，已移除死开关）。
+    const pitch = 1.0;
     final success = await _audioHandler.setPlaybackParameters(
       _playbackSpeed,
-      _pitch,
+      pitch,
     );
     if (!success) {
       // Fallback to just_audio native setSpeed when pitch plugin is unavailable.
-      await _audioPlayer.setSpeed(_playbackSpeed);
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> setPitch(double pitch) async {
-    _pitch = pitch.clamp(0.5, 2.0);
-
-    final success = await _audioHandler.setPlaybackParameters(
-      _playbackSpeed,
-      _pitch,
-    );
-    if (!success) {
-      await _audioPlayer.setSpeed(_playbackSpeed);
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> togglePitchCorrection() async {
-    _pitchCorrection = !_pitchCorrection;
-    final targetPitch = _pitchCorrection ? 1.0 : _playbackSpeed;
-    _pitch = targetPitch.clamp(0.5, 2.0);
-
-    final success = await _audioHandler.setPlaybackParameters(
-      _playbackSpeed,
-      _pitch,
-    );
-    if (!success) {
       await _audioPlayer.setSpeed(_playbackSpeed);
     }
 
@@ -4430,34 +4393,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
   }
 
-  void reorderQueue(int oldIndex, int newIndex) {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
-
-    final song = _queue.removeAt(oldIndex);
-    _queue.insert(newIndex, song);
-
-    if (_concatenatingSource != null) {
-      try {
-        _concatenatingSource!.move(oldIndex, newIndex);
-      } catch (e) {
-        debugPrint('Error moving in concatenating source: $e');
-      }
-    }
-
-    if (oldIndex == _currentIndex) {
-      _currentIndex = newIndex;
-    } else if (oldIndex < _currentIndex && newIndex >= _currentIndex) {
-      _currentIndex -= 1;
-    } else if (oldIndex > _currentIndex && newIndex <= _currentIndex) {
-      _currentIndex += 1;
-    }
-
-    notifyListeners();
-    _saveQueueState();
-  }
-
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
     await _storageService.saveVolume(_volume);
@@ -4751,11 +4686,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final effectiveVolume = _volume * replayGainMultiplier;
     await _audioPlayer.setVolume(effectiveVolume);
-  }
-
-  Future<void> refreshReplayGain() async {
-    await _applyReplayGain(_currentSong);
-    notifyListeners();
   }
 
   ReplayGainService get replayGainService => _replayGainService;

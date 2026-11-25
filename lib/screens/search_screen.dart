@@ -14,6 +14,7 @@ import '../utils/artist_stats.dart';
 import '../widgets/luobo/list_rows.dart';
 import '../widgets/luobo/multi_select.dart';
 import '../widgets/luobo/song_divider.dart';
+import '../widgets/load_error_view.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import 'artist_screen.dart';
@@ -38,11 +39,23 @@ class _SearchScreenState extends State<SearchScreen> {
   SearchResult? _searchResult;
   SearchResult? _autocompleteSuggestions;
   bool _isSearching = false;
+  /// 已有结果时的轻量刷新态：不替换结果页，只在顶部显示一条细进度条。
+  /// 实时搜索每次输入都会重新搜，若一律切成骨架屏，用户会看到「结果闪一下就没」。
+  bool _isRefreshing = false;
+  /// 搜索失败态：网络异常时 libraryProvider.search 抛错，必须记住错误并展示
+  /// 重试入口。否则 catch 里只清 loading，`_searchResult` 仍是 null，build 会
+  /// 掉到最后的 else 显示历史页——用户看到的就是「结果页一闪就没了」。
+  String? _searchError;
   bool _isLoadingSuggestions = false;
   bool _showSuggestions = false;
   String _query = '';
   Timer? _debounceTimer;
   bool _liveSearch = true;
+
+  /// 搜索请求序号：只有最后一次发起的搜索回调才允许更新 UI。
+  /// 比字符串比较 `_query == query` 更稳——快速输入时旧请求返回晚也不会
+  /// 误更新，更不会让界面卡在骨架屏/刷新态。
+  int _searchGeneration = 0;
 
   /// 搜索历史（fnos v5_0016：chips 流式换行 + 垃圾桶清空，本地持久化）。
   final _historyStore = SearchHistoryStore();
@@ -75,6 +88,13 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onLiveSearchChanged() {
     setState(() {
       _liveSearch = PlayerUiSettingsService().liveSearchNotifier.value;
+      // 模式切换后展示形态不同（实时=结果页 / 联想=overlay），清掉对方的残留态，
+      // 否则可能出现「结果页和 overlay 同时在」或停在骨架屏。
+      _searchGeneration++;
+      _isSearching = false;
+      _isRefreshing = false;
+      _searchError = null;
+      _showSuggestions = false;
     });
   }
 
@@ -141,10 +161,15 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounceTimer?.cancel();
 
     if (value.isEmpty) {
+      // 让在途搜索的回调全部失效，避免清空后旧结果又冒出来。
+      _searchGeneration++;
       setState(() {
         _searchResult = null;
         _autocompleteSuggestions = null;
         _showSuggestions = false;
+        _isSearching = false;
+        _isRefreshing = false;
+        _searchError = null;
         _query = '';
       });
       return;
@@ -161,19 +186,30 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _search(String query, {bool recordHistory = false}) async {
     if (query.trim().isEmpty) {
+      _searchGeneration++;
       setState(() {
         _searchResult = null;
         _query = '';
         _showSuggestions = false;
+        _isSearching = false;
+        _isRefreshing = false;
+        _searchError = null;
       });
       return;
     }
 
+    final generation = ++_searchGeneration;
+    // 关键：已有结果就走「轻量刷新」——保留旧结果、只在顶部显示细进度条，
+    // 绝不再把结果页整块换成骨架屏；否则实时搜索每敲一个字就闪没一次。
+    // 只有首次搜索（还没有任何结果）才显示骨架屏。
+    final hasResult = _searchResult != null;
     setState(() {
-      _isSearching = true;
+      _isSearching = !hasResult;
+      _isRefreshing = hasResult;
+      _searchError = null;
       _query = query;
       _showSuggestions = false;
-      _resultTab = 0;
+      if (!hasResult) _resultTab = 0;
     });
     if (_resultPageController.hasClients) {
       _resultPageController.jumpToPage(0);
@@ -193,17 +229,33 @@ class _SearchScreenState extends State<SearchScreen> {
 
     try {
       final result = await libraryProvider.search(query);
-      if (mounted && _query == query) {
+      // 用序号守卫：只有最后一次搜索能更新 UI。旧请求即使返回更晚也不会
+      // 覆盖新结果、更不会把 _isSearching 卡在 true 造成结果页消失。
+      if (mounted && generation == _searchGeneration) {
         setState(() {
           _searchResult = result;
           _isSearching = false;
+          _isRefreshing = false;
+          _resultTab = 0;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _searchGeneration) {
+        final hadResult = _searchResult != null && !_searchResult!.isEmpty;
         setState(() {
           _isSearching = false;
+          _isRefreshing = false;
+          // 记住失败：build 里据此展示错误态 + 重试，而不是掉回历史页。
+          _searchError = e.toString();
         });
+        // 有旧结果可看时页面保留旧结果，改用轻提示告知这次刷新失败。
+        if (hadResult) {
+          showLuoboToast(
+            context,
+            message: AppLocalizations.of(context)!.failedToConnect,
+            tone: LuoboToastTone.error,
+          );
+        }
       }
     }
   }
@@ -281,6 +333,10 @@ class _SearchScreenState extends State<SearchScreen> {
                               ),
                               onChanged: _onSearchChanged,
                               onSubmitted: (value) {
+                                // 先撤销已排队的防抖：否则输入后立刻回车会对同一
+                                // query 发两次请求，晚到的第二次可能覆盖第一次的
+                                // 成功结果、甚至把首次提交错误的显示成失败态。
+                                _debounceTimer?.cancel();
                                 setState(() => _showSuggestions = false);
                                 _search(value, recordHistory: true);
                               },
@@ -341,6 +397,16 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                       ...List.generate(5, (_) => const SongTileShimmer()),
                     ],
+                  ),
+                )
+              else if (_searchError != null &&
+                  (_searchResult == null || _searchResult!.isEmpty))
+                SliverFillRemaining(
+                  child: LoadErrorView(
+                    title: AppLocalizations.of(context)!.failedToConnect,
+                    message: _searchError,
+                    retryLabel: AppLocalizations.of(context)!.retry,
+                    onRetry: () => _search(_query, recordHistory: false),
                   ),
                 )
               else if (_searchResult != null && !_searchResult!.isEmpty)
@@ -404,6 +470,12 @@ class _SearchScreenState extends State<SearchScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildResultTabBar(tabs),
+        // 实时搜索刷新时只显示一条细进度条，旧结果保持可见、不闪没。
+        if (_isRefreshing)
+          const SizedBox(
+            height: 2,
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
         Expanded(
           child: PageView(
             controller: _resultPageController,

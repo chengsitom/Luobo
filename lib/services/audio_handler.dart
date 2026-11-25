@@ -123,10 +123,6 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 
-  void clearNowPlaying() {
-    mediaItem.add(const MediaItem(id: '', title: ''));
-  }
-
   // ---------------------------------------------------------------------------
   // Internal: map just_audio state → audio_service PlaybackState
   // ---------------------------------------------------------------------------

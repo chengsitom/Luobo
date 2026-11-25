@@ -31,9 +31,9 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   final _offlineService = OfflineService();
 
   bool _imageCacheEnabled = true;
-  final bool _isCaching = false;
-  final int _currentProgress = 0;
-  final int _totalSongs = 0;
+  bool _isCaching = false;
+  int _currentProgress = 0;
+  int _totalSongs = 0;
   int _downloadedCount = 0;
   String _downloadedSize = '0 B';
   // 下载任务进度（与 BPM 缓存进度 _currentProgress/_totalSongs 分开）
@@ -611,6 +611,59 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     );
   }
 
+  Future<void> _cacheAllBPMs() async {
+    final l10n = AppLocalizations.of(context)!;
+    final songs = context.read<LibraryProvider>().cachedAllSongs;
+    if (songs.isEmpty) {
+      showLuoboToast(
+        context,
+        message: l10n.libraryEmpty,
+        tone: LuoboToastTone.info,
+      );
+      return;
+    }
+
+    setState(() {
+      _isCaching = true;
+      _currentProgress = 0;
+      _totalSongs = songs.length;
+    });
+
+    try {
+      await _bpmAnalyzer.cacheAllBPM(
+        songs,
+        onProgress: (current, total) {
+          if (!mounted) return;
+          setState(() {
+            _currentProgress = current;
+            _totalSongs = total;
+          });
+        },
+      );
+      if (!mounted) return;
+      showLuoboToast(
+        context,
+        message: '${l10n.done} · ${l10n.cachedBpms} ${_bpmAnalyzer.getCachedCount()}',
+        tone: LuoboToastTone.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showLuoboToast(
+        context,
+        message: '${l10n.operationFailed}: $e',
+        tone: LuoboToastTone.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCaching = false;
+          _currentProgress = 0;
+          _totalSongs = 0;
+        });
+      }
+    }
+  }
+
   Widget _buildCacheAllButton() {
     return Column(
       children: [
@@ -618,7 +671,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         LuoboRow(
           title: AppLocalizations.of(context)!.cacheAllBpms,
           trailing: _isCaching ? const CupertinoActivityIndicator() : null,
-          onTap: _isCaching ? null : () {},
+          onTap: _isCaching ? null : () => _cacheAllBPMs(),
         ),
       ],
     );

@@ -291,10 +291,10 @@ const List<MechanismItem> _audioItems = [
     details: '依据：bpm_analyzer_service.dart:68-106',
   ),
   MechanismItem(
-    title: 'Dolby Atmos 检测',
-    summary: '仅检测 Android 设备是否支持/开启 Dolby Atmos 空间音频，'
-        '作能力展示与提示，不改变音轨本身。',
-    details: '依据：dolby_atmos_service.dart:20-35',
+    title: 'Dolby Atmos 标识',
+    summary: '部分曲目带 Dolby Atmos 元数据，播放页与歌曲列表会显示对应标识；'
+        'App 不改动音轨本身。',
+    details: '依据：song.hasDolbyAtmos 字段（服务端提供）',
   ),
 ];
 

@@ -266,7 +266,9 @@ class ListeningInsightBuilder {
         artistPlays[p.artist!] = (artistPlays[p.artist!] ?? 0) + p.playCount;
       }
       final g = _cleanGenre(p);
-      if (g != null) {
+      // 0 次播放的画像（如只被回填了 genre、实际没听过）不构成口味，
+      // 否则会出现「摇滚 0% · 0 次」这种空条目，且占比被污染。
+      if (g != null && p.playCount > 0) {
         genrePlays[g] = (genrePlays[g] ?? 0) + p.playCount;
       }
     }
@@ -648,18 +650,21 @@ class ListeningInsightBuilder {
 
   DroughtInfo? _buildDrought() {
     final from = _dayKey(now.subtract(const Duration(days: 7)));
-    final recent = <SongProfile>[];
+    final toExclusive = _dayKey(now.add(const Duration(days: 1)));
+    // 文案说「最近一周 X% 的播放」，分子分母就都必须用**窗口内**播放数，
+    // 不能用历史累计 playCount——否则三个月前循环上千次、上周只听 1 次的老歌
+    // 会把集中度拉高，误报歌荒。
+    final recent = <(SongProfile, int)>[];
     for (final p in profiles.values) {
-      if (_playsInWindow(p, from, _dayKey(now.add(const Duration(days: 1)))) > 0) {
-        recent.add(p);
-      }
+      final inWindow = _playsInWindow(p, from, toExclusive);
+      if (inWindow > 0) recent.add((p, inWindow));
     }
     if (recent.length <= 5) return null;
-    final total = recent.fold(0, (s, p) => s + p.playCount);
+    final total = recent.fold(0, (s, e) => s + e.$2);
     if (total == 0) return null;
-    // 必须按播放次数降序再取前 5，否则算的是「任意 5 首」的集中度。
-    recent.sort((a, b) => b.playCount.compareTo(a.playCount));
-    final top5 = recent.take(5).fold(0, (s, p) => s + p.playCount);
+    // 必须按窗口内播放数降序再取前 5，否则算的是「任意 5 首」的集中度。
+    recent.sort((a, b) => b.$2.compareTo(a.$2));
+    final top5 = recent.take(5).fold(0, (s, e) => s + e.$2);
     final concentration = top5 / total;
     return concentration >= 0.7
         ? DroughtInfo(concentration: concentration, recentSongs: recent.length)

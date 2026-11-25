@@ -125,6 +125,16 @@ void main() {
       expect(insight.flavorPrint.first.percent, closeTo(100, 0.01));
     });
 
+    test('0 次播放的画像不进口味指纹（不出现「摇滚 0% · 0 次」）', () {
+      final insight = build({
+        // 只有 genreLookup 回填的风格、但实际一次没听。
+        'idle': mk(id: 'idle', title: '没听过', plays: 0),
+        'a': mk(id: 'a', title: 'A', plays: 5, daily: {'2026-11-01': 5}),
+      }, genreLookup: {'idle': 'rock'});
+      expect(insight.flavorPrint, isEmpty);
+      expect(insight.totalPlays, 5);
+    });
+
     test('占比按有效播放计算', () {
       final insight = build({
         'a': mk(id: 'a', title: 'A', genre: 'pop', plays: 3,
@@ -252,6 +262,26 @@ void main() {
       final insight = build(profiles);
       expect(insight.drought, isNotNull);
       expect(insight.drought!.concentration, greaterThanOrEqualTo(0.7));
+    });
+
+    test('历史累计高但窗口内低的老歌不拉高集中度，也不误报歌荒', () {
+      final profiles = <String, SongProfile>{};
+      // 一首三个月前的老歌：历史 playCount=1000，但最近一周只听 1 次。
+      profiles['old'] = mk(
+        id: 'old', title: 'Old', plays: 1000,
+        daily: {'2026-06-01': 999, '2026-11-18': 1},
+      );
+      // 最近一周另有 10 首各 10 次 —— 明显分散，不该报歌荒。
+      for (var i = 0; i < 10; i++) {
+        profiles['new$i'] = mk(
+          id: 'new$i', title: 'New $i', plays: 10,
+          daily: {'2026-11-18': 10},
+        );
+      }
+      // 窗口内正确算法：total=101, top5=50 → ≈49.5%，不报警。
+      // 若误用 playCount：old=1000 排第一，top5≈1040, total=1100 → ≈94.5%，误报。
+      expect(build(profiles).drought, isNull,
+          reason: '窗口内播放分散，老歌的历史累计不得计入集中度');
     });
 
     test('播放分散时不误报歌荒', () {
