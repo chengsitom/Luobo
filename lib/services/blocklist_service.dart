@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
 /// 屏蔽对象的类型。
-enum BlockKind { artist, album, playlist }
+enum BlockKind { artist, album, playlist, song }
 
 /// 屏蔽强度。
 ///
@@ -122,6 +122,11 @@ class BlocklistService extends ChangeNotifier {
   final Set<String> _hiddenAlbumIds = {};
   final Set<String> _excludedAlbumIds = {};
   final Set<String> _hiddenPlaylistIds = {};
+  final Set<String> _hiddenSongIds = {};
+  final Set<String> _blockedSongIds = {};
+
+  /// 歌单成员歌曲（用于「排除整个歌单」），与单曲屏蔽分开维护：
+  /// 前者不该让歌曲在列表里消失，后者在 `hidden` 时必须消失。
   final Set<String> _excludedSongIds = {};
 
   /// 每次名单或成员集合变化都 +1，供外部缓存失效。
@@ -144,8 +149,9 @@ class BlocklistService extends ChangeNotifier {
   BlockEntry? entryFor(BlockKind kind, String id) =>
       _entries['${kind.name}:$id'];
 
-  /// 被排除歌单的成员歌曲总数（管理页展示"影响多少首"用）。
-  int get excludedSongIdCount => _excludedSongIds.length;
+  /// 被排除的歌曲总数（歌单成员 + 单曲屏蔽，去重）。
+  int get excludedSongIdCount =>
+      {..._excludedSongIds, ..._blockedSongIds}.length;
 
   // ── 作用域 ────────────────────────────────────────────────────────────
 
@@ -258,6 +264,7 @@ class BlocklistService extends ChangeNotifier {
   /// 它的歌仍然属于各自的艺人/专辑，照常可浏览（否则会在别处凭空少歌）。
   bool isSongHidden(Song song) {
     if (_entries.isEmpty) return false;
+    if (_hiddenSongIds.contains(song.id)) return true;
     if (isAlbumHidden(song.albumId)) return true;
     if (isArtistHidden(song.artistId, name: song.artist)) return true;
     final parts = song.artistParticipants;
@@ -272,6 +279,7 @@ class BlocklistService extends ChangeNotifier {
   /// 歌曲是否可以参与「随机 / 漫游 / 推荐 / AutoDJ」（`hidden` ∪ `muted` 都排除）。
   bool isSongExcluded(Song song) {
     if (_entries.isEmpty) return false;
+    if (_blockedSongIds.contains(song.id)) return true;
     if (_excludedSongIds.contains(song.id)) return true;
     if (isAlbumExcluded(song.albumId)) return true;
     if (isArtistExcluded(song.artistId, name: song.artist)) return true;
@@ -369,6 +377,25 @@ class BlocklistService extends ChangeNotifier {
     }
   }
 
+  /// 屏蔽单曲。
+  ///
+  /// 与艺人/专辑不同，歌曲没有「成员」概念；`hidden` 会从列表/搜索消失，
+  /// `muted` 仍可浏览，但不会被漫游/AutoDJ 抽到。
+  Future<void> blockSong(
+    String id,
+    String name, {
+    required BlockMode mode,
+  }) =>
+      _upsert(
+        BlockEntry(
+          kind: BlockKind.song,
+          targetId: id,
+          name: name,
+          mode: mode,
+          addedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+
   /// 切换强度（管理页用）。
   Future<void> setMode(BlockKind kind, String targetId, BlockMode mode) async {
     final key = '${kind.name}:$targetId';
@@ -383,7 +410,9 @@ class BlocklistService extends ChangeNotifier {
   Future<void> unblock(BlockKind kind, String targetId) async {
     final key = '${kind.name}:$targetId';
     if (_entries.remove(key) == null) return;
-    _playlistSongs.remove(targetId);
+    if (kind == BlockKind.playlist) {
+      _playlistSongs.remove(targetId);
+    }
     _rebuildIndexes();
     notifyListeners();
     await _persist();
@@ -478,6 +507,8 @@ class BlocklistService extends ChangeNotifier {
     _hiddenAlbumIds.clear();
     _excludedAlbumIds.clear();
     _hiddenPlaylistIds.clear();
+    _hiddenSongIds.clear();
+    _blockedSongIds.clear();
     _excludedSongIds.clear();
 
     for (final entry in _entries.values) {
@@ -496,9 +527,14 @@ class BlocklistService extends ChangeNotifier {
         case BlockKind.playlist:
           if (hidden) _hiddenPlaylistIds.add(entry.targetId);
           // 歌单被排除的是**成员歌曲**，两档都要展开（hidden 也要，否则
-          // "隐藏了歌单但它的歌照样被随机抽到"）。
+          // "隐藏了歌单但它的歌照样被随机抽到"）。注意这里只进
+          // `_excludedSongIds`，不能进 `_hiddenSongIds`：歌单隐藏只影响
+          // 歌单条目本身，它的歌仍属于各自艺人/专辑，照常可浏览。
           final members = _playlistSongs[entry.targetId];
           if (members != null) _excludedSongIds.addAll(members);
+        case BlockKind.song:
+          _blockedSongIds.add(entry.targetId);
+          if (hidden) _hiddenSongIds.add(entry.targetId);
       }
     }
     _revision++;

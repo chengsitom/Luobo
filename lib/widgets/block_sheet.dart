@@ -4,7 +4,8 @@ import '../l10n/app_localizations.dart';
 import '../services/blocklist_service.dart';
 
 // 调用方（详情页/歌曲菜单）只需要屏蔽类型，顺带再导出，省一个 import。
-export '../services/blocklist_service.dart' show BlockKind, BlockMode, BlockEntry;
+export '../services/blocklist_service.dart'
+    show BlockKind, BlockMode, BlockEntry;
 import 'luobo/luobo_toast.dart';
 import 'luobo/sheet_shell.dart';
 
@@ -38,6 +39,7 @@ Future<void> showBlockSheet(
     BlockKind.artist => l10n.blockArtistAction,
     BlockKind.album => l10n.blockAlbumAction,
     BlockKind.playlist => l10n.blockPlaylistAction,
+    BlockKind.song => l10n.blockSongAction,
   };
 
   Future<void> apply(BlockMode mode) async {
@@ -54,6 +56,8 @@ Future<void> showBlockSheet(
           members: members,
           songCount: songCount,
         );
+      case BlockKind.song:
+        await blocklist.blockSong(targetId, name, mode: mode);
     }
     showLuoboToastOnOverlay(
       toastOverlay,

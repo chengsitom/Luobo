@@ -55,7 +55,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   void initState() {
     super.initState();
+    // 页内屏蔽单曲后立即从列表/计数里移除（不重新请求歌单详情）。
+    BlocklistService.instance.addListener(_onBlocklistChanged);
     _loadPlaylist();
+  }
+
+  @override
+  void dispose() {
+    BlocklistService.instance.removeListener(_onBlocklistChanged);
+    super.dispose();
+  }
+
+  void _onBlocklistChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadPlaylist() async {
@@ -96,7 +108,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   /// 「N 首」→ 双胶囊（116×48、间距 12、居中，主题取反：浅色黑/深色白）→
   /// 「共 N 首」行（右：排序 + 多选）。整块随滚动上移，顶栏圆钮常驻。
   /// 歌单详情头部（共享组件 LuoboHeroCardHeader；fnos 帧实测版式）。
-  Widget _buildHeroHeader(BuildContext context) {
+  Widget _buildHeroHeader(BuildContext context, {required int songCount}) {
     final l10n = AppLocalizations.of(context)!;
     final coverArt = _playlist!.coverArt;
     final coverUrl = coverArt != null
@@ -107,10 +119,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     return LuoboHeroCardHeader(
       title: _playlist!.name,
       subtitle: l10n.songsCountWithDuration(
-        _playlist!.songs?.length ?? 0,
+        songCount,
         _playlist!.formattedDuration,
       ),
-      countLabel: l10n.songsCount(_playlist!.songs?.length ?? 0),
+      countLabel: l10n.songsCount(songCount),
       card: FluidBackground(
         imageProvider: (coverUrl == null || coverUrl.isEmpty)
             ? null
@@ -169,11 +181,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   void _playAll({bool shuffle = false}) {
-    if (_playlist?.songs == null || _playlist!.songs!.isEmpty) return;
+    final visible = _displaySongs;
+    if (visible.isEmpty) return;
 
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    var songs = List.from(_playlist!.songs!);
+    var songs = List<Song>.from(visible);
     if (shuffle) {
       songs.shuffle();
     }
@@ -361,10 +374,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
-  /// 普通列表分支的展示顺序（排序后）。
+  /// 普通列表分支的展示顺序（先过滤单曲级彻底屏蔽，再排序）。
   List<Song> get _displaySongs {
-    final songs = _playlist?.songs;
-    if (songs == null || songs.length < 2) return songs ?? [];
+    final all = _playlist?.songs;
+    if (all == null || all.isEmpty) return all ?? [];
+    final blocklist = BlocklistService.instance;
+    final songs = blocklist.isEmpty
+        ? all
+        : all.where((s) => !blocklist.isSongHidden(s)).toList();
+    if (songs.length < 2) return songs;
     return sortSongs(songs, _sortField, ascending: _sortAscending);
   }
 
@@ -424,8 +442,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _downloadPlaylist() async {
-    final songs = _playlist?.songs;
-    if (songs == null || songs.isEmpty) return;
+    final songs = _displaySongs;
+    if (songs.isEmpty) return;
 
     final subsonicService = Provider.of<SubsonicService>(
       context,
@@ -601,14 +619,17 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     }
 
+    final songs = _displaySongs;
     return Scaffold(
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _buildHeroHeader(context)),
+              SliverToBoxAdapter(
+                child: _buildHeroHeader(context, songCount: songs.length),
+              ),
               const SliverToBoxAdapter(child: Divider()),
-              if (_playlist!.songs?.isEmpty ?? true)
+              if (songs.isEmpty)
                 SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
@@ -626,7 +647,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final songs = _displaySongs;
                       final song = songs[index];
                       final tile = SongTile(
                         song: song,
@@ -684,13 +704,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                             tile,
                             // 行间分隔线（fnos v6_0060 实测：左右各缩 16dp，
                             // 行高 64dp）。
-                            if (index < _playlist!.songs!.length - 1)
+                            if (index < songs.length - 1)
                               const LuoboSongDivider(),
                           ],
                         ),
                       );
                     },
-                    childCount: _playlist!.songs!.length,
+                    childCount: songs.length,
                   ),
                 ),
               SliverToBoxAdapter(

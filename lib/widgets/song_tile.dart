@@ -750,13 +750,11 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
             _showPlaylistPicker(context, song);
           },
         ),
-        // 屏蔽：一个弹窗两档强度。缺 artistId/albumId 时不给入口
-        // （没有稳定 id 的屏蔽会"看起来生效但其实没匹配上"）。
-        // 没有 artistId 就不给"屏蔽艺人"入口：名字兜底只用于**匹配**，
-        // 不能用来建规则（同名不同人 + 改名后规则失联），点了也只会空转。
-        if (song.artistId != null && song.artistId!.isNotEmpty)
+        // 屏蔽：菜单只操作**当前这首歌**。歌手/专辑各自在详情页右上角有
+        // 对应入口，避免同一菜单里出现“屏蔽关联对象”的不对称交互。
+        if (song.id.isNotEmpty)
           LuoboSheetRow(
-            title: l10n.blockArtistAction,
+            title: l10n.blockSongAction,
             contentPadding: _rowPadding,
             gap: _rowGap,
             trailing: const Icon(Icons.visibility_off_rounded,
@@ -765,26 +763,9 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
               Navigator.pop(context);
               showBlockSheet(
                 context,
-                kind: BlockKind.artist,
-                targetId: song.artistId ?? '',
-                name: song.artist ?? '—',
-              );
-            },
-          ),
-        if (song.albumId != null && song.albumId!.isNotEmpty)
-          LuoboSheetRow(
-            title: l10n.blockAlbumAction,
-            contentPadding: _rowPadding,
-            gap: _rowGap,
-            trailing: const Icon(Icons.visibility_off_rounded,
-                size: 18, color: LuoboAccent.accent),
-            onTap: () {
-              Navigator.pop(context);
-              showBlockSheet(
-                context,
-                kind: BlockKind.album,
-                targetId: song.albumId!,
-                name: song.album ?? '—',
+                kind: BlockKind.song,
+                targetId: song.id,
+                name: song.title,
               );
             },
           ),

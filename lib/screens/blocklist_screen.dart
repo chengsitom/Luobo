@@ -20,7 +20,7 @@ import '../widgets/settings_sub_page.dart';
 /// 样式对齐「资料库内容列表」（歌曲/专辑/艺术家/歌单）而非设置页：
 /// 64dp 行 + 48px 类型图标块 + 16/600 标题 + 12px 副标题 + 行尾 ⋮，
 /// 分组用内容页同款「计数行 + 分隔线」，不用 LuoboGroup 白卡。
-/// 屏蔽条目的对象本质（艺人/专辑/歌单）与资料库同类，观感应一致
+/// 屏蔽条目的对象本质（歌曲/艺人/专辑/歌单）与资料库同类，观感应一致
 ///（2026-11-23 用户反馈：旧版 LuoboRow 太像设置页）。
 ///
 /// 顶栏仍是 SettingsSubPage（全局渐显标题），只是列表 body 换了一套视觉。
@@ -59,6 +59,7 @@ class BlocklistScreen extends StatelessWidget {
               .toSet();
           final canJudgePlaylists = rawPlaylistIds.isNotEmpty;
 
+          final songs = entries.where((e) => e.kind == BlockKind.song);
           final artists = entries.where((e) => e.kind == BlockKind.artist);
           final albums = entries.where((e) => e.kind == BlockKind.album);
           final playlists = entries.where((e) => e.kind == BlockKind.playlist);
@@ -70,6 +71,12 @@ class BlocklistScreen extends StatelessWidget {
               bottom: LuoboSpacing.pageBottomWithStrip(context),
             ),
             children: [
+              if (songs.isNotEmpty)
+                ..._section(
+                  context,
+                  '${l10n.songs} · ${songs.length}',
+                  [for (final e in songs) _tile(context, e)],
+                ),
               if (artists.isNotEmpty)
                 ..._section(
                   context,
@@ -184,6 +191,7 @@ class _BlockEntryTile extends StatelessWidget {
       BlockKind.artist => Icons.person_rounded,
       BlockKind.album => Icons.album_rounded,
       BlockKind.playlist => Icons.queue_music_rounded,
+      BlockKind.song => Icons.music_note_rounded,
     };
 
     return InkWell(
@@ -199,7 +207,7 @@ class _BlockEntryTile extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: c.card,
-                  // 艺人圆形头像、专辑/歌单方形封面，沿用内容列表的形状约定。
+                  // 艺人圆形头像、歌曲/专辑/歌单方形封面，沿用内容列表的形状约定。
                   borderRadius: BorderRadius.circular(isArtist ? 24 : 6),
                 ),
                 alignment: Alignment.center,

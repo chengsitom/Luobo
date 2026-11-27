@@ -15,6 +15,7 @@ import '../theme/design_tokens.dart';
 import '../utils/image_cache.dart';
 import '../utils/song_sort.dart';
 import '../widgets/album_artwork.dart';
+import '../widgets/block_sheet.dart';
 import '../widgets/blocked_placeholder.dart';
 import '../widgets/luobo/anchored_menu.dart';
 import '../widgets/luobo/hero_detail_header.dart';
@@ -71,13 +72,21 @@ class _ArtistScreenState extends State<ArtistScreen> {
   @override
   void initState() {
     super.initState();
+    // 屏蔽名单变化要立刻反映：页内点了「屏蔽歌手」→ 切成已屏蔽占位；
+    // 页内屏蔽了某首歌 → 列表/计数立即少一首。
+    BlocklistService.instance.addListener(_onBlocklistChanged);
     _loadArtistDetails();
   }
 
   @override
   void dispose() {
+    BlocklistService.instance.removeListener(_onBlocklistChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onBlocklistChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadArtistDetails() async {
@@ -102,7 +111,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         );
         final albums = await libraryProvider.getArtistAlbums(widget.artistId);
 
-        final topSongs = libraryProvider.cachedAllSongs
+        final topSongs = libraryProvider.cachedAllSongsUnfiltered
             .where((s) => s.artistId == widget.artistId)
             .toList();
 
@@ -133,7 +142,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final cachedAlbums = libraryProvider.cachedAllAlbums
         .where((a) => a.artistId == widget.artistId)
         .toList();
-    final cachedSongs = libraryProvider.cachedAllSongs
+    final cachedSongs = libraryProvider.cachedAllSongsUnfiltered
         .where((s) => s.artistId == widget.artistId)
         .toList();
 
@@ -209,13 +218,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
     // 歌曲列表要**该歌手全部歌曲**（fnos：共 202 首）。`getArtistTopSongs`
     // 只给热门 N 首，所以只要有本地曲库缓存就优先用缓存的全量列表。
-    final cachedAll = libraryProvider.cachedAllSongs
+    final cachedAll = libraryProvider.cachedAllSongsUnfiltered
         .where((s) => s.artistId == widget.artistId)
         .toList();
     if (cachedAll.isNotEmpty) {
       topSongs = cachedAll;
     } else if (topSongs.isEmpty) {
-      topSongs = libraryProvider.cachedAllSongs
+      topSongs = libraryProvider.cachedAllSongsUnfiltered
           .where((s) => s.artistId == widget.artistId)
           .toList();
     }
@@ -229,9 +238,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
     });
   }
 
+  /// 单曲级「彻底屏蔽」不经过 `LibraryProvider._visibleSongs`，歌手页是
+  /// 直接按 artistId 取歌，必须在展示层再过滤一次。
+  List<Song> get _visibleTopSongs {
+    final blocklist = BlocklistService.instance;
+    if (blocklist.isEmpty) return _topSongs;
+    return _topSongs.where((s) => !blocklist.isSongHidden(s)).toList();
+  }
+
   List<Song> get _displaySongs {
-    if (_topSongs.length < 2) return _topSongs;
-    return sortSongs(_topSongs, _sortField, ascending: _sortAscending);
+    final songs = _visibleTopSongs;
+    if (songs.length < 2) return songs;
+    return sortSongs(songs, _sortField, ascending: _sortAscending);
   }
 
   Future<void> _addArtistToQueue() async {
@@ -250,12 +268,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
       final songsToQueue = <Song>[];
       for (final album in _albums) {
         final albumSongs = libraryProvider.isLocalOnlyMode
-            ? libraryProvider.cachedAllSongs
+            ? libraryProvider.cachedAllSongsUnfiltered
                 .where((s) => s.albumId == album.id)
                 .toList()
             : await subsonicService.getAlbumSongs(album.id);
 
-        songsToQueue.addAll(albumSongs);
+        songsToQueue.addAll(
+          albumSongs.where((s) => !BlocklistService.instance.isSongHidden(s)),
+        );
       }
 
       if (songsToQueue.isNotEmpty) {
@@ -285,11 +305,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   void _playTopSongs({bool shuffle = false}) {
-    if (_topSongs.isEmpty) return;
+    final visibleSongs = _visibleTopSongs;
+    if (visibleSongs.isEmpty) return;
 
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    var songs = List<Song>.from(_topSongs);
+    var songs = List<Song>.from(visibleSongs);
     if (shuffle) {
       songs.shuffle();
     }
@@ -477,7 +498,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ),
               const SizedBox(height: 5),
               Text(
-                l10n.artistStats(_topSongs.length, _albums.length),
+                l10n.artistStats(_visibleTopSongs.length, _albums.length),
                 style: LuoboType.caption.copyWith(color: c.fg2),
               ),
               const SizedBox(height: 16),
@@ -715,6 +736,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     top: 8,
                     child: _buildBackPill(context, name, width, nameT),
                   ),
+                  // 头图区右上角：屏蔽当前歌手。滚动后让位给「歌曲 / 专辑」
+                  // 分段控件（segT 到 0.25 就完全淡出，避免两个 40dp 圆钮重叠）。
+                  if (name.isNotEmpty && _artist != null)
+                    Positioned(
+                      right: 16,
+                      top: 8,
+                      child: IgnorePointer(
+                        ignoring: segT > 0.01,
+                        child: Opacity(
+                          opacity: (1 - segT * 4).clamp(0.0, 1.0),
+                          child: LuoboTopCircleButton(
+                            icon: Icons.block_rounded,
+                            onTap: () => showBlockSheet(
+                              context,
+                              kind: BlockKind.artist,
+                              targetId: widget.artistId,
+                              name: name,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (name.isNotEmpty && _artist != null)
                     Positioned(
                       right: 16,

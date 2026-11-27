@@ -55,6 +55,7 @@ void main() {
   testWidgets('按类型分组列出，并标出当前强度', (tester) async {
     await blocklist.blockArtist('a1', '周杰伦', mode: BlockMode.hidden);
     await blocklist.blockAlbum('al1', '范特西', mode: BlockMode.muted);
+    await blocklist.blockSong('s1', '晴天', mode: BlockMode.muted);
     await blocklist.blockPlaylist(
       'p1',
       '儿歌',
@@ -67,6 +68,7 @@ void main() {
 
     expect(find.text('周杰伦'), findsOneWidget);
     expect(find.text('范特西'), findsOneWidget);
+    expect(find.text('晴天'), findsOneWidget);
     expect(find.text('儿歌'), findsOneWidget);
     // 两档强度的标签都要能区分出来
     expect(find.text('彻底屏蔽'), findsOneWidget);
@@ -78,16 +80,18 @@ void main() {
   testWidgets('样式对齐内容列表：类型图标块 + 行尾 ⋮，不用设置页白卡', (tester) async {
     await blocklist.blockArtist('a1', '周杰伦', mode: BlockMode.hidden);
     await blocklist.blockAlbum('al1', '范特西', mode: BlockMode.muted);
+    await blocklist.blockSong('s1', '晴天', mode: BlockMode.muted);
     await blocklist.blockPlaylist('p1', '儿歌', mode: BlockMode.muted);
 
     await pumpPage(tester);
 
-    // 三类对象的图标块：艺人圆形、专辑/歌单方形。
+    // 四类对象的图标块：艺人圆形、歌曲/专辑/歌单方形。
     expect(find.byIcon(Icons.person_rounded), findsOneWidget);
     expect(find.byIcon(Icons.album_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.music_note_rounded), findsOneWidget);
     expect(find.byIcon(Icons.queue_music_rounded), findsOneWidget);
     // 行尾 ⋮ 数量与条目数一致（点它和点整行都打开同一 sheet）。
-    expect(find.byIcon(AppIcons.moreV), findsNWidgets(3));
+    expect(find.byIcon(AppIcons.moreV), findsNWidgets(4));
   });
 
   testWidgets('规则指向的歌单已不存在时会标出来', (tester) async {

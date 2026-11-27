@@ -518,6 +518,13 @@ class LibraryProvider extends ChangeNotifier {
     return _allSongsCache.of(raw, _blocklist.revision, _visibleSongs);
   }
 
+  /// **未应用屏蔽**的全部歌曲，仅供需要“解屏蔽后立即恢复”的详情页使用。
+  ///
+  /// 歌手详情直接按 artistId 从缓存取歌；若拿 [cachedAllSongs]，屏蔽期间
+  /// 列表里根本没有那首歌，解除后即使收到通知也无法把它加回来。调用方
+  /// 必须自己用 `BlocklistService.isSongHidden` 过滤展示。
+  List<Song> get cachedAllSongsUnfiltered => _mergedAllSongs;
+
   List<Artist> get artists {
     final raw = _mergedArtists;
     if (_blocklist.isEmpty) return raw;

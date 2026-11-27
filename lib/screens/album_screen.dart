@@ -36,7 +36,19 @@ class _AlbumScreenState extends State<AlbumScreen> {
   @override
   void initState() {
     super.initState();
+    // 页内屏蔽专辑后立刻切成「已屏蔽」占位；页内屏蔽单曲后列表立即少一首。
+    BlocklistService.instance.addListener(_onBlocklistChanged);
     _loadAlbum();
+  }
+
+  @override
+  void dispose() {
+    BlocklistService.instance.removeListener(_onBlocklistChanged);
+    super.dispose();
+  }
+
+  void _onBlocklistChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadAlbum() async {
@@ -77,18 +89,28 @@ class _AlbumScreenState extends State<AlbumScreen> {
     }
   }
 
+  /// 单曲级屏蔽在页内生效后，`_songs` 仍是服务端原始列表；展示/播放/下载
+  /// 统一走这里，避免「屏蔽了但当前页还在」。
+  List<Song> get _visibleSongs {
+    final blocklist = BlocklistService.instance;
+    if (blocklist.isEmpty) return _songs;
+    return _songs.where((s) => !blocklist.isSongHidden(s)).toList();
+  }
+
   /// 多选（fnos：全屏弹窗）。
   void _openMultiSelect() {
-    if (_songs.isEmpty) return;
-    showMultiSelectSheet(context, songs: _songs);
+    final songs = _visibleSongs;
+    if (songs.isEmpty) return;
+    showMultiSelectSheet(context, songs: songs);
   }
 
   void _playAll({bool shuffle = false}) {
-    if (_songs.isEmpty) return;
+    final songs = _visibleSongs;
+    if (songs.isEmpty) return;
 
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    List<Song> playlist = List.from(_songs);
+    List<Song> playlist = List.from(songs);
     if (shuffle) {
       playlist.shuffle();
     }
@@ -97,7 +119,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
   }
 
   Future<void> _downloadAlbum() async {
-    if (_songs.isEmpty || _isDownloading) return;
+    final songs = _visibleSongs;
+    if (songs.isEmpty || _isDownloading) return;
 
     final l10n = AppLocalizations.of(context)!;
     // 仅 Wi-Fi 下载：批量下载耗流量，蜂窝下按用户设置拦截。
@@ -120,7 +143,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
     final confirmed = await showLuoboConfirmSheet(
       context: context,
       title: l10n.downloadAlbumConfirmTitle,
-      message: l10n.downloadAlbumConfirmBody(_album!.name, _songs.length),
+      message: l10n.downloadAlbumConfirmBody(_album!.name, songs.length),
       confirmLabel: l10n.download,
     );
     if (confirmed != true || !mounted) return;
@@ -133,7 +156,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
     // 进度与结果提示由全局 DownloadProgressOverlay 统一负责（进度卡 + 终态卡），
     // 这里只管本页按钮的 loading 态，避免两套提示重复弹。
-    offline.startBackgroundDownload(_songs, subsonicService).then((_) {
+    offline.startBackgroundDownload(songs, subsonicService).then((_) {
       if (mounted) setState(() => _isDownloading = false);
     });
   }
@@ -226,6 +249,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
       context,
       listen: false,
     ).isLocalPlaybackSession;
+    final songs = _visibleSongs;
 
     return Scaffold(
       body: Stack(
@@ -242,7 +266,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                     if (_album!.year != null) _album!.year.toString(),
                   ].join(' · '),
                   countLabel: AppLocalizations.of(context)!.songsCount(
-                    _songs.length,
+                    songs.length,
                   ),
                   card: Center(
                     child: AlbumArtwork(
@@ -259,23 +283,23 @@ class _AlbumScreenState extends State<AlbumScreen> {
               ),
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
-                  final song = _songs[index];
+                  final song = songs[index];
                   return Column(
                     children: [
                       SongTile(
                         song: song,
-                        playlist: _songs,
+                        playlist: songs,
                         index: index,
                         showArtwork: false,
                         showTrackNumber: true,
                         showArtist: false,
                       ),
                       // 序号行分隔线：左缩 42 对到歌名（设计稿/08 §3）。
-                      if (index < _songs.length - 1)
+                      if (index < songs.length - 1)
                         const LuoboSongDivider(indent: 42),
                     ],
                   );
-                }, childCount: _songs.length),
+                }, childCount: songs.length),
               ),
               SliverToBoxAdapter(
                   child: SizedBox(

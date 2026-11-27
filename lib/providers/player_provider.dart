@@ -693,7 +693,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     try {
-      final songs = await _subsonicService.getAlbumSongs(albumId);
+      final songs = (await _subsonicService.getAlbumSongs(albumId))
+          .where((s) => !BlocklistService.instance.isSongHidden(s))
+          .toList();
       return songs
           .map(
             (song) => {
@@ -777,7 +779,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           .firstOrNull;
       if (cachedPlaylist?.songs != null && cachedPlaylist!.songs!.isNotEmpty) {
         final offlineSongs = cachedPlaylist.songs!
-            .where((s) => downloadedIds.contains(s.id))
+            .where(
+              (s) =>
+                  downloadedIds.contains(s.id) &&
+                  !BlocklistService.instance.isSongHidden(s),
+            )
             .toList();
         if (offlineSongs.isNotEmpty) {
           return offlineSongs
@@ -802,7 +808,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     try {
       final playlist = await _subsonicService.getPlaylist(playlistId);
-      final songs = playlist.songs ?? [];
+      final songs = (playlist.songs ?? [])
+          .where((s) => !BlocklistService.instance.isSongHidden(s))
+          .toList();
       return songs
           .map(
             (song) => {
@@ -875,6 +883,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint(
           'PlayerProvider: Search returned ${results.songs.length} songs');
       return results.songs
+          .where((s) => !BlocklistService.instance.isSongHidden(s))
           .map(
             (song) => {
               'id': song.id,

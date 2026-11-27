@@ -65,6 +65,31 @@ void main() {
     expect(blocklist.isSongHidden(song(id: 's2', albumId: 'al2')), isFalse);
   });
 
+  test('单曲彻底屏蔽：列表与随机都不出现，且不影响同专辑其他歌', () async {
+    await blocklist.blockSong('s1', 'Song s1', mode: BlockMode.hidden);
+
+    expect(blocklist.isSongHidden(song()), isTrue);
+    expect(blocklist.isSongExcluded(song()), isTrue);
+    expect(blocklist.isSongHidden(song(id: 's2')), isFalse);
+    expect(blocklist.isSongExcluded(song(id: 's2')), isFalse);
+  });
+
+  test('单曲仅从漫游排除：仍可见，但不参与随机', () async {
+    await blocklist.blockSong('s1', 'Song s1', mode: BlockMode.muted);
+
+    expect(blocklist.isSongHidden(song()), isFalse);
+    expect(blocklist.isSongExcluded(song()), isTrue);
+  });
+
+  test('解除单曲屏蔽后恢复', () async {
+    await blocklist.blockSong('s1', 'Song s1', mode: BlockMode.hidden);
+    await blocklist.unblock(BlockKind.song, 's1');
+
+    expect(blocklist.isSongHidden(song()), isFalse);
+    expect(blocklist.isSongExcluded(song()), isFalse);
+    expect(blocklist.isEmpty, isTrue);
+  });
+
   test('多艺人歌曲：命中任一被屏蔽艺人即排除', () async {
     await blocklist.blockArtist('a2', 'Guest', mode: BlockMode.muted);
 
