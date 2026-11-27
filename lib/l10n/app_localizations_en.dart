@@ -3197,6 +3197,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get blockPlaylistAction => 'Block this playlist';
 
   @override
+  String get blockSongAction => 'Block this song';
+
+  @override
   String get blockModeHide => 'Hide completely';
 
   @override
@@ -3223,7 +3226,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get blocklistSubtitle =>
-      'Blocked artists, albums and playlists stay out of lists, search and roaming';
+      'Hidden items stay out of lists, search and roaming';
 
   @override
   String get blocklistEmpty => 'Nothing blocked yet';

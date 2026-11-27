@@ -5752,23 +5752,29 @@ abstract class AppLocalizations {
   /// **'Enter offline mode'**
   String get enterOfflineMode;
 
-  /// Song menu: block the artist of this song
+  /// Artist detail: block the current artist
   ///
   /// In en, this message translates to:
   /// **'Block this artist'**
   String get blockArtistAction;
 
-  /// Song menu: block the album of this song
+  /// Album detail: block the current album
   ///
   /// In en, this message translates to:
   /// **'Block this album'**
   String get blockAlbumAction;
 
-  /// Playlist menu: block this playlist
+  /// Playlist menu: block the current playlist
   ///
   /// In en, this message translates to:
   /// **'Block this playlist'**
   String get blockPlaylistAction;
+
+  /// Song menu: block the current song
+  ///
+  /// In en, this message translates to:
+  /// **'Block this song'**
+  String get blockSongAction;
 
   /// Block sheet option: completely hide from lists, search and roaming
   ///
@@ -5815,7 +5821,7 @@ abstract class AppLocalizations {
   /// Settings entry subtitle
   ///
   /// In en, this message translates to:
-  /// **'Blocked artists, albums and playlists stay out of lists, search and roaming'**
+  /// **'Hidden items stay out of lists, search and roaming'**
   String get blocklistSubtitle;
 
   /// Empty state of the content filter page

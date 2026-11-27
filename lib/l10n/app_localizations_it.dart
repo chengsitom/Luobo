@@ -3207,6 +3207,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get blockPlaylistAction => 'Block this playlist';
 
   @override
+  String get blockSongAction => 'Block this song';
+
+  @override
   String get blockModeHide => 'Hide completely';
 
   @override

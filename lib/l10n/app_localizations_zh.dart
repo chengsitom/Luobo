@@ -3086,6 +3086,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blockPlaylistAction => '屏蔽此歌单';
 
   @override
+  String get blockSongAction => '屏蔽这首歌';
+
+  @override
   String get blockModeHide => '彻底屏蔽';
 
   @override
@@ -3109,7 +3112,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blocklistTitle => '内容过滤';
 
   @override
-  String get blocklistSubtitle => '被屏蔽的艺人、专辑与歌单不会出现在列表、搜索和漫游里';
+  String get blocklistSubtitle => '彻底屏蔽的内容不会出现在列表、搜索和漫游里';
 
   @override
   String get blocklistEmpty => '还没有屏蔽任何内容';
