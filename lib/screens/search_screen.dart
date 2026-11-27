@@ -39,9 +39,11 @@ class _SearchScreenState extends State<SearchScreen> {
   SearchResult? _searchResult;
   SearchResult? _autocompleteSuggestions;
   bool _isSearching = false;
+
   /// 已有结果时的轻量刷新态：不替换结果页，只在顶部显示一条细进度条。
   /// 实时搜索每次输入都会重新搜，若一律切成骨架屏，用户会看到「结果闪一下就没」。
   bool _isRefreshing = false;
+
   /// 搜索失败态：网络异常时 libraryProvider.search 抛错，必须记住错误并展示
   /// 重试入口。否则 catch 里只清 loading，`_searchResult` 仍是 null，build 会
   /// 掉到最后的 else 显示历史页——用户看到的就是「结果页一闪就没了」。
@@ -63,7 +65,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// 结果分段（fnos v8_0022：单曲 / 专辑 / 歌手 三 tab，带条数）。
   int _resultTab = 0;
-
 
   @override
   void initState() {
@@ -295,9 +296,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           child: Container(
                             height: 48,
                             decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppTheme.darkCard
-                                  : Colors.white,
+                              color: isDark ? AppTheme.darkCard : Colors.white,
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: isDark
                                   ? null
@@ -318,10 +317,9 @@ class _SearchScreenState extends State<SearchScreen> {
                                   context,
                                 )!
                                     .searchPlaceholder,
-                                hintStyle: theme.textTheme.bodyLarge
-                                    ?.copyWith(
-                                      color: AppTheme.lightSecondaryText,
-                                    ),
+                                hintStyle: theme.textTheme.bodyLarge?.copyWith(
+                                  color: AppTheme.lightSecondaryText,
+                                ),
                                 prefixIcon: Icon(
                                   Icons.search_rounded,
                                   size: 20,
@@ -556,8 +554,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  List<Song> get _sortedResultSongs =>
-      _searchResult?.songs ?? const <Song>[];
+  List<Song> get _sortedResultSongs => _searchResult?.songs ?? const <Song>[];
 
   /// 单曲 tab：玫红圆形播放钮（左）+ 排序（右）→ 64dp 歌曲行。
   Widget _buildSongsResultPage(SearchResult result) {
@@ -664,7 +661,8 @@ class _SearchScreenState extends State<SearchScreen> {
     final libraryProvider =
         Provider.of<LibraryProvider>(context, listen: false);
     final songCounts = ArtistStats.songCounts(result.artists, libraryProvider);
-    final albumCounts = ArtistStats.albumCounts(result.artists, libraryProvider);
+    final albumCounts =
+        ArtistStats.albumCounts(result.artists, libraryProvider);
     // 与歌手列表页同款行式（头像 + 名字 + 「N 首歌 · M 张专辑」）。
     return ListView.builder(
       padding: EdgeInsets.only(
@@ -707,7 +705,12 @@ class _SearchScreenState extends State<SearchScreen> {
     final l10n = AppLocalizations.of(context)!;
     final c = LuoboColors.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        LuoboSpacing.pageBottomWithStrip(context),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -957,4 +960,3 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 }
-

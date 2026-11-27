@@ -101,10 +101,9 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     final serverKey = _serverKey;
     if (serverKey == null) return;
     // await 之前先取 provider，避免跨异步边界用 context。
-    final playingBookId =
-        Provider.of<PlayerProvider>(context, listen: false)
-            .currentAudiobook
-            ?.id;
+    final playingBookId = Provider.of<PlayerProvider>(context, listen: false)
+        .currentAudiobook
+        ?.id;
     try {
       final raw = await subsonicService.fetchAudiobookProgress();
       if (raw == null || raw.isEmpty) return;
@@ -179,8 +178,7 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
         ..sort((a, b) => a.order.compareTo(b.order));
       if (chapters.isEmpty) throw Exception('empty chapters');
 
-      var index =
-          chapters.indexWhere((c) => c.id == progress.chapterId);
+      var index = chapters.indexWhere((c) => c.id == progress.chapterId);
       if (index < 0) {
         index = chapters.indexWhere((c) => c.order == progress.chapterOrder);
       }
@@ -190,8 +188,7 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
         book,
         chapters,
         index,
-        resumePositionMs:
-            progress.completed ? null : progress.positionMs,
+        resumePositionMs: progress.completed ? null : progress.positionMs,
         chaptersComplete: true,
       );
       if (!ok && mounted) {
@@ -231,7 +228,7 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
               ? AudiobookDock.contentHeight +
                   8 +
                   MediaQuery.paddingOf(context).bottom
-              : 100.0;
+              : LuoboSpacing.pageBottomWithStrip(context);
 
           return Stack(
             children: [
@@ -385,8 +382,8 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     LuoboColors c,
     PlayerProvider player,
   ) {
-    final isCurrent = player.isPlayingAudiobook &&
-        player.currentAudiobook?.id == book.id;
+    final isCurrent =
+        player.isPlayingAudiobook && player.currentAudiobook?.id == book.id;
     final ratio = progress.progressRatio(
           totalEpisodes: book.episodeCount,
         ) ??
@@ -394,7 +391,8 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
     final remaining = _remainingSeconds(book, progress);
     final subtitle = [
       l10n.chapterX(progress.chapterOrder),
-      if (remaining != null) l10n.remainingTime(_humanDuration(l10n, remaining)),
+      if (remaining != null)
+        l10n.remainingTime(_humanDuration(l10n, remaining)),
     ].join(' · ');
 
     return SizedBox(
@@ -466,8 +464,8 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
   ) {
     final c = LuoboColors.of(context);
     final progress = _progressOf(book);
-    final isCurrent = player.isPlayingAudiobook &&
-        player.currentAudiobook?.id == book.id;
+    final isCurrent =
+        player.isPlayingAudiobook && player.currentAudiobook?.id == book.id;
     final finished = progress?.completed == true;
     final hasProgress = progress != null &&
         !progress.completed &&
@@ -578,8 +576,7 @@ class _AudiobookListScreenState extends State<AudiobookListScreen> {
   int? _remainingSeconds(Audiobook book, AudiobookProgress progress) {
     final total = book.totalDurationSeconds;
     if (total == null || total <= 0) return null;
-    final ratio =
-        progress.progressRatio(totalEpisodes: book.episodeCount) ?? 0;
+    final ratio = progress.progressRatio(totalEpisodes: book.episodeCount) ?? 0;
     return (total * (1 - ratio)).round().clamp(0, total);
   }
 
@@ -673,8 +670,7 @@ class _CirclePlayButton extends StatelessWidget {
                   ? PlayingBars(size: size * 0.42, color: fg)
                   : Padding(
                       padding: EdgeInsets.only(left: size * 0.07),
-                      child:
-                          Icon(AppIcons.play, size: size * 0.42, color: fg),
+                      child: Icon(AppIcons.play, size: size * 0.42, color: fg),
                     ),
         ),
       ),

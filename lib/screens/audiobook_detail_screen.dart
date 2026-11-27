@@ -624,7 +624,7 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
           final rowExtent = _rowExtentOf(context);
           final bottomInset = hasDock
               ? 90 + MediaQuery.paddingOf(context).bottom
-              : 24.0;
+              : 24 + MediaQuery.paddingOf(context).bottom;
 
           return Stack(
             children: [
@@ -785,9 +785,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     final player = Provider.of<PlayerProvider>(context, listen: false);
     final isThisBook = player.isPlayingAudiobook &&
         player.currentAudiobook?.id == widget.book.id;
-    final order = isThisBook
-        ? player.audiobookChapterOrder
-        : _progress?.chapterOrder;
+    final order =
+        isThisBook ? player.audiobookChapterOrder : _progress?.chapterOrder;
     if (order == null) return;
 
     // 当前筛选可能把目标章排除了 → 先切回「全部」再定位（否则点了没反应）。
@@ -822,12 +821,11 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     ].join(' · ');
 
     final progress = _progress;
-    final isThisBook = player.isPlayingAudiobook &&
-        player.currentAudiobook?.id == book.id;
+    final isThisBook =
+        player.isPlayingAudiobook && player.currentAudiobook?.id == book.id;
     final ratio = _liveRatio(player);
     final remaining = _remainingSeconds(book, progress, ratio);
-    final hasProgress =
-        (progress != null && !progress.completed) || isThisBook;
+    final hasProgress = (progress != null && !progress.completed) || isThisBook;
     final displayOrder = isThisBook
         ? (player.audiobookChapterOrder ?? progress?.chapterOrder)
         : progress?.chapterOrder;
@@ -877,8 +875,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
                   : l10n.play,
               onTap: hasProgress && displayOrder != null
                   ? () {
-                      final index = _chapters
-                          .indexWhere((c) => c.order == displayOrder);
+                      final index =
+                          _chapters.indexWhere((c) => c.order == displayOrder);
                       if (index >= 0) {
                         _playChapter(
                           _chapters[index],
@@ -1084,16 +1082,15 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     final p = _progress;
     final isCurrentBook = player.isPlayingAudiobook &&
         player.currentAudiobook?.id == widget.book.id;
-    final isCurrent = isCurrentBook &&
-        player.audiobookChapterOrder == chapter.order;
+    final isCurrent =
+        isCurrentBook && player.audiobookChapterOrder == chapter.order;
     final listened = _isListened(chapter, p);
     final isSavedChapter = p != null && p.chapterOrder == chapter.order;
     // 「上次播放章」样式只在**本书未在播放**时出现（冷启 / 在播别的书）：用来
     // 指示「从这里续听」。本书正在播时只有真正在播的那一章高亮——否则缓存的
     // `_progress`（_playChapter 不会即时刷新）还停在旧章，会和当前章一起高亮
     // （用户 2026-10-27：在播第 3 章、点了第 4 章，3、4 两行都高亮）。
-    final isResumeChapter =
-        !isCurrentBook && isSavedChapter && !p.completed;
+    final isResumeChapter = !isCurrentBook && isSavedChapter && !p.completed;
     // 高亮：当前播放章 + 上次播放章都用同一套「正在播放」样式。
     final shouldHighlight = isCurrent || isResumeChapter;
     // 只有「既非当前、也非上次播放章」的已听章才显示 ✓/已听完。
@@ -1105,10 +1102,10 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     final durationMs = !isCurrentBook && isSavedChapter ? p.durationMs : null;
     final showBar = playedMs > 0 && (durationMs ?? 0) > 0;
 
-    final durationText = (chapter.durationSeconds != null &&
-            chapter.durationSeconds! > 0)
-        ? formatDuration(chapter.durationSeconds!)
-        : '';
+    final durationText =
+        (chapter.durationSeconds != null && chapter.durationSeconds! > 0)
+            ? formatDuration(chapter.durationSeconds!)
+            : '';
     String? state;
     if (showListened) {
       state = l10n.finished;
@@ -1125,9 +1122,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     final highlight = _highlightVisible && _highlightOrder == chapter.order;
 
     return Container(
-      key: _targetUnique && chapter.order == _targetOrder
-          ? _targetRowKey
-          : null,
+      key:
+          _targetUnique && chapter.order == _targetOrder ? _targetRowKey : null,
       decoration: BoxDecoration(
         color: highlight
             ? accent.withValues(alpha: 0.12)
@@ -1148,7 +1144,8 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       child: InkWell(
         // 点击「上次播放章」续播到保存位置（冷启/在播别的书时）；点其它章从 0 起。
         // 否则冷启点进度章会从 0:00 重放（用户 2026-10-28：记录了 12 分却从头播）。
-        onTap: () => _playChapter(chapter, progress: isResumeChapter ? p : null),
+        onTap: () =>
+            _playChapter(chapter, progress: isResumeChapter ? p : null),
         onLongPress: () => _showChapterActions(chapter),
         child: Padding(
           padding: const EdgeInsets.only(left: 16, right: 16),
@@ -1168,13 +1165,13 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
                           : showListened
                               ? Icon(AppIcons.check, size: 13, color: c.fg3)
                               : Text(
-                                    '${chapter.order}',
-                                    style: LuoboType.body.copyWith(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: c.fg2,
-                                    ),
+                                  '${chapter.order}',
+                                  style: LuoboType.body.copyWith(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: c.fg2,
                                   ),
+                                ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1237,8 +1234,7 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
       return p?.progressRatio(totalEpisodes: total);
     }
 
-    final currentOrder =
-        player.audiobookChapterOrder ?? p?.chapterOrder ?? 1;
+    final currentOrder = player.audiobookChapterOrder ?? p?.chapterOrder ?? 1;
     var listened = 0;
     if (p != null && p.listenedOrders.isNotEmpty) {
       listened = p.listenedOrders
@@ -1247,10 +1243,10 @@ class _AudiobookDetailScreenState extends State<AudiobookDetailScreen>
     } else {
       listened = (currentOrder - 1).clamp(0, total);
     }
-    final fraction = (player.chapterPosition.inMilliseconds /
-            chapterDuration.inMilliseconds)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final fraction =
+        (player.chapterPosition.inMilliseconds / chapterDuration.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble();
     return ((listened + fraction) / total).clamp(0.0, 1.0).toDouble();
   }
 
@@ -1431,8 +1427,8 @@ class _FastScrollBarState extends State<_FastScrollBar> {
 
         final total = widget.itemCount;
         final hover = _hoverIndex;
-        final thumbH =
-            (height * (height / (total * widget.itemExtent))).clamp(40.0, height);
+        final thumbH = (height * (height / (total * widget.itemExtent)))
+            .clamp(40.0, height);
         final thumbTop =
             hover == null ? 0.0 : (height - thumbH) * (hover / (total - 1));
 
@@ -1504,8 +1500,7 @@ class _FastScrollBarState extends State<_FastScrollBar> {
                   Positioned(
                     // 紧贴 thumb 左缘，避免中间露出「半圆形红色」的错觉。
                     right: 22,
-                    top: (thumbTop + thumbH / 2 - 16)
-                        .clamp(4.0, height - 36),
+                    top: (thumbTop + thumbH / 2 - 16).clamp(4.0, height - 36),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 220),
                       child: Container(

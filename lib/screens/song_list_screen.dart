@@ -11,6 +11,7 @@ import '../models/models.dart';
 import '../providers/player_provider.dart';
 import '../services/diagnostics/diagnostics.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../utils/image_cache.dart';
 import '../widgets/pressable_scale.dart';
 import '../widgets/widgets.dart';
@@ -257,7 +258,11 @@ class _SongListScreenState extends State<SongListScreen> {
                 );
               },
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: LuoboSpacing.pageBottomWithStrip(context),
+            ),
+          ),
         ],
       ),
     );

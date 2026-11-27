@@ -470,10 +470,21 @@ class _MainScreenState extends State<MainScreen> {
     // `Navigator` 挂的是全局 GlobalKey，包/不包会改变 widget 树形状，形状一变
     // 就要重新挂接 Navigator（路由还在，但正在跑的转场动画会断）。离线↔在线
     // 切换时正处在一个大动作里，不该再叠加这种扰动。
-    final data = MediaQuery.of(context);
-    return MediaQuery(
-      data: stripTopInset ? data.removePadding(removeTop: true) : data,
-      child: navigator,
+    //
+    // ⚠️ 必须用 `Builder` 取**Scaffold body 内部**的 MediaQuery，不能用
+    // MainScreen 的 `context`：`Scaffold.extendBody` 是在 `_BodyBuilder` 里
+    // 给 body 注入 `padding.bottom = max(安全区, 底栏高度)` 的，而 MainScreen
+    // 的 context 在 Scaffold **之上**，拿到的是外层的安全区。直接用它包
+    // Navigator 会把注入值覆盖成 0/安全区，所有页面都只按安全区留白 ——
+    // 表现为底栏 / 播放条压住最后一屏内容。
+    return Builder(
+      builder: (bodyContext) {
+        final data = MediaQuery.of(bodyContext);
+        return MediaQuery(
+          data: stripTopInset ? data.removePadding(removeTop: true) : data,
+          child: navigator,
+        );
+      },
     );
   }
 

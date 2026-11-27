@@ -7,6 +7,7 @@ import '../services/ai_playlist_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/song_tile.dart';
 
 class AiPlaylistScreen extends StatefulWidget {
@@ -460,6 +461,13 @@ class _AiPlaylistScreenState extends State<AiPlaylistScreen>
               ),
             ),
           ),
+        // CustomScrollView 不会自动消费 extendBody 注入的 padding.bottom，
+        // 必须自己留出底栏/迷你播放条的净空。
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: LuoboSpacing.pageBottomWithStrip(context),
+          ),
+        ),
       ],
     );
   }
@@ -876,10 +884,10 @@ class _AiPlaylistScreenState extends State<AiPlaylistScreen>
     final name = _playlistNameController.text.trim();
     if (name.isEmpty) {
       showLuoboToast(
-      context,
-      message: '请输入歌单名称',
-      tone: LuoboToastTone.info,
-    );
+        context,
+        message: '请输入歌单名称',
+        tone: LuoboToastTone.info,
+      );
       return;
     }
 
